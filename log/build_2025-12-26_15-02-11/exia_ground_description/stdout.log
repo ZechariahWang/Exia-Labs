@@ -1,0 +1,24 @@
+-- Install configuration: ""
+-- Up-to-date: /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/urdf
+-- Installing: /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/urdf/exia_ground.urdf
+-- Up-to-date: /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/launch
+-- Up-to-date: /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/launch/exia_ground_sim.launch.py
+-- Up-to-date: /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/launch/exia_ground_state.launch.py
+-- Up-to-date: /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/rviz
+-- Up-to-date: /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/rviz/exia_ground.rviz
+-- Up-to-date: /home/zech/exia_ws/install/exia_ground_description/lib/exia_ground_description/move_forward.py
+-- Up-to-date: /home/zech/exia_ws/install/exia_ground_description/share/ament_index/resource_index/package_run_dependencies/exia_ground_description
+-- Up-to-date: /home/zech/exia_ws/install/exia_ground_description/share/ament_index/resource_index/parent_prefix_path/exia_ground_description
+-- Up-to-date: /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/environment/ament_prefix_path.sh
+-- Up-to-date: /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/environment/ament_prefix_path.dsv
+-- Up-to-date: /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/environment/path.sh
+-- Up-to-date: /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/environment/path.dsv
+-- Up-to-date: /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/local_setup.bash
+-- Up-to-date: /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/local_setup.sh
+-- Up-to-date: /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/local_setup.zsh
+-- Up-to-date: /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/local_setup.dsv
+-- Installing: /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/package.dsv
+-- Up-to-date: /home/zech/exia_ws/install/exia_ground_description/share/ament_index/resource_index/packages/exia_ground_description
+-- Up-to-date: /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/cmake/exia_ground_descriptionConfig.cmake
+-- Up-to-date: /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/cmake/exia_ground_descriptionConfig-version.cmake
+-- Up-to-date: /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/package.xml

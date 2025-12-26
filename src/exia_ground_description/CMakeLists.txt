@@ -36,4 +36,16 @@ install(
   DESTINATION share/${PROJECT_NAME}
 )
 
+# Install rviz files
+install(
+  DIRECTORY rviz
+  DESTINATION share/${PROJECT_NAME}
+)
+
+# Install Python scripts
+install(
+  PROGRAMS scripts/move_forward.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 ament_package()

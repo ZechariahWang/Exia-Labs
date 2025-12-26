@@ -1,6 +1,8 @@
 /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/urdf/exia_ground.urdf
 /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/launch/exia_ground_sim.launch.py
 /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/launch/exia_ground_state.launch.py
+/home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/rviz/exia_ground.rviz
+/home/zech/exia_ws/install/exia_ground_description/lib/exia_ground_description/move_forward.py
 /home/zech/exia_ws/install/exia_ground_description/share/ament_index/resource_index/package_run_dependencies/exia_ground_description
 /home/zech/exia_ws/install/exia_ground_description/share/ament_index/resource_index/parent_prefix_path/exia_ground_description
 /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/environment/ament_prefix_path.sh

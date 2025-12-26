@@ -1,23 +1,33 @@
 <?xml version="1.0"?>
 <robot name="exia_ground">
 
-  <!-- World link -->
-  <link name="world"/>
+  <!-- ==================== PROPERTIES ==================== -->
+  <!-- Chassis dimensions -->
+  <!-- Length: 0.6m, Width: 0.4m, Height: 0.2m -->
 
-  <!-- Base link -->
+  <!-- Wheel properties -->
+  <!-- Radius: 0.1m, Width: 0.05m -->
+  <!-- Wheel separation (Y): 0.45m (center to center) -->
+  <!-- Wheel base (X): 0.4m (front to rear axle) -->
+
+  <!-- ==================== BASE FOOTPRINT ==================== -->
+  <!-- Ground projection of the robot - used for navigation -->
+  <link name="base_footprint"/>
+
+  <!-- ==================== BASE LINK (CHASSIS) ==================== -->
   <link name="base_link">
     <visual>
-      <origin xyz="0 0 0.1"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
         <box size="0.6 0.4 0.2"/>
       </geometry>
       <material name="blue">
-        <color rgba="0 0 1 1"/>
+        <color rgba="0.2 0.2 0.8 1"/>
       </material>
     </visual>
 
     <collision>
-      <origin xyz="0 0 0.1"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
         <box size="0.6 0.4 0.2"/>
       </geometry>
@@ -25,17 +35,252 @@
 
     <inertial>
       <mass value="20.0"/>
-      <origin xyz="0 0 0.1"/>
-      <inertia ixx="1" iyy="1" izz="1"
-               ixy="0" ixz="0" iyz="0"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <!-- Inertia for a box: Ixx = 1/12*m*(y^2+z^2), etc. -->
+      <inertia ixx="0.267" ixy="0" ixz="0"
+               iyy="0.667" iyz="0"
+               izz="0.867"/>
     </inertial>
   </link>
 
-  <!-- FIXED JOINT (THIS IS THE KEY) -->
-  <joint name="world_to_base" type="fixed">
-    <parent link="world"/>
+  <!-- Connect base_link to base_footprint -->
+  <!-- Elevate base_link by wheel_radius + half chassis height = 0.1 + 0.1 = 0.2m -->
+  <joint name="base_joint" type="fixed">
+    <parent link="base_footprint"/>
     <child link="base_link"/>
-    <origin xyz="0 0 0"/>
+    <origin xyz="0 0 0.2" rpy="0 0 0"/>
   </joint>
+
+  <!-- ==================== WHEEL MACRO DEFINITIONS ==================== -->
+
+  <!-- FRONT LEFT WHEEL -->
+  <link name="front_left_wheel">
+    <visual>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+      <geometry>
+        <cylinder radius="0.1" length="0.05"/>
+      </geometry>
+      <material name="black">
+        <color rgba="0.1 0.1 0.1 1"/>
+      </material>
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+      <geometry>
+        <cylinder radius="0.1" length="0.05"/>
+      </geometry>
+    </collision>
+
+    <inertial>
+      <mass value="2.0"/>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+      <!-- Inertia for a cylinder: Ixx=Iyy=1/12*m*(3r^2+h^2), Izz=1/2*m*r^2 -->
+      <inertia ixx="0.00542" ixy="0" ixz="0"
+               iyy="0.00542" iyz="0"
+               izz="0.01"/>
+    </inertial>
+  </link>
+
+  <joint name="front_left_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="front_left_wheel"/>
+    <origin xyz="0.2 0.225 -0.1" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <dynamics damping="0.1" friction="0.1"/>
+  </joint>
+
+  <!-- FRONT RIGHT WHEEL -->
+  <link name="front_right_wheel">
+    <visual>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+      <geometry>
+        <cylinder radius="0.1" length="0.05"/>
+      </geometry>
+      <material name="black">
+        <color rgba="0.1 0.1 0.1 1"/>
+      </material>
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+      <geometry>
+        <cylinder radius="0.1" length="0.05"/>
+      </geometry>
+    </collision>
+
+    <inertial>
+      <mass value="2.0"/>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+      <inertia ixx="0.00542" ixy="0" ixz="0"
+               iyy="0.00542" iyz="0"
+               izz="0.01"/>
+    </inertial>
+  </link>
+
+  <joint name="front_right_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="front_right_wheel"/>
+    <origin xyz="0.2 -0.225 -0.1" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <dynamics damping="0.1" friction="0.1"/>
+  </joint>
+
+  <!-- REAR LEFT WHEEL -->
+  <link name="rear_left_wheel">
+    <visual>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+      <geometry>
+        <cylinder radius="0.1" length="0.05"/>
+      </geometry>
+      <material name="black">
+        <color rgba="0.1 0.1 0.1 1"/>
+      </material>
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+      <geometry>
+        <cylinder radius="0.1" length="0.05"/>
+      </geometry>
+    </collision>
+
+    <inertial>
+      <mass value="2.0"/>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+      <inertia ixx="0.00542" ixy="0" ixz="0"
+               iyy="0.00542" iyz="0"
+               izz="0.01"/>
+    </inertial>
+  </link>
+
+  <joint name="rear_left_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="rear_left_wheel"/>
+    <origin xyz="-0.2 0.225 -0.1" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <dynamics damping="0.1" friction="0.1"/>
+  </joint>
+
+  <!-- REAR RIGHT WHEEL -->
+  <link name="rear_right_wheel">
+    <visual>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+      <geometry>
+        <cylinder radius="0.1" length="0.05"/>
+      </geometry>
+      <material name="black">
+        <color rgba="0.1 0.1 0.1 1"/>
+      </material>
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+      <geometry>
+        <cylinder radius="0.1" length="0.05"/>
+      </geometry>
+    </collision>
+
+    <inertial>
+      <mass value="2.0"/>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+      <inertia ixx="0.00542" ixy="0" ixz="0"
+               iyy="0.00542" iyz="0"
+               izz="0.01"/>
+    </inertial>
+  </link>
+
+  <joint name="rear_right_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="rear_right_wheel"/>
+    <origin xyz="-0.2 -0.225 -0.1" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <dynamics damping="0.1" friction="0.1"/>
+  </joint>
+
+  <!-- ==================== GAZEBO PROPERTIES ==================== -->
+
+  <!-- Chassis Gazebo properties -->
+  <gazebo reference="base_link">
+    <material>Gazebo/Blue</material>
+  </gazebo>
+
+  <!-- Wheel Gazebo properties with friction -->
+  <gazebo reference="front_left_wheel">
+    <material>Gazebo/DarkGrey</material>
+    <mu1>1.0</mu1>
+    <mu2>1.0</mu2>
+    <kp>1000000.0</kp>
+    <kd>100.0</kd>
+    <minDepth>0.001</minDepth>
+  </gazebo>
+
+  <gazebo reference="front_right_wheel">
+    <material>Gazebo/DarkGrey</material>
+    <mu1>1.0</mu1>
+    <mu2>1.0</mu2>
+    <kp>1000000.0</kp>
+    <kd>100.0</kd>
+    <minDepth>0.001</minDepth>
+  </gazebo>
+
+  <gazebo reference="rear_left_wheel">
+    <material>Gazebo/DarkGrey</material>
+    <mu1>1.0</mu1>
+    <mu2>1.0</mu2>
+    <kp>1000000.0</kp>
+    <kd>100.0</kd>
+    <minDepth>0.001</minDepth>
+  </gazebo>
+
+  <gazebo reference="rear_right_wheel">
+    <material>Gazebo/DarkGrey</material>
+    <mu1>1.0</mu1>
+    <mu2>1.0</mu2>
+    <kp>1000000.0</kp>
+    <kd>100.0</kd>
+    <minDepth>0.001</minDepth>
+  </gazebo>
+
+  <!-- ==================== GAZEBO DIFFERENTIAL DRIVE PLUGIN ==================== -->
+  <gazebo>
+    <plugin name="diff_drive" filename="libgazebo_ros_diff_drive.so">
+
+      <ros>
+        <namespace>/</namespace>
+      </ros>
+
+      <!-- 4-wheel skid steer configuration -->
+      <num_wheel_pairs>2</num_wheel_pairs>
+
+      <!-- Left wheels (front and rear) -->
+      <left_joint>front_left_wheel_joint</left_joint>
+      <left_joint>rear_left_wheel_joint</left_joint>
+
+      <!-- Right wheels (front and rear) -->
+      <right_joint>front_right_wheel_joint</right_joint>
+      <right_joint>rear_right_wheel_joint</right_joint>
+
+      <!-- Kinematics -->
+      <wheel_separation>0.45</wheel_separation>
+      <wheel_diameter>0.2</wheel_diameter>
+
+      <!-- Limits -->
+      <max_wheel_torque>100</max_wheel_torque>
+      <max_wheel_acceleration>5.0</max_wheel_acceleration>
+
+      <!-- Output -->
+      <command_topic>cmd_vel</command_topic>
+      <publish_odom>true</publish_odom>
+      <publish_odom_tf>true</publish_odom_tf>
+      <publish_wheel_tf>true</publish_wheel_tf>
+
+      <odometry_topic>odom</odometry_topic>
+      <odometry_frame>odom</odometry_frame>
+      <robot_base_frame>base_footprint</robot_base_frame>
+
+    </plugin>
+  </gazebo>
+
 
 </robot>

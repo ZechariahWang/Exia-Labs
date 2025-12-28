@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Simple script to move the robot forward."""
+
+# move thr bot forward to test if the config works properly
 
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
-
 
 class MoveForward(Node):
     def __init__(self):
@@ -15,8 +15,8 @@ class MoveForward(Node):
 
     def publish_velocity(self):
         msg = Twist()
-        msg.linear.x = 0.5  # Forward velocity (m/s)
-        msg.angular.z = 0.0  # No rotation
+        msg.linear.x = 0.5  
+        msg.angular.z = 0.0
         self.publisher.publish(msg)
 
 
@@ -26,7 +26,6 @@ def main(args=None):
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        # Stop the robot before context is invalidated
         if rclpy.ok():
             stop_msg = Twist()
             node.publisher.publish(stop_msg)

@@ -198,6 +198,50 @@
     <dynamics damping="0.1" friction="0.1"/>
   </joint>
 
+  <!-- ==================== IMU SENSOR ==================== -->
+  <!-- IMU mounted on top of the chassis, centered -->
+  <!-- This represents the Yahboom 10-axis IMU for hardware deployment -->
+  <!-- Position: Center of base_link, on top surface (z = 0.1 = half chassis height) -->
+
+  <link name="imu_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <!-- Small box representing the physical IMU module -->
+        <!-- Yahboom IMU approximate dimensions: 25mm x 25mm x 10mm -->
+        <box size="0.025 0.025 0.01"/>
+      </geometry>
+      <material name="green">
+        <color rgba="0.2 0.8 0.2 1"/>
+      </material>
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.025 0.025 0.01"/>
+      </geometry>
+    </collision>
+
+    <inertial>
+      <!-- Very light sensor, minimal impact on dynamics -->
+      <mass value="0.01"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <!-- Inertia for small box, negligible -->
+      <inertia ixx="0.000001" ixy="0" ixz="0"
+               iyy="0.000001" iyz="0"
+               izz="0.000001"/>
+    </inertial>
+  </link>
+
+  <joint name="imu_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="imu_link"/>
+    <!-- Mount on top surface of chassis, centered -->
+    <!-- z = 0.1 (half chassis height) + 0.005 (half IMU height) = 0.105 -->
+    <origin xyz="0 0 0.105" rpy="0 0 0"/>
+  </joint>
+
   <!-- ==================== GAZEBO PROPERTIES ==================== -->
 
   <!-- Chassis Gazebo properties -->
@@ -240,6 +284,85 @@
     <kp>1000000.0</kp>
     <kd>100.0</kd>
     <minDepth>0.001</minDepth>
+  </gazebo>
+
+  <!-- ==================== GAZEBO IMU SENSOR PLUGIN ==================== -->
+  <!-- IMU Gazebo visual properties -->
+  <gazebo reference="imu_link">
+    <material>Gazebo/Green</material>
+
+    <!-- IMU Sensor Configuration -->
+    <!-- Configured to match Yahboom 10-axis IMU characteristics -->
+    <sensor name="imu_sensor" type="imu">
+      <always_on>true</always_on>
+      <!-- Update rate: 200Hz typical for MEMS IMUs -->
+      <update_rate>200</update_rate>
+
+      <!-- Gazebo ROS IMU sensor plugin -->
+      <plugin name="imu_plugin" filename="libgazebo_ros_imu_sensor.so">
+        <ros>
+          <namespace>/</namespace>
+          <!-- Remap to standard IMU topic -->
+          <remapping>~/out:=imu/data</remapping>
+        </ros>
+
+        <!-- Use gravity-aligned initial orientation (typical for navigation) -->
+        <initial_orientation_as_reference>false</initial_orientation_as_reference>
+
+        <!-- Frame ID for TF - matches the URDF link name -->
+        <frame_name>imu_link</frame_name>
+      </plugin>
+
+      <!-- IMU noise characteristics -->
+      <!-- These values simulate typical MEMS IMU behavior (Yahboom uses similar sensors) -->
+      <imu>
+        <!-- Angular velocity (gyroscope) noise -->
+        <!-- Typical gyro noise: 0.01-0.05 deg/s = 0.0002-0.001 rad/s -->
+        <angular_velocity>
+          <x>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>0.0002</stddev>
+            </noise>
+          </x>
+          <y>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>0.0002</stddev>
+            </noise>
+          </y>
+          <z>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>0.0002</stddev>
+            </noise>
+          </z>
+        </angular_velocity>
+
+        <!-- Linear acceleration (accelerometer) noise -->
+        <!-- Typical accelerometer noise: 0.01-0.05 m/s^2 -->
+        <linear_acceleration>
+          <x>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>0.017</stddev>
+            </noise>
+          </x>
+          <y>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>0.017</stddev>
+            </noise>
+          </y>
+          <z>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>0.017</stddev>
+            </noise>
+          </z>
+        </linear_acceleration>
+      </imu>
+    </sensor>
   </gazebo>
 
   <!-- ==================== GAZEBO DIFFERENTIAL DRIVE PLUGIN ==================== -->

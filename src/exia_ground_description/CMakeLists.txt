@@ -12,6 +12,7 @@ find_package(ament_cmake REQUIRED)
 # find_package(<dependency> REQUIRED)
 
 # zech dec 25: apparently you dont need this for testing? not sure
+
 # if(BUILD_TESTING)
   # find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights

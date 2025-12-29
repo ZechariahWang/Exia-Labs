@@ -292,6 +292,50 @@
     <dynamics damping="0.01" friction="0.0"/>
   </joint>
 
+  <!-- ==================== BRAKE SYSTEM ==================== -->
+  <!-- Virtual brake actuator for simulation -->
+  <!-- In real hardware: This maps to a brake motor/servo/actuator -->
+  <!-- The brake_joint position (0-1) represents brake engagement level -->
+  <!-- 0 = no brake, 1 = full brake -->
+
+  <link name="brake_actuator_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.05 0.08 0.03"/>
+      </geometry>
+      <material name="red">
+        <color rgba="0.8 0.2 0.2 1"/>
+      </material>
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.05 0.08 0.03"/>
+      </geometry>
+    </collision>
+
+    <inertial>
+      <mass value="0.5"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <inertia ixx="0.0001" ixy="0" ixz="0"
+               iyy="0.0001" iyz="0"
+               izz="0.0001"/>
+    </inertial>
+  </link>
+
+  <!-- Brake actuator joint - position controlled (0.0 to 1.0) -->
+  <!-- This is a virtual joint for control purposes -->
+  <joint name="brake_joint" type="revolute">
+    <parent link="base_link"/>
+    <child link="brake_actuator_link"/>
+    <origin xyz="-0.15 0 -0.05" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="0.0" upper="1.0" effort="1000.0" velocity="5.0"/>
+    <dynamics damping="0.1" friction="0.0"/>
+  </joint>
+
   <!-- ==================== IMU SENSOR ==================== -->
   <!-- IMU mounted on top of the chassis, centered -->
   <!-- This represents the Yahboom 10-axis IMU for hardware deployment -->
@@ -434,12 +478,20 @@
       <state_interface name="position"/>
       <state_interface name="velocity"/>
     </joint>
+
+    <!-- Brake joint - position control (0.0 to 1.0 engagement) -->
+    <joint name="brake_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
   </ros2_control>
 
   <gazebo>
     <plugin filename="gz_ros2_control-system" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
       <robot_param>robot_description</robot_param>
       <robot_param_node>robot_state_publisher</robot_param_node>
+      <!-- Only pass minimal hardware config - controllers loaded by spawners -->
       <parameters>$(arg config_path)</parameters>
     </plugin>
   </gazebo>

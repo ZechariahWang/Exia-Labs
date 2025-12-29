@@ -5,59 +5,65 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# find dependencies
+# Find dependencies
 find_package(ament_cmake REQUIRED)
-# uncomment the following section in order to fill in
-# further dependencies manually.
-# find_package(<dependency> REQUIRED)
+find_package(ament_cmake_python REQUIRED)
 
-# zech dec 25: apparently you dont need this for testing? not sure
-
-# if(BUILD_TESTING)
-  # find_package(ament_lint_auto REQUIRED)
-  # the following line skips the linter which checks for copyrights
-  # comment the line when a copyright and license is added to all source files
-  # set(ament_cmake_copyright_FOUND TRUE)
-  # the following line skips cpplint (only works in a git repo)
-  # comment the line when this package is in a git repo and when
-  # a copyright and license is added to all source files
-  # set(ament_cmake_cpplint_FOUND TRUE)
-  # ament_lint_auto_find_test_dependencies()
-# endif()
+# ==================== Install Directories ====================
 
 # Install URDF files
-install(
-  DIRECTORY urdf
+install(DIRECTORY urdf
   DESTINATION share/${PROJECT_NAME}
 )
 
 # Install launch files
-install(
-  DIRECTORY launch
+install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME}
 )
 
 # Install rviz files
-install(
-  DIRECTORY rviz
+install(DIRECTORY rviz
   DESTINATION share/${PROJECT_NAME}
 )
 
-# Install config files (ros2_control configuration)
-install(
-  DIRECTORY config
+# Install config files
+install(DIRECTORY config
   DESTINATION share/${PROJECT_NAME}
 )
 
-# Install Python scripts
+# ==================== Install Python Package ====================
+# The exia_control package contains reusable modules:
+#   - hal/       Hardware Abstraction Layer
+#   - control/   Control algorithms
+#   - planning/  Path planning algorithms
+
+install(DIRECTORY src/exia_control
+  DESTINATION lib/${PROJECT_NAME}
+  FILES_MATCHING PATTERN "*.py"
+)
+
+# ==================== Install Entry-Point Scripts ====================
+# These are ROS2 node executables that use the exia_control package
+
 install(
   PROGRAMS
+    # Main control nodes
+    scripts/ackermann_drive_node.py
+    scripts/path_follower_node.py
+
+    # Legacy/utility scripts (for backwards compatibility)
     scripts/move_forward.py
+    scripts/steering_controller.py
     scripts/ackermann_controller.py
     scripts/ackermann_odometry.py
-    scripts/steering_controller.py
     scripts/atv_controller.py
     scripts/atv_hardware_interface.py
+    scripts/waypoint_follower.py
+
+    # Old HAL scripts (can be removed after transition)
+    scripts/ackermann_hal_base.py
+    scripts/ackermann_hal_simulation.py
+    scripts/ackermann_hal_hardware.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

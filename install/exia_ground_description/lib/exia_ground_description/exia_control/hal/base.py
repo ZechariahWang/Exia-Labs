@@ -81,9 +81,9 @@ class AckermannConfig:
     of the vehicle. Must match the actual robot/ATV specifications.
     """
     # Geometry (meters)
-    wheelbase: float = 0.4              # Front to rear axle distance
-    track_width: float = 0.45           # Left to right wheel distance
-    wheel_radius: float = 0.1           # Wheel radius
+    wheelbase: float = 1.3              # Front to rear axle distance
+    track_width: float = 1.1            # Left to right wheel distance
+    wheel_radius: float = 0.3           # Wheel radius
 
     # Steering limits
     max_steering_angle: float = 0.6     # Maximum steering angle (rad)

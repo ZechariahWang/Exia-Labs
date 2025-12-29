@@ -1,6 +1,6 @@
 # Exia Ground Robot Workspace
 # Author: Zechariah Wang (Dec 25, 2025)
-# Updated: December 2025 - Three-Motor HAL Architecture
+# Updated: December 2025 - ATV-Scale Vehicle (2.11m x 1.2m x 0.6m)
 
 ROS 2 workspace for the Exia Ground robot platform.
 
@@ -49,13 +49,20 @@ exia_ws/
 │       ├── launch/                 # Launch files
 │       ├── config/                 # Controller configurations
 │       ├── rviz/                   # RViz configuration
-│       ├── scripts/                # Python control scripts
-│       │   ├── ackermann_hal_base.py        # HAL base interface
-│       │   ├── ackermann_hal_simulation.py  # Gazebo HAL
-│       │   ├── ackermann_hal_hardware.py    # Real hardware HAL
-│       │   └── ackermann_drive_node.py      # Main drive controller
-│       ├── include/                # C++ headers (empty)
-│       └── src/                    # C++ source (empty)
+│       ├── scripts/                # ROS2 node entry points
+│       │   ├── ackermann_drive_node.py      # Main drive controller
+│       │   ├── path_follower_node.py        # Pure Pursuit path following
+│       │   └── ackermann_odometry.py        # Fallback odometry node
+│       └── src/
+│           └── exia_control/       # Modular Python package
+│               ├── hal/            # Hardware Abstraction Layer
+│               │   ├── base.py     # HAL interface & data types
+│               │   └── simulation.py  # Gazebo Fortress HAL
+│               ├── control/        # Control algorithms
+│               │   └── ackermann_drive.py  # Ackermann kinematics
+│               └── planning/       # Path planning & following
+│                   ├── pure_pursuit.py  # Pure Pursuit controller
+│                   └── paths.py         # Predefined paths
 ├── build/                          # Build artifacts (generated)
 ├── install/                        # Install space (generated)
 └── log/                            # Build logs (generated)
@@ -76,13 +83,13 @@ Robot description package containing URDF model and launch files for visualizati
 
 | Property | Value |
 |----------|-------|
-| Chassis dimensions | 0.6m x 0.4m x 0.2m (L x W x H) |
-| Wheel radius | 0.1m |
-| Wheel width | 0.05m |
-| Wheel separation | 0.45m (center to center) |
-| Wheel base | 0.4m (front to rear axle) |
-| Chassis mass | 20.0 kg |
-| Wheel mass | 2.0 kg each |
+| Chassis dimensions | 2.11m x 1.2m x 0.6m (L x W x H) |
+| Wheel radius | 0.3m |
+| Wheel width | 0.15m |
+| Track width | 1.1m (wheel center to center) |
+| Wheel base | 1.3m (front to rear axle) |
+| Chassis mass | 200.0 kg |
+| Wheel mass | 10.0 kg each |
 | Max steering angle | 0.6 rad (~34 degrees) |
 | Max speed | 5.0 m/s |
 
@@ -149,6 +156,14 @@ ros2 launch exia_ground_description exia_ground_sim.launch.py
 
 # Visualize in RViz2 (use when Gazebo GUI has issues)
 rviz2 -d ~/exia_ws/src/exia_ground_description/rviz/exia_ground.rviz
+
+# Run path follower (after simulation is running)
+ros2 run exia_ground_description path_follower_node.py
+
+# Run path follower with specific path type
+ros2 run exia_ground_description path_follower_node.py --ros-args -p path_type:=square
+ros2 run exia_ground_description path_follower_node.py --ros-args -p path_type:=circle
+ros2 run exia_ground_description path_follower_node.py --ros-args -p path_type:=figure_eight
 ```
 
 ## Control Commands
@@ -195,6 +210,47 @@ ros2 topic pub /throttle_controller/commands std_msgs/msg/Float64MultiArray "{da
 # Center steering
 ros2 topic pub /steering_controller/commands std_msgs/msg/Float64MultiArray "{data: [0.0, 0.0]}" -1
 ```
+
+## Path Following
+
+The robot includes a Pure Pursuit path following system for autonomous navigation.
+
+### Path Types
+| Path | Description |
+|------|-------------|
+| `line` | Straight line along X-axis |
+| `square` | Square path (returns to start) |
+| `circle` | Circular path |
+| `figure_eight` | Figure-8 pattern |
+| `slalom` | Weaving slalom pattern |
+
+### Path Follower Parameters
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `path_type` | `figure_eight` | Type of path to follow |
+| `path_scale` | `2.0` | Scale factor for path size |
+| `speed` | `0.5` | Target speed (m/s) |
+| `lookahead_distance` | `2.0` | Pure Pursuit lookahead (m) |
+| `goal_tolerance` | `0.5` | Waypoint reached threshold (m) |
+| `auto_start` | `true` | Start following immediately |
+
+### Path Follower Services
+```bash
+# Start path following
+ros2 service call /path_follower/start std_srvs/srv/Trigger
+
+# Stop path following
+ros2 service call /path_follower/stop std_srvs/srv/Trigger
+
+# Reset to start of path
+ros2 service call /path_follower/reset std_srvs/srv/Trigger
+```
+
+### Visualization Topics
+| Topic | Type | Description |
+|-------|------|-------------|
+| `/planned_path` | nav_msgs/Path | Current path being followed |
+| `/path_markers` | visualization_msgs/MarkerArray | Waypoint markers |
 
 ## ROS Topics
 
@@ -265,24 +321,34 @@ ros2 topic pub /steering_controller/commands std_msgs/msg/Float64MultiArray "{da
 ## Key Files
 
 ### Robot Model & Configuration
-- `src/exia_ground_description/urdf/exia_ground.urdf.xacro` - Robot model (Xacro format)
-- `src/exia_ground_description/config/ackermann_controllers.yaml` - Three-motor controller configuration
+- `urdf/exia_ground.urdf.xacro` - Robot model (Xacro format)
+- `config/ackermann_controllers.yaml` - Three-motor controller configuration
+- `config/hardware_config.yaml` - Minimal config for gz_ros2_control
 
 ### Launch Files
-- `src/exia_ground_description/launch/exia_ground_sim.launch.py` - Gazebo Fortress simulation
-- `src/exia_ground_description/launch/exia_ground_state.launch.py` - State publisher (RViz only)
+- `launch/exia_ground_sim.launch.py` - Gazebo Fortress simulation
+- `launch/exia_ground_state.launch.py` - State publisher (RViz only)
 
-### HAL System (Hardware Abstraction Layer)
-- `src/exia_ground_description/scripts/ackermann_hal_base.py` - Base HAL interface and data types
-- `src/exia_ground_description/scripts/ackermann_hal_simulation.py` - Gazebo Fortress HAL implementation
-- `src/exia_ground_description/scripts/ackermann_hal_hardware.py` - Real hardware HAL (PWM/CAN/Serial)
+### ROS2 Node Entry Points (`scripts/`)
+- `ackermann_drive_node.py` - Unified drive controller (cmd_vel -> motors)
+- `path_follower_node.py` - Pure Pursuit path following demo
+- `ackermann_odometry.py` - Fallback odometry node
 
-### Control Nodes
-- `src/exia_ground_description/scripts/ackermann_drive_node.py` - Unified drive controller (cmd_vel -> motors)
-- `src/exia_ground_description/scripts/ackermann_odometry.py` - Fallback odometry node
+### Modular Python Package (`src/exia_control/`)
+
+**HAL - Hardware Abstraction Layer** (`hal/`)
+- `base.py` - AckermannConfig, AckermannCommand, AckermannState, AckermannHAL interface
+- `simulation.py` - SimulationHAL for Gazebo Fortress (ros2_control)
+
+**Control Algorithms** (`control/`)
+- `ackermann_drive.py` - DriveControllerConfig, AckermannDriveController (cmd_vel -> Ackermann)
+
+**Path Planning** (`planning/`)
+- `pure_pursuit.py` - PurePursuitConfig, PurePursuitController (geometric path tracking)
+- `paths.py` - Predefined paths (line, square, circle, figure-eight, slalom)
 
 ### Visualization
-- `src/exia_ground_description/rviz/exia_ground.rviz` - RViz config (Fixed Frame: odom)
+- `rviz/exia_ground.rviz` - RViz config (Fixed Frame: odom)
 
 ## Debugging Commands
 
@@ -338,7 +404,8 @@ The HAL architecture makes hardware deployment straightforward:
    hal_type: 'hardware'  # Instead of 'simulation'
    ```
 
-2. **Configure Hardware HAL** (`ackermann_hal_hardware.py`):
+2. **Create Hardware HAL** (`src/exia_control/hal/hardware.py`):
+   - Implement `HardwareHAL` class extending `AckermannHAL`
    - Set driver type: `GPIO_PWM`, `PCA9685`, `SERIAL`, or `CAN`
    - Configure PWM channels and pulse widths for your servos/ESCs
    - Implement encoder feedback for closed-loop control
@@ -353,24 +420,28 @@ The HAL architecture makes hardware deployment straightforward:
 | IMU | Gazebo sensor | Yahboom 10-axis driver |
 | Encoders | Gazebo physics | Real wheel encoders |
 
-### Example Hardware Configurations
+### Example Hardware HAL Implementation
 
-**1. RC-Style (Raspberry Pi + PCA9685)**
 ```python
-from ackermann_hal_hardware import HardwareHAL, HardwareDriver, PWMConfig
+from exia_control.hal.base import AckermannHAL, AckermannConfig, AckermannCommand
 
-hal = HardwareHAL(
-    node=self,
-    driver_type=HardwareDriver.PCA9685,
-    steering_pwm=PWMConfig(channel=0, min_pulse_us=1000, max_pulse_us=2000),
-    throttle_pwm=PWMConfig(channel=1, min_pulse_us=1000, max_pulse_us=2000),
-    brake_pwm=PWMConfig(channel=2, min_pulse_us=1000, max_pulse_us=2000),
-)
+class HardwareHAL(AckermannHAL):
+    def __init__(self, node, config: AckermannConfig):
+        super().__init__(config)
+        self.node = node
+        # Initialize your hardware drivers here
+
+    def initialize(self) -> bool:
+        # Setup PWM, CAN, Serial, etc.
+        return True
+
+    def set_command(self, command: AckermannCommand) -> bool:
+        # Convert command to hardware signals
+        # command.steering_angle (radians)
+        # command.throttle (0-1)
+        # command.brake (0-1)
+        return True
 ```
-
-**2. Industrial (CAN Bus Motor Controllers)**
-- Modify `_init_can()` in `ackermann_hal_hardware.py`
-- Implement CAN message encoding for your motor controller protocol
 
 ### Safety Considerations
 

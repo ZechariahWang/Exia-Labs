@@ -50,9 +50,9 @@ class AckermannDriveNode(Node):
         super().__init__('ackermann_drive_node')
 
         # Declare parameters
-        self.declare_parameter('wheelbase', 0.4)
-        self.declare_parameter('track_width', 0.45)
-        self.declare_parameter('wheel_radius', 0.1)
+        self.declare_parameter('wheelbase', 1.3)
+        self.declare_parameter('track_width', 1.1)
+        self.declare_parameter('wheel_radius', 0.3)
         self.declare_parameter('max_steering_angle', 0.6)
         self.declare_parameter('max_speed', 5.0)
         self.declare_parameter('max_acceleration', 2.0)

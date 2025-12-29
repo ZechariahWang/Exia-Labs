@@ -27,9 +27,9 @@ from ..hal.base import (
 class DriveControllerConfig:
     """Configuration for the drive controller."""
     # Kinematic parameters
-    wheelbase: float = 0.4
-    track_width: float = 0.45
-    wheel_radius: float = 0.1
+    wheelbase: float = 1.3
+    track_width: float = 1.1
+    wheel_radius: float = 0.3
 
     # Limits
     max_steering_angle: float = 0.6

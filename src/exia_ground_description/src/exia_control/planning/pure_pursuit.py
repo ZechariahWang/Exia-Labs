@@ -24,22 +24,22 @@ from geometry_msgs.msg import Twist
 @dataclass
 class PurePursuitConfig:
     """Configuration for Pure Pursuit controller."""
-    # Lookahead parameters
-    lookahead_distance: float = 0.8      # Base lookahead distance (m)
-    min_lookahead: float = 0.3           # Minimum lookahead (m)
-    max_lookahead: float = 2.0           # Maximum lookahead (m)
+    # Lookahead parameters (scaled for larger vehicle)
+    lookahead_distance: float = 2.0      # Base lookahead distance (m)
+    min_lookahead: float = 1.0           # Minimum lookahead (m)
+    max_lookahead: float = 5.0           # Maximum lookahead (m)
     lookahead_gain: float = 0.5          # Speed-dependent lookahead gain
 
     # Goal parameters
-    goal_tolerance: float = 0.3          # Distance to consider goal reached (m)
+    goal_tolerance: float = 0.5          # Distance to consider goal reached (m)
 
     # Speed control
-    max_linear_speed: float = 1.0        # Maximum speed (m/s)
-    min_linear_speed: float = 0.2        # Minimum speed when moving (m/s) - ensures throttle > deadband
-    max_angular_speed: float = 1.5       # Maximum angular velocity (rad/s)
+    max_linear_speed: float = 2.0        # Maximum speed (m/s)
+    min_linear_speed: float = 0.3        # Minimum speed when moving (m/s) - ensures throttle > deadband
+    max_angular_speed: float = 1.0       # Maximum angular velocity (rad/s)
 
     # Vehicle parameters
-    wheelbase: float = 0.4               # Front to rear axle (m)
+    wheelbase: float = 1.3               # Front to rear axle (m)
 
 
 @dataclass
@@ -82,76 +82,45 @@ class Path:
 
 
 class PurePursuitController:
-    """
-    Pure Pursuit path following controller for Ackermann vehicles.
-
-    Generates Twist commands to follow a given path.
-    """
 
     def __init__(self, config: Optional[PurePursuitConfig] = None):
-        """
-        Initialize the Pure Pursuit controller.
-
-        Args:
-            config: PurePursuitConfig, uses defaults if not provided
-        """
         self.config = config or PurePursuitConfig()
         self._path: Optional[Path] = None
         self._current_waypoint_idx = 0
         self._is_active = False
 
     def set_path(self, path: Path):
-        """Set the path to follow."""
         self._path = path
         self._current_waypoint_idx = 0
         self._is_active = len(path) > 0
 
     def clear_path(self):
-        """Clear the current path."""
         self._path = None
         self._current_waypoint_idx = 0
         self._is_active = False
 
     def start(self):
-        """Start following the path."""
         if self._path and len(self._path) > 0:
             self._is_active = True
             self._current_waypoint_idx = 0
 
     def stop(self):
-        """Stop following the path."""
         self._is_active = False
 
     def is_active(self) -> bool:
-        """Check if controller is actively following a path."""
         return self._is_active
 
     def is_goal_reached(self) -> bool:
-        """Check if the final goal has been reached."""
         if self._path is None or self._path.is_empty():
             return True
         return self._current_waypoint_idx >= len(self._path)
 
     def get_current_waypoint_index(self) -> int:
-        """Get the index of the current target waypoint."""
         return self._current_waypoint_idx
 
-    def compute_velocity(self, x: float, y: float, yaw: float,
-                         current_speed: float = 0.0) -> Tuple[Twist, bool]:
-        """
-        Compute velocity command to follow the path.
+    def compute_velocity(self, x: float, y: float, yaw: float, current_speed: float = 0.0) -> Tuple[Twist, bool]:
 
-        Args:
-            x: Current x position (m)
-            y: Current y position (m)
-            yaw: Current heading (rad)
-            current_speed: Current speed (m/s)
-
-        Returns:
-            Tuple of (Twist command, goal_reached)
-        """
         cmd = Twist()
-
         if not self._is_active or self._path is None or self._path.is_empty():
             return cmd, True
 
@@ -239,12 +208,6 @@ class PurePursuitController:
         return angle
 
     def get_lookahead_point(self, x: float, y: float, yaw: float) -> Optional[Tuple[float, float]]:
-        """
-        Get the current lookahead point for visualization.
-
-        Returns:
-            Tuple of (lookahead_x, lookahead_y) or None
-        """
         if not self._is_active or self._path is None:
             return None
 

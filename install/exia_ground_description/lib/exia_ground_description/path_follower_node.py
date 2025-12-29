@@ -74,7 +74,7 @@ class PathFollowerNode(Node):
             lookahead_distance=lookahead,
             goal_tolerance=tolerance,
             max_linear_speed=speed,
-            wheelbase=0.4,
+            wheelbase=1.3,
         )
         self._controller = PurePursuitController(pp_config)
 

@@ -171,9 +171,9 @@ def generate_launch_description():
         name='ackermann_drive_node',
         parameters=[{
             'use_sim_time': use_sim_time,
-            'wheelbase': 0.4,
-            'track_width': 0.45,
-            'wheel_radius': 0.1,
+            'wheelbase': 1.3,
+            'track_width': 1.1,
+            'wheel_radius': 0.3,
             'max_steering_angle': 0.6,
             'max_speed': 5.0,
             'max_acceleration': 2.0,

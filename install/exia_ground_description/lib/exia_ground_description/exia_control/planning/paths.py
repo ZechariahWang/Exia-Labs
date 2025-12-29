@@ -8,7 +8,6 @@ Date: December 2025
 from typing import List, Tuple, Optional
 from .pure_pursuit import Path
 
-
 def create_path(points: List[Tuple[float, float]], speed: Optional[float] = None) -> Path:
     """
     Create a Path from a list of (x, y) coordinates.
@@ -41,28 +40,19 @@ def create_scaled_path(points: List[Tuple[float, float]], scale: float = 1.0,
 
 
 def create_line_path(length: float = 4.0, speed: Optional[float] = None) -> Path:
-    """Create a straight line path along X axis."""
     points = [(i * length / 4, 0.0) for i in range(5)]
     return create_path(points, speed)
 
-
 def create_square_path(size: float = 2.0, speed: Optional[float] = None) -> Path:
-    """Create a square path."""
     return create_scaled_path(SQUARE_PATH, scale=size / 2.0, speed=speed)
 
-
 def create_circle_path(radius: float = 1.5, speed: Optional[float] = None) -> Path:
-    """Create a circle path."""
     return create_scaled_path(CIRCLE_PATH, scale=radius / 1.5, speed=speed)
 
-
 def create_figure_eight_path(size: float = 2.0, speed: Optional[float] = None) -> Path:
-    """Create a figure-eight path."""
     return create_scaled_path(FIGURE_EIGHT_PATH, scale=size / 2.5, speed=speed)
 
-
 def create_slalom_path(length: float = 6.0, speed: Optional[float] = None) -> Path:
-    """Create a slalom path."""
     return create_scaled_path(SLALOM_PATH, scale=length / 6.0, speed=speed)
 
 LINE_PATH = [
@@ -115,9 +105,7 @@ SLALOM_PATH = [
     (6.0, 0.0),
 ]
 
-
 def get_path(name: str, speed: Optional[float] = None) -> Path:
-    """Get a predefined path by name."""
     paths = {
         'line': LINE_PATH,
         'square': SQUARE_PATH,

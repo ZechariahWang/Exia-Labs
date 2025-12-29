@@ -34,9 +34,9 @@ class AckermannOdometry(Node):
     """Computes odometry from Ackermann steering joint states."""
 
     # Robot geometry (must match URDF)
-    WHEEL_RADIUS = 0.1      # meters
-    WHEEL_BASE = 0.4        # meters (front to rear axle)
-    TRACK_WIDTH = 0.45      # meters (left to right wheel)
+    WHEEL_RADIUS = 0.3      # meters
+    WHEEL_BASE = 1.3        # meters (front to rear axle)
+    TRACK_WIDTH = 1.1       # meters (left to right wheel)
 
     def __init__(self):
         super().__init__('ackermann_odometry')

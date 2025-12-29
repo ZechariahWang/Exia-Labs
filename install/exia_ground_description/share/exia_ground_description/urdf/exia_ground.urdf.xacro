@@ -373,6 +373,48 @@
     <origin xyz="0 0 0.31" rpy="0 0 0"/>
   </joint>
 
+  <!-- ==================== LIDAR SENSOR ==================== -->
+  <!-- 2D Lidar mounted on top of the chassis -->
+  <!-- Simulation: Gazebo Fortress GPU ray sensor -->
+  <!-- Hardware: Slamtec RPlidar S3 (40m range, 360 deg, 32000 samples/sec) -->
+  <!-- Mount position: Forward of center, above chassis for unobstructed 360 deg view -->
+
+  <link name="lidar_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <!-- RPlidar S3 approximate dimensions: 76mm diameter, 41mm height -->
+        <cylinder radius="0.038" length="0.041"/>
+      </geometry>
+      <material name="dark_grey">
+        <color rgba="0.2 0.2 0.2 1"/>
+      </material>
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.038" length="0.041"/>
+      </geometry>
+    </collision>
+
+    <inertial>
+      <mass value="0.190"/>  <!-- RPlidar S3 weight: ~190g -->
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <inertia ixx="0.00005" ixy="0" ixz="0"
+               iyy="0.00005" iyz="0"
+               izz="0.00007"/>
+    </inertial>
+  </link>
+
+  <!-- Lidar mount: Centered on chassis top, slightly forward -->
+  <!-- Z = 0.3 (half chassis height) + 0.02 (small clearance) + 0.02 (half lidar height) = 0.34m -->
+  <joint name="lidar_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="lidar_link"/>
+    <origin xyz="0.3 0 0.34" rpy="0 0 0"/>
+  </joint>
+
   <!-- ==================== GAZEBO FORTRESS PROPERTIES ==================== -->
 
   <!-- Wheel friction for traction -->
@@ -446,6 +488,39 @@
           <z><noise type="gaussian"><mean>0.0</mean><stddev>0.017</stddev></noise></z>
         </linear_acceleration>
       </imu>
+    </sensor>
+  </gazebo>
+
+  <!-- ==================== GAZEBO FORTRESS LIDAR SENSOR ==================== -->
+  <!-- 2D lidar sensor matching RPlidar S3 specifications -->
+  <!-- For hardware: Use rplidar_ros driver publishing to /scan topic -->
+  <gazebo reference="lidar_link">
+    <sensor name="gpu_lidar" type="gpu_lidar">
+      <update_rate>10</update_rate>
+      <topic>lidar</topic>
+      <gz_frame_id>lidar_link</gz_frame_id>
+      <lidar>
+        <scan>
+          <horizontal>
+            <samples>360</samples>
+            <resolution>1</resolution>
+            <min_angle>-3.14159</min_angle>
+            <max_angle>3.14159</max_angle>
+          </horizontal>
+          <vertical>
+            <samples>1</samples>
+            <resolution>1</resolution>
+            <min_angle>0</min_angle>
+            <max_angle>0</max_angle>
+          </vertical>
+        </scan>
+        <range>
+          <min>0.2</min>
+          <max>20.0</max>
+        </range>
+      </lidar>
+      <always_on>true</always_on>
+      <visualize>true</visualize>
     </sensor>
   </gazebo>
 

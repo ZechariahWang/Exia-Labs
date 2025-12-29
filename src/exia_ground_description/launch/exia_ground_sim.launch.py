@@ -72,11 +72,13 @@ def generate_launch_description():
     )
 
     # ==================== Gazebo Fortress ====================
+    # Use custom world with Sensors plugin for IMU/Lidar support
+    world_file = os.path.join(pkg_share, 'worlds', 'exia_world.sdf')
     gz_sim = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(pkg_ros_gz_sim, 'launch', 'gz_sim.launch.py')
         ),
-        launch_arguments={'gz_args': '-r empty.sdf'}.items()
+        launch_arguments={'gz_args': f'-r {world_file}'}.items()
     )
 
     # ==================== Robot State Publisher ====================
@@ -102,15 +104,21 @@ def generate_launch_description():
     )
 
     # ==================== Gazebo-ROS Bridge ====================
+    # Bridge Gazebo topics to ROS 2
+    # Format: /gz_topic@ros_msg_type[gz_msg_type (for Gazebo->ROS)
+    # Format: /gz_topic@ros_msg_type]gz_msg_type (for ROS->Gazebo)
     bridge = Node(
         package='ros_gz_bridge',
         executable='parameter_bridge',
         arguments=[
             '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock',
             '/imu@sensor_msgs/msg/Imu[gz.msgs.IMU',
+            # Lidar scan: Gazebo publishes LaserScan on /lidar topic
+            '/lidar@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
         ],
         remappings=[
             ('/imu', '/imu/data'),
+            ('/lidar', '/scan'),
         ],
         output='screen'
     )

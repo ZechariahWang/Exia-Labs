@@ -31,6 +31,11 @@ install(DIRECTORY config
   DESTINATION share/${PROJECT_NAME}
 )
 
+# Install world files
+install(DIRECTORY worlds
+  DESTINATION share/${PROJECT_NAME}
+)
+
 # ==================== Install Python Package ====================
 # The exia_control package contains reusable modules:
 #   - hal/       Hardware Abstraction Layer

@@ -128,7 +128,8 @@ odom
               ├── rear_left_wheel (continuous - driven)
               ├── rear_right_wheel (continuous - driven)
               ├── brake_actuator_link (revolute - brake)
-              └── imu_link (fixed)
+              ├── imu_link (fixed)
+              └── lidar_link (fixed)
 ```
 
 ## Build Commands
@@ -272,6 +273,7 @@ ros2 service call /path_follower/reset std_srvs/srv/Trigger
 |-------|------|-------------|
 | `/joint_states` | sensor_msgs/JointState | Joint positions and velocities |
 | `/odom` | nav_msgs/Odometry | Odometry estimate |
+| `/scan` | sensor_msgs/LaserScan | 2D lidar scan data (15Hz) |
 | `/imu/data` | sensor_msgs/Imu | IMU sensor data (200Hz) |
 | `/tf` | tf2_msgs/TFMessage | Transform tree |
 
@@ -299,6 +301,19 @@ ros2 service call /path_follower/reset std_srvs/srv/Trigger
 | brake_controller | ForwardCommandController | brake_joint |
 
 ## Sensors
+
+### Lidar (Slamtec RPlidar S3 compatible)
+- **Topic**: `/scan`
+- **Frame**: `lidar_link`
+- **Message Type**: `sensor_msgs/LaserScan`
+- **Update rate**: 15Hz (configurable 10-20Hz)
+- **Range**: 0.1m - 40m
+- **FOV**: 360 degrees
+- **Angular resolution**: 0.225 degrees (1600 samples/scan)
+- **Position**: Forward of center, on top of chassis (X=0.3m, Z=0.34m from base_link)
+- **Noise**: Gaussian (stddev: 0.02m)
+- **Simulation**: Gazebo Fortress GPU lidar sensor
+- **Hardware**: Slamtec RPlidar S3 via rplidar_ros package
 
 ### IMU (Yahboom 10-axis compatible)
 - **Topic**: `/imu/data`
@@ -376,6 +391,12 @@ ros2 run tf2_tools view_frames
 
 # View TF between frames
 ros2 run tf2_ros tf2_echo odom base_footprint
+
+# Check lidar scan data
+ros2 topic echo /scan --once
+
+# Check lidar scan rate
+ros2 topic hz /scan
 ```
 
 ## Development Notes
@@ -417,8 +438,59 @@ The HAL architecture makes hardware deployment straightforward:
 | Steering | gz_ros2_control | PWM servo (50Hz, 1000-2000us) |
 | Throttle | gz_ros2_control | ESC/Motor controller |
 | Brake | gz_ros2_control | Servo or linear actuator |
+| Lidar | Gazebo GPU sensor | RPlidar S3 via rplidar_ros |
 | IMU | Gazebo sensor | Yahboom 10-axis driver |
 | Encoders | Gazebo physics | Real wheel encoders |
+
+### RPlidar S3 Hardware Deployment
+
+To switch from simulated lidar to real RPlidar S3:
+
+1. **Install rplidar_ros package**:
+   ```bash
+   sudo apt install ros-humble-rplidar-ros
+   ```
+
+2. **Configure USB permissions**:
+   ```bash
+   # Create udev rule for persistent device naming
+   echo 'KERNEL=="ttyUSB*", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", MODE:="0666", SYMLINK+="rplidar"' | sudo tee /etc/udev/rules.d/99-rplidar.rules
+   sudo udevadm control --reload-rules && sudo udevadm trigger
+   ```
+
+3. **Launch RPlidar node** (instead of Gazebo sensor):
+   ```bash
+   ros2 launch rplidar_ros rplidar_s3_launch.py serial_port:=/dev/rplidar frame_id:=lidar_link
+   ```
+
+4. **Create hardware launch file** (`exia_ground_hardware.launch.py`):
+   ```python
+   # Add RPlidar node instead of Gazebo bridge for /scan
+   rplidar_node = Node(
+       package='rplidar_ros',
+       executable='rplidar_node',
+       name='rplidar_node',
+       parameters=[{
+           'serial_port': '/dev/rplidar',
+           'serial_baudrate': 256000,  # RPlidar S3 baudrate
+           'frame_id': 'lidar_link',
+           'angle_compensate': True,
+           'scan_mode': 'Standard',
+       }],
+       output='screen'
+   )
+   ```
+
+**RPlidar S3 Specifications**:
+| Parameter | Value |
+|-----------|-------|
+| Range | 0.1m - 40m |
+| Sample Rate | 32,000 samples/sec |
+| Scan Frequency | 10-20 Hz |
+| Angular Resolution | 0.225 deg |
+| Interface | USB (CP2102 UART) |
+| Baudrate | 256000 |
+| Weight | 190g |
 
 ### Example Hardware HAL Implementation
 

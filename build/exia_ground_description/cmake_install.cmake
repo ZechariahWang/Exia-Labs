@@ -55,7 +55,18 @@ if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_
 endif()
 
 if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/exia_ground_description" TYPE PROGRAM FILES "/home/zech/exia_ws/src/exia_ground_description/scripts/move_forward.py")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/exia_ground_description" TYPE DIRECTORY FILES "/home/zech/exia_ws/src/exia_ground_description/config")
+endif()
+
+if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/exia_ground_description" TYPE PROGRAM FILES
+    "/home/zech/exia_ws/src/exia_ground_description/scripts/move_forward.py"
+    "/home/zech/exia_ws/src/exia_ground_description/scripts/ackermann_controller.py"
+    "/home/zech/exia_ws/src/exia_ground_description/scripts/ackermann_odometry.py"
+    "/home/zech/exia_ws/src/exia_ground_description/scripts/steering_controller.py"
+    "/home/zech/exia_ws/src/exia_ground_description/scripts/atv_controller.py"
+    "/home/zech/exia_ws/src/exia_ground_description/scripts/atv_hardware_interface.py"
+    )
 endif()
 
 if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)

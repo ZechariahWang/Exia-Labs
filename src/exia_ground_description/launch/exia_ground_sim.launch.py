@@ -1,124 +1,152 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import (
+    DeclareLaunchArgument,
+    IncludeLaunchDescription,
+    RegisterEventHandler,
+)
+from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
+from launch_ros.substitutions import FindPackageShare
 from ament_index_python.packages import get_package_share_directory
+import xacro
 import os
 
 
 def generate_launch_description():
-    """
-    Launch file for Exia Ground robot simulation with IMU sensor.
+    pkg_share = get_package_share_directory('exia_ground_description')
+    pkg_ros_gz_sim = get_package_share_directory('ros_gz_sim')
 
-    This launch file supports both simulation and hardware modes:
-    - Simulation mode: Uses Gazebo IMU plugin (default)
-    - Hardware mode: Designed for future Yahboom IMU hardware integration
+    xacro_path = os.path.join(pkg_share, 'urdf', 'exia_ground.urdf.xacro')
+    controller_config = os.path.join(pkg_share, 'config', 'ackermann_controllers.yaml')
 
-    Launch arguments:
-        use_sim_time (bool): Use simulation time from Gazebo (default: true)
-        use_hardware_imu (bool): Use hardware IMU instead of simulated (default: false)
-        imu_frame_id (str): Frame ID for IMU data (default: imu_link)
-    """
+    robot_description = xacro.process_file(
+        xacro_path,
+        mappings={'config_path': controller_config}
+    ).toxml()
 
-    exia_share = get_package_share_directory('exia_ground_description')
-    gazebo_ros_share = get_package_share_directory('gazebo_ros')
+    use_sim_time = LaunchConfiguration('use_sim_time')
 
-    urdf_path = os.path.join(exia_share, 'urdf', 'exia_ground.urdf')
-
-    # Read URDF file
-    with open(urdf_path, 'r') as urdf_file:
-        robot_description = urdf_file.read()
-
-    # ==================== LAUNCH ARGUMENTS ====================
-
-    # sim imu
     use_sim_time_arg = DeclareLaunchArgument(
         'use_sim_time',
         default_value='true',
-        description='Use simulation (Gazebo) clock'
+        description='Use simulation time'
     )
 
-    # Hardware IMU flag, i think we will use when real imu is connected
-    use_hardware_imu_arg = DeclareLaunchArgument(
-        'use_hardware_imu',
-        default_value='false',
-        description='Use hardware IMU (Yahboom) instead of simulated IMU'
-    )
-
-    # IMU frame ID - should match URDF imu_link
-    imu_frame_id_arg = DeclareLaunchArgument(
-        'imu_frame_id',
-        default_value='imu_link',
-        description='Frame ID for IMU sensor data'
-    )
-
-    # Get launch configurations
-    use_sim_time = LaunchConfiguration('use_sim_time')
-    # Note: use_hardware_imu and imu_frame_id will be used when hardware IMU support is added
-
-    # ==================== GAZEBO SIMULATION ====================
-
-    # Launch Gazebo using the gazebo_ros launch file
-    gazebo = IncludeLaunchDescription(
+    # Gazebo Fortress
+    gz_sim = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(gazebo_ros_share, 'launch', 'gazebo.launch.py')
+            os.path.join(pkg_ros_gz_sim, 'launch', 'gz_sim.launch.py')
         ),
-        launch_arguments={
-            'verbose': 'true'
-        }.items()
+        launch_arguments={'gz_args': '-r empty.sdf'}.items()
     )
 
-    # ==================== ROBOT STATE PUBLISHER ====================
-
-    # Robot state publisher - publishes TF transforms from URDF
+    # Robot state publisher
     robot_state_publisher = Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
-        name='robot_state_publisher',
-        output='screen',
         parameters=[{
             'robot_description': robot_description,
             'use_sim_time': use_sim_time
         }]
     )
 
-    # ==================== SPAWN ROBOT IN GAZEBO ====================
-
     # Spawn robot in Gazebo
     spawn_entity = Node(
-        package='gazebo_ros',
-        executable='spawn_entity.py',
+        package='ros_gz_sim',
+        executable='create',
         arguments=[
-            '-entity', 'exia_ground',
+            '-name', 'exia_ground',
             '-topic', 'robot_description',
-            '-x', '0',
-            '-y', '0',
-            '-z', '0.05'
+            '-z', '0.15'
         ],
         output='screen'
     )
 
-    # ==================== BUILD LAUNCH DESCRIPTION ====================
+    # Bridge for clock and IMU
+    bridge = Node(
+        package='ros_gz_bridge',
+        executable='parameter_bridge',
+        arguments=[
+            '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock',
+            '/imu@sensor_msgs/msg/Imu[gz.msgs.IMU',
+        ],
+        remappings=[
+            ('/imu', '/imu/data'),
+        ],
+        output='screen'
+    )
+
+    # Controller spawners
+    joint_state_broadcaster_spawner = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=[
+            'joint_state_broadcaster',
+            '--param-file', controller_config,
+        ],
+    )
+
+    steering_controller_spawner = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=[
+            'steering_controller',
+            '--param-file', controller_config,
+        ],
+    )
+
+    throttle_controller_spawner = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=[
+            'throttle_controller',
+            '--param-file', controller_config,
+        ],
+    )
+
+    # Odometry node
+    odometry_node = Node(
+        package='exia_ground_description',
+        executable='ackermann_odometry.py',
+        parameters=[{'use_sim_time': use_sim_time}]
+    )
+
+    # Chain controller spawning after robot is spawned
+    delay_jsb = RegisterEventHandler(
+        OnProcessExit(
+            target_action=spawn_entity,
+            on_exit=[joint_state_broadcaster_spawner]
+        )
+    )
+    delay_steering = RegisterEventHandler(
+        OnProcessExit(
+            target_action=joint_state_broadcaster_spawner,
+            on_exit=[steering_controller_spawner]
+        )
+    )
+    delay_throttle = RegisterEventHandler(
+        OnProcessExit(
+            target_action=steering_controller_spawner,
+            on_exit=[throttle_controller_spawner]
+        )
+    )
+    delay_odom = RegisterEventHandler(
+        OnProcessExit(
+            target_action=throttle_controller_spawner,
+            on_exit=[odometry_node]
+        )
+    )
 
     return LaunchDescription([
-        # Launch arguments
         use_sim_time_arg,
-        use_hardware_imu_arg,
-        imu_frame_id_arg,
-
-        # Gazebo and robot
-        gazebo,
+        gz_sim,
         robot_state_publisher,
         spawn_entity,
-
-        # Note dec 28, 2025: im pretty sure IMU data is published by the Gazebo plugin configured in the URDF
-
-        # Topic: /imu/data (sensor_msgs/Imu)
-        # Frame: imu_link
-        #
-        # For hardware deployment with Yahboom IMU, i have to make sure:
-        # 1. Set use_hardware_imu:=true
-        # 2. Add Yahboom IMU driver node (e.g., wit_ros2_imu or custom serial driver)
-        # 3. Ensure driver publishes to /imu/data with frame_id=imu_link
+        bridge,
+        delay_jsb,
+        delay_steering,
+        delay_throttle,
+        delay_odom,
     ])

@@ -43,9 +43,21 @@ install(
   DESTINATION share/${PROJECT_NAME}
 )
 
+# Install config files (ros2_control configuration)
+install(
+  DIRECTORY config
+  DESTINATION share/${PROJECT_NAME}
+)
+
 # Install Python scripts
 install(
-  PROGRAMS scripts/move_forward.py
+  PROGRAMS
+    scripts/move_forward.py
+    scripts/ackermann_controller.py
+    scripts/ackermann_odometry.py
+    scripts/steering_controller.py
+    scripts/atv_controller.py
+    scripts/atv_hardware_interface.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

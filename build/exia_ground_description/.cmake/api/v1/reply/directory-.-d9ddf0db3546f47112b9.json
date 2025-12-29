@@ -72,7 +72,7 @@
 			{
 				"command" : 5,
 				"file" : 0,
-				"line" : 70,
+				"line" : 73,
 				"parent" : 0
 			},
 			{
@@ -309,18 +309,9 @@
 			"destination" : "lib/exia_ground_description",
 			"paths" : 
 			[
-				"scripts/ackermann_drive_node.py",
-				"scripts/path_follower_node.py",
-				"scripts/move_forward.py",
-				"scripts/steering_controller.py",
-				"scripts/ackermann_controller.py",
-				"scripts/ackermann_odometry.py",
-				"scripts/atv_controller.py",
-				"scripts/atv_hardware_interface.py",
-				"scripts/waypoint_follower.py",
-				"scripts/ackermann_hal_base.py",
-				"scripts/ackermann_hal_simulation.py",
-				"scripts/ackermann_hal_hardware.py"
+				"scripts/active/ackermann_drive_node.py",
+				"scripts/active/path_follower_node.py",
+				"scripts/active/ackermann_odometry.py"
 			],
 			"type" : "file"
 		},

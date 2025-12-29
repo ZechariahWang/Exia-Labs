@@ -43,28 +43,31 @@ install(DIRECTORY src/exia_control
 )
 
 # ==================== Install Entry-Point Scripts ====================
-# These are ROS2 node executables that use the exia_control package
+# Active scripts - ROS2 node executables that use the exia_control package
 
 install(
   PROGRAMS
-    # Main control nodes
-    scripts/ackermann_drive_node.py
-    scripts/path_follower_node.py
-
-    # Legacy/utility scripts (for backwards compatibility)
-    scripts/move_forward.py
-    scripts/steering_controller.py
-    scripts/ackermann_controller.py
-    scripts/ackermann_odometry.py
-    scripts/atv_controller.py
-    scripts/atv_hardware_interface.py
-    scripts/waypoint_follower.py
-
-    # Old HAL scripts (can be removed after transition)
-    scripts/ackermann_hal_base.py
-    scripts/ackermann_hal_simulation.py
-    scripts/ackermann_hal_hardware.py
+    scripts/active/ackermann_drive_node.py
+    scripts/active/path_follower_node.py
+    scripts/active/ackermann_odometry.py
   DESTINATION lib/${PROJECT_NAME}
 )
+
+# Archive scripts - Legacy/reference scripts (not actively used)
+# These are kept for reference but not installed by default
+# To install archive scripts, uncomment the block below:
+# install(
+#   PROGRAMS
+#     scripts/archive/ackermann_hal_base.py
+#     scripts/archive/ackermann_hal_simulation.py
+#     scripts/archive/ackermann_hal_hardware.py
+#     scripts/archive/ackermann_controller.py
+#     scripts/archive/atv_controller.py
+#     scripts/archive/atv_hardware_interface.py
+#     scripts/archive/steering_controller.py
+#     scripts/archive/move_forward.py
+#     scripts/archive/waypoint_follower.py
+#   DESTINATION lib/${PROJECT_NAME}
+# )
 
 ament_package()

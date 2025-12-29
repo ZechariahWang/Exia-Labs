@@ -15,16 +15,7 @@
 /home/zech/exia_ws/install/exia_ground_description/lib/exia_ground_description/exia_control/planning/pure_pursuit.py
 /home/zech/exia_ws/install/exia_ground_description/lib/exia_ground_description/ackermann_drive_node.py
 /home/zech/exia_ws/install/exia_ground_description/lib/exia_ground_description/path_follower_node.py
-/home/zech/exia_ws/install/exia_ground_description/lib/exia_ground_description/move_forward.py
-/home/zech/exia_ws/install/exia_ground_description/lib/exia_ground_description/steering_controller.py
-/home/zech/exia_ws/install/exia_ground_description/lib/exia_ground_description/ackermann_controller.py
 /home/zech/exia_ws/install/exia_ground_description/lib/exia_ground_description/ackermann_odometry.py
-/home/zech/exia_ws/install/exia_ground_description/lib/exia_ground_description/atv_controller.py
-/home/zech/exia_ws/install/exia_ground_description/lib/exia_ground_description/atv_hardware_interface.py
-/home/zech/exia_ws/install/exia_ground_description/lib/exia_ground_description/waypoint_follower.py
-/home/zech/exia_ws/install/exia_ground_description/lib/exia_ground_description/ackermann_hal_base.py
-/home/zech/exia_ws/install/exia_ground_description/lib/exia_ground_description/ackermann_hal_simulation.py
-/home/zech/exia_ws/install/exia_ground_description/lib/exia_ground_description/ackermann_hal_hardware.py
 /home/zech/exia_ws/install/exia_ground_description/share/ament_index/resource_index/package_run_dependencies/exia_ground_description
 /home/zech/exia_ws/install/exia_ground_description/share/ament_index/resource_index/parent_prefix_path/exia_ground_description
 /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/environment/ament_prefix_path.sh

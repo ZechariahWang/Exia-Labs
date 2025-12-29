@@ -119,7 +119,7 @@ class PurePursuitController:
         return self._current_waypoint_idx
 
     def compute_velocity(self, x: float, y: float, yaw: float, current_speed: float = 0.0) -> Tuple[Twist, bool]:
-        
+
         cmd = Twist()
         if not self._is_active or self._path is None or self._path.is_empty():
             return cmd, True
@@ -208,12 +208,6 @@ class PurePursuitController:
         return angle
 
     def get_lookahead_point(self, x: float, y: float, yaw: float) -> Optional[Tuple[float, float]]:
-        """
-        Get the current lookahead point for visualization.
-
-        Returns:
-            Tuple of (lookahead_x, lookahead_y) or None
-        """
         if not self._is_active or self._path is None:
             return None
 

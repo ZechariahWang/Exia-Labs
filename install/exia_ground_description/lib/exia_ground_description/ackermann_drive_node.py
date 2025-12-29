@@ -24,10 +24,13 @@ import os
 import sys
 
 # Add package to path for module imports
+# scripts/active/ -> scripts/ -> exia_ground_description/ -> src/
 _script_dir = os.path.dirname(os.path.abspath(__file__))
-_package_dir = os.path.dirname(_script_dir)
-if _package_dir not in sys.path:
-    sys.path.insert(0, _package_dir)
+_scripts_dir = os.path.dirname(_script_dir)
+_package_dir = os.path.dirname(_scripts_dir)
+_src_dir = os.path.join(_package_dir, 'src')
+if _src_dir not in sys.path:
+    sys.path.insert(0, _src_dir)
 
 import rclpy
 from rclpy.node import Node

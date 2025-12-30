@@ -407,12 +407,13 @@
     </inertial>
   </link>
 
-  <!-- Lidar mount: Centered on chassis top, slightly forward -->
-  <!-- Z = 0.3 (half chassis height) + 0.02 (small clearance) + 0.02 (half lidar height) = 0.34m -->
+  <!-- Lidar mount: Lower position to detect small obstacles -->
+  <!-- Z = 0.15m (15cm) to detect obstacles >= 15cm tall at close range -->
+  <!-- Tilted down 5 degrees (0.087 rad) to hit ground at ~1.7m distance -->
   <joint name="lidar_joint" type="fixed">
     <parent link="base_link"/>
     <child link="lidar_link"/>
-    <origin xyz="0.3 0 0.34" rpy="0 0 0"/>
+    <origin xyz="0.3 0 0.15" rpy="0 0.087 0"/>
   </joint>
 
   <!-- ==================== GAZEBO FORTRESS PROPERTIES ==================== -->

@@ -78,7 +78,7 @@
 			{
 				"command" : 5,
 				"file" : 0,
-				"line" : 78,
+				"line" : 79,
 				"parent" : 0
 			},
 			{
@@ -327,7 +327,8 @@
 			[
 				"scripts/active/ackermann_drive_node.py",
 				"scripts/active/path_follower_node.py",
-				"scripts/active/ackermann_odometry.py"
+				"scripts/active/ackermann_odometry.py",
+				"scripts/active/navigation_node.py"
 			],
 			"type" : "file"
 		},

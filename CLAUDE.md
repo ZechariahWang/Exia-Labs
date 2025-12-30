@@ -49,10 +49,14 @@ exia_ws/
 │       ├── launch/                 # Launch files
 │       ├── config/                 # Controller configurations
 │       ├── rviz/                   # RViz configuration
-│       ├── scripts/                # ROS2 node entry points
-│       │   ├── ackermann_drive_node.py      # Main drive controller
-│       │   ├── path_follower_node.py        # Pure Pursuit path following
-│       │   └── ackermann_odometry.py        # Fallback odometry node
+│       ├── worlds/                 # Gazebo world files
+│       │   └── exia_world.sdf      # Custom world with obstacles & sensors
+│       ├── scripts/
+│       │   ├── active/             # Current ROS2 node entry points
+│       │   │   ├── ackermann_drive_node.py   # Main drive controller
+│       │   │   ├── path_follower_node.py     # Pure Pursuit path following
+│       │   │   └── ackermann_odometry.py     # Fallback odometry node
+│       │   └── archive/            # Legacy scripts (reference only)
 │       └── src/
 │           └── exia_control/       # Modular Python package
 │               ├── hal/            # Hardware Abstraction Layer
@@ -253,6 +257,123 @@ ros2 service call /path_follower/reset std_srvs/srv/Trigger
 | `/planned_path` | nav_msgs/Path | Current path being followed |
 | `/path_markers` | visualization_msgs/MarkerArray | Waypoint markers |
 
+## SLAM and Navigation
+
+The robot includes full SLAM and autonomous navigation capabilities using Nav2.
+
+### Architecture
+
+```
+/scan (lidar) --> slam_toolbox --> /map --> global_costmap
+                                              |
+                                              v
+/goal_pose --------------------------------> Smac Hybrid-A*
+                                              |
+                                              v /planned_path
+/local_costmap --> Path Validator --> Replan Manager
+                         |                    |
+                         v                    v
+                   Pure Pursuit <-------------+
+                         |
+                         v /cmd_vel
+                   Ackermann Drive Node
+```
+
+### Key Components
+
+| Component | Package | Purpose |
+|-----------|---------|---------|
+| SLAM | slam_toolbox | Builds map, provides map->odom TF |
+| Global Planner | Nav2 Smac Hybrid-A* | Ackermann-aware path planning |
+| Local Costmap | Nav2 Costmap 2D | Obstacle detection from lidar |
+| Path Validator | exia_control.navigation | Checks path collisions |
+| Replan Manager | exia_control.navigation | Triggers replanning |
+| Path Follower | Pure Pursuit | Executes planned path |
+
+### Ackermann-Specific Parameters
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| Minimum turning radius | 1.9m | wheelbase / tan(max_steering) |
+| Motion model | REEDS_SHEPP | Allows forward + reverse |
+| Robot footprint | 2.31m x 1.30m | With safety margin |
+| Rotate in place | Disabled | Ackermann cannot rotate in place |
+
+### Launch Commands
+
+```bash
+# Start simulation first
+ros2 launch exia_ground_description exia_ground_sim.launch.py
+
+# Terminal 2: SLAM only (for mapping)
+ros2 launch exia_ground_description slam.launch.py
+
+# Terminal 2: SLAM + Navigation (for autonomous navigation)
+ros2 launch exia_ground_description slam_nav.launch.py
+
+# Terminal 3: RViz with SLAM/Nav visualization
+rviz2 -d ~/exia_ws/src/exia_ground_description/rviz/exia_slam_nav.rviz
+```
+
+### Navigation Commands
+
+```bash
+# Send navigation goal via command line
+ros2 topic pub /goal_pose geometry_msgs/msg/PoseStamped "{
+  header: {frame_id: 'map'},
+  pose: {position: {x: 5.0, y: 0.0, z: 0.0}, orientation: {w: 1.0}}
+}" -1
+
+# Start/stop navigation
+ros2 service call /navigation/start std_srvs/srv/Trigger
+ros2 service call /navigation/stop std_srvs/srv/Trigger
+
+# Force replanning
+ros2 service call /navigation/replan std_srvs/srv/Trigger
+
+# Save map when done
+ros2 run nav2_map_server map_saver_cli -f ~/exia_ws/maps/my_map
+```
+
+### Navigation Topics
+
+| Topic | Type | Description |
+|-------|------|-------------|
+| `/goal_pose` | geometry_msgs/PoseStamped | Navigation goal (set in RViz) |
+| `/map` | nav_msgs/OccupancyGrid | SLAM map |
+| `/global_costmap/costmap` | nav_msgs/OccupancyGrid | Global planning costmap |
+| `/local_costmap/costmap` | nav_msgs/OccupancyGrid | Local obstacle costmap |
+| `/plan` | nav_msgs/Path | Nav2 planned path |
+| `/planned_path` | nav_msgs/Path | Path being executed |
+| `/navigation/active` | std_msgs/Bool | Navigation status |
+
+### Replanning Triggers
+
+1. **Path blocked** - New obstacle detected in path
+2. **Periodic** - Every 10 seconds (configurable)
+3. **Distance** - After traveling 5m (configurable)
+4. **Goal changed** - New goal received
+5. **Manual** - Via `/navigation/replan` service
+
+### Configuration Files
+
+| File | Purpose |
+|------|---------|
+| `config/slam_toolbox_params.yaml` | SLAM configuration |
+| `config/nav2_params.yaml` | Nav2 stack configuration |
+| `config/robot_localization.yaml` | EKF sensor fusion (optional) |
+
+### Navigation Module Structure
+
+```
+src/exia_control/navigation/
+├── __init__.py           # Module exports
+├── path_validator.py     # Validates paths against costmap
+├── planner_interface.py  # Interface to Nav2 A* planner
+├── replan_manager.py     # Decides when to replan
+└── costmap_monitor.py    # Monitors costmap for obstacles
+```
+
 ## ROS Topics
 
 ### Command Topics
@@ -306,13 +427,12 @@ ros2 service call /path_follower/reset std_srvs/srv/Trigger
 - **Topic**: `/scan`
 - **Frame**: `lidar_link`
 - **Message Type**: `sensor_msgs/LaserScan`
-- **Update rate**: 15Hz (configurable 10-20Hz)
-- **Range**: 0.1m - 40m
+- **Update rate**: 10Hz
+- **Range**: 0.2m - 20m
 - **FOV**: 360 degrees
-- **Angular resolution**: 0.225 degrees (1600 samples/scan)
+- **Samples**: 360 per scan (1 degree resolution)
 - **Position**: Forward of center, on top of chassis (X=0.3m, Z=0.34m from base_link)
-- **Noise**: Gaussian (stddev: 0.02m)
-- **Simulation**: Gazebo Fortress GPU lidar sensor
+- **Simulation**: Gazebo Fortress GPU lidar sensor (requires Sensors system plugin)
 - **Hardware**: Slamtec RPlidar S3 via rplidar_ros package
 
 ### IMU (Yahboom 10-axis compatible)
@@ -321,6 +441,42 @@ ros2 service call /path_follower/reset std_srvs/srv/Trigger
 - **Update rate**: 200Hz
 - **Position**: Centered on top of chassis
 - **Noise**: Gaussian (gyro: 0.0002 rad/s, accel: 0.017 m/s²)
+
+## Gazebo World
+
+The simulation uses a custom world (`worlds/exia_world.sdf`) with:
+- **Sensors system plugin** - Required for IMU and Lidar to function
+- **Obstacle course** - Various boxes, cylinders, and walls for lidar testing
+- **Top-down camera** - Default view looking down from 25m
+
+### World Obstacles
+| Obstacle | Position | Color |
+|----------|----------|-------|
+| North box | (8, 0) | Red |
+| South box | (-8, 0) | Blue |
+| East box | (0, 8) | Green |
+| West box | (0, -8) | Yellow |
+| 4 corner cylinders | (±6, ±6) | Various |
+| 3 angled walls | Various | Brown/Green/Blue |
+| Small obstacles | Near center | Various |
+
+## RViz Visualization
+
+### Launch RViz with pre-configured display:
+```bash
+rviz2 -d ~/exia_ws/src/exia_ground_description/rviz/exia_ground.rviz
+```
+
+### Manual RViz Setup:
+1. Set **Fixed Frame** to `odom`
+2. Add **RobotModel** (Description Topic: `/robot_description`)
+3. Add **TF** to see coordinate frames
+4. Add **LaserScan** (Topic: `/scan`, Size: 0.1m)
+5. For top-down view: View → Type → TopDownOrtho
+
+### Visualize Path Following:
+- Add **Path** display (Topic: `/planned_path`)
+- Add **MarkerArray** display (Topic: `/path_markers`)
 
 ## Dependencies
 
@@ -344,10 +500,16 @@ ros2 service call /path_follower/reset std_srvs/srv/Trigger
 - `launch/exia_ground_sim.launch.py` - Gazebo Fortress simulation
 - `launch/exia_ground_state.launch.py` - State publisher (RViz only)
 
-### ROS2 Node Entry Points (`scripts/`)
+### World Files
+- `worlds/exia_world.sdf` - Custom Gazebo world with Sensors plugin and obstacles
+
+### ROS2 Node Entry Points (`scripts/active/`)
 - `ackermann_drive_node.py` - Unified drive controller (cmd_vel -> motors)
 - `path_follower_node.py` - Pure Pursuit path following demo
 - `ackermann_odometry.py` - Fallback odometry node
+
+### Legacy Scripts (`scripts/archive/`)
+- Archived reference scripts (not installed, kept for reference)
 
 ### Modular Python Package (`src/exia_control/`)
 
@@ -397,6 +559,12 @@ ros2 topic echo /scan --once
 
 # Check lidar scan rate
 ros2 topic hz /scan
+
+# Check Gazebo topics (use 'ign' for Fortress)
+ign topic -l
+
+# Check if sensors are publishing in Gazebo
+ign topic -l | grep -E "(lidar|imu|scan)"
 ```
 
 ## Development Notes
@@ -413,6 +581,8 @@ ros2 topic hz /scan
 - Gazebo Fortress GUI may show libEGL warnings on some systems - simulation still works
 - If controllers fail to load, ensure controller_manager service is running
 - Ackermann steering has minimum turning radius - cannot turn sharply at high speeds
+- **Sensors require custom world**: The default `empty.sdf` doesn't include the Sensors system plugin. Use `exia_world.sdf` for IMU/Lidar to work
+- **Use `ign` not `gz`**: For Gazebo Fortress commands, use `ign topic -l` (not `gz topic -l`)
 
 ## Hardware Deployment Notes
 

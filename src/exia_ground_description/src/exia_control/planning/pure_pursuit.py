@@ -9,6 +9,7 @@ Algorithm:
     2. Find the lookahead point (distance ahead on path)
     3. Compute steering angle to reach lookahead point
     4. Apply Ackermann kinematics
+    5. Handle reverse driving when target is behind robot
 
 Author: Zechariah Wang
 Date: December 2025
@@ -31,15 +32,19 @@ class PurePursuitConfig:
     lookahead_gain: float = 0.3          # Speed-dependent lookahead gain
 
     # Goal parameters
-    goal_tolerance: float = 1.0          # Distance to consider goal reached (m)
+    goal_tolerance: float = 1.5          # Distance to consider goal reached (m)
 
     # Speed control
     max_linear_speed: float = 2.0        # Maximum speed (m/s)
     min_linear_speed: float = 0.3        # Minimum speed when moving (m/s)
     max_angular_speed: float = 1.0       # Maximum angular velocity (rad/s)
+    reverse_speed: float = 1.0           # Speed when reversing (m/s)
 
     # Vehicle parameters
     wheelbase: float = 1.3               # Front to rear axle (m)
+
+    # Reverse handling
+    reverse_angle_threshold: float = 2.0  # Angle (rad) beyond which to reverse (~115 deg)
 
 
 @dataclass
@@ -47,7 +52,7 @@ class PathPoint:
     """A point on the path with optional speed."""
     x: float
     y: float
-    speed: Optional[float] = None  # Desired speed at this point (m/s)
+    speed: Optional[float] = None  # Desired speed at this point (m/s), negative = reverse
 
 
 class Path:
@@ -86,7 +91,8 @@ class PurePursuitController:
     Pure Pursuit path following controller.
 
     Uses proper lookahead point finding along the path rather than
-    waypoint-by-waypoint targeting.
+    waypoint-by-waypoint targeting. Supports reverse driving when
+    target is behind the robot.
     """
 
     def __init__(self, config: Optional[PurePursuitConfig] = None):
@@ -180,7 +186,7 @@ class PurePursuitController:
         dist_to_lookahead = math.sqrt(dx*dx + dy*dy)
 
         if dist_to_lookahead < 0.1:
-            # Already at lookahead point
+            # Already at lookahead point, move to next
             return cmd, False
 
         # Angle to lookahead point in world frame
@@ -189,30 +195,56 @@ class PurePursuitController:
         # Angle error (alpha) in vehicle frame
         alpha = self._normalize_angle(target_angle - yaw)
 
-        # Step 6: Pure Pursuit steering computation
-        # Curvature: k = 2 * sin(alpha) / L_d
-        # Steering angle: delta = atan(k * wheelbase)
-        curvature = 2.0 * math.sin(alpha) / dist_to_lookahead
-        steering_angle = math.atan(self.config.wheelbase * curvature)
+        # Step 6: Determine if we should reverse
+        # If target is behind us (|alpha| > threshold), reverse
+        should_reverse = abs(alpha) > self.config.reverse_angle_threshold
 
-        # Step 7: Compute linear velocity
-        # Slow down for sharp turns and when approaching goal
-        turn_factor = 1.0 - min(abs(steering_angle) / 0.6, 0.7)
+        if should_reverse:
+            # Reverse: flip the angle and drive backward
+            # When reversing, we steer opposite and use rear as reference
+            alpha_reverse = self._normalize_angle(alpha + math.pi if alpha > 0 else alpha - math.pi)
 
-        # Slow down when approaching goal
-        approach_factor = min(dist_to_goal / 3.0, 1.0)
+            # Pure Pursuit for reverse
+            curvature = 2.0 * math.sin(alpha_reverse) / dist_to_lookahead
+            steering_angle = math.atan(self.config.wheelbase * curvature)
 
-        # Get target speed from path or use max
-        target_speed = self.config.max_linear_speed
-        if closest_idx < len(self._path) and self._path[closest_idx].speed is not None:
-            target_speed = self._path[closest_idx].speed
+            # Slow down for approach
+            approach_factor = min(dist_to_goal / 2.0, 1.0)
+            linear_vel = -self.config.reverse_speed * approach_factor
+            linear_vel = max(-self.config.reverse_speed, min(-self.config.min_linear_speed, linear_vel))
 
-        linear_vel = target_speed * turn_factor * approach_factor
-        linear_vel = max(self.config.min_linear_speed, linear_vel)
+            # Reverse angular velocity (opposite steering effect)
+            angular_vel = linear_vel * math.tan(steering_angle) / self.config.wheelbase
+        else:
+            # Forward driving
+            # Pure Pursuit steering computation
+            # Curvature: k = 2 * sin(alpha) / L_d
+            # Steering angle: delta = atan(k * wheelbase)
+            curvature = 2.0 * math.sin(alpha) / dist_to_lookahead
+            steering_angle = math.atan(self.config.wheelbase * curvature)
 
-        # Step 8: Compute angular velocity using Ackermann kinematics
-        # omega = v * tan(delta) / L
-        angular_vel = linear_vel * math.tan(steering_angle) / self.config.wheelbase
+            # Compute linear velocity
+            # Slow down for sharp turns and when approaching goal
+            turn_factor = 1.0 - min(abs(steering_angle) / 0.6, 0.7)
+
+            # Slow down when approaching goal
+            approach_factor = min(dist_to_goal / 3.0, 1.0)
+
+            # Get target speed from path or use max
+            target_speed = self.config.max_linear_speed
+            if closest_idx < len(self._path) and self._path[closest_idx].speed is not None:
+                path_speed = self._path[closest_idx].speed
+                if path_speed is not None and path_speed > 0:
+                    target_speed = path_speed
+
+            linear_vel = target_speed * turn_factor * approach_factor
+            linear_vel = max(self.config.min_linear_speed, linear_vel)
+
+            # Compute angular velocity using Ackermann kinematics
+            # omega = v * tan(delta) / L
+            angular_vel = linear_vel * math.tan(steering_angle) / self.config.wheelbase
+
+        # Clamp angular velocity
         angular_vel = max(-self.config.max_angular_speed,
                          min(self.config.max_angular_speed, angular_vel))
 
@@ -225,19 +257,16 @@ class PurePursuitController:
         """
         Find the index of the closest point on the path.
 
-        Only searches forward from current index to prevent backtracking.
+        Searches entire path to handle cases where robot is far from expected position.
         """
         if self._path is None or self._path.is_empty():
             return 0
 
         min_dist = float('inf')
-        closest_idx = self._closest_point_idx
+        closest_idx = 0
 
-        # Search from current position forward (don't go backwards)
-        # Also check a few points behind in case we overshot
-        start_idx = max(0, self._closest_point_idx - 2)
-
-        for i in range(start_idx, len(self._path)):
+        # Search entire path to find closest point
+        for i in range(len(self._path)):
             point = self._path[i]
             dist = math.sqrt((point.x - x)**2 + (point.y - y)**2)
             if dist < min_dist:

@@ -36,8 +36,10 @@ class PathValidator:
     """
 
     # Costmap value thresholds
-    LETHAL_THRESHOLD = 253      # Definite collision
-    HIGH_COST_THRESHOLD = 200   # Near obstacle, should avoid
+    # Nav2 trinary costmap: 0=free, 100=lethal, 255=unknown
+    # In trinary mode, costs are: free(0), inscribed(99), lethal(100), unknown(255/-1)
+    LETHAL_THRESHOLD = 99       # Inscribed or lethal - definite collision
+    HIGH_COST_THRESHOLD = 50    # High inflation cost - should avoid
     UNKNOWN_VALUE = 255         # Unknown space
 
     def __init__(self, robot_footprint: Optional[List[Tuple[float, float]]] = None):

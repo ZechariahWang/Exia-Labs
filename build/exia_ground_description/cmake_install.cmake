@@ -71,7 +71,7 @@ if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_
     "/home/zech/exia_ws/src/exia_ground_description/scripts/active/ackermann_drive_node.py"
     "/home/zech/exia_ws/src/exia_ground_description/scripts/active/path_follower_node.py"
     "/home/zech/exia_ws/src/exia_ground_description/scripts/active/ackermann_odometry.py"
-    "/home/zech/exia_ws/src/exia_ground_description/scripts/active/navigation_node.py"
+    "/home/zech/exia_ws/src/exia_ground_description/scripts/active/mission_navigator_node.py"
     )
 endif()
 

@@ -47,14 +47,23 @@ exia_ws/
 │   └── exia_ground_description/    # Robot description package
 │       ├── urdf/                   # URDF/Xacro robot models
 │       ├── launch/                 # Launch files
+│       │   ├── exia_ground_sim.launch.py    # Gazebo simulation
+│       │   ├── mission_nav.launch.py        # Mission navigation (RECOMMENDED)
+│       │   ├── slam.launch.py               # SLAM only (legacy)
+│       │   └── slam_nav_simple.launch.py    # SLAM + Nav (legacy)
 │       ├── config/                 # Controller configurations
+│       │   ├── ackermann_controllers.yaml   # ros2_control config
+│       │   └── nav2_params.yaml             # Costmap + planner config
 │       ├── rviz/                   # RViz configuration
+│       │   ├── exia_ground.rviz             # Basic visualization
+│       │   └── exia_slam_nav.rviz           # SLAM + Navigation
 │       ├── worlds/                 # Gazebo world files
 │       │   └── exia_world.sdf      # Custom world with obstacles & sensors
 │       ├── scripts/
 │       │   ├── active/             # Current ROS2 node entry points
 │       │   │   ├── ackermann_drive_node.py   # Main drive controller
-│       │   │   ├── path_follower_node.py     # Pure Pursuit path following
+│       │   │   ├── path_follower_node.py     # Pure Pursuit demo paths
+│       │   │   ├── mission_navigator_node.py # Mission nav with obstacle avoidance
 │       │   │   └── ackermann_odometry.py     # Fallback odometry node
 │       │   └── archive/            # Legacy scripts (reference only)
 │       └── src/
@@ -64,9 +73,13 @@ exia_ws/
 │               │   └── simulation.py  # Gazebo Fortress HAL
 │               ├── control/        # Control algorithms
 │               │   └── ackermann_drive.py  # Ackermann kinematics
-│               └── planning/       # Path planning & following
-│                   ├── pure_pursuit.py  # Pure Pursuit controller
-│                   └── paths.py         # Predefined paths
+│               ├── planning/       # Path planning & following
+│               │   ├── pure_pursuit.py  # Pure Pursuit controller
+│               │   └── paths.py         # Predefined paths
+│               └── navigation/     # Obstacle detection & replanning
+│                   ├── path_validator.py     # Costmap collision check
+│                   ├── planner_interface.py  # Nav2 A* planner API
+│                   └── replan_manager.py     # Replan decision logic
 ├── build/                          # Build artifacts (generated)
 ├── install/                        # Install space (generated)
 └── log/                            # Build logs (generated)
@@ -257,38 +270,60 @@ ros2 service call /path_follower/reset std_srvs/srv/Trigger
 | `/planned_path` | nav_msgs/Path | Current path being followed |
 | `/path_markers` | visualization_msgs/MarkerArray | Waypoint markers |
 
-## SLAM and Navigation
+## Mission Navigation (Simplified)
 
-The robot includes full SLAM and autonomous navigation capabilities using Nav2.
+The robot follows **predefined paths** with **obstacle avoidance**. No SLAM required.
 
 ### Architecture
 
 ```
-/scan (lidar) --> slam_toolbox --> /map --> global_costmap
-                                              |
-                                              v
-/goal_pose --------------------------------> Smac Hybrid-A*
-                                              |
-                                              v /planned_path
-/local_costmap --> Path Validator --> Replan Manager
-                         |                    |
-                         v                    v
-                   Pure Pursuit <-------------+
-                         |
-                         v /cmd_vel
-                   Ackermann Drive Node
+Predefined Path (odom frame)
+         |
+         v
++---------------------------------------------+
+|          Mission Navigator Node             |
+|  +-------------+  +-----------+  +--------+ |
+|  |  Waypoint   |  | Obstacle  |  | Detour | |
+|  |   Tracker   |--| Monitor   |--| Planner| |
+|  +-------------+  +-----------+  +--------+ |
+|         |               |             |     |
+|         v               v             v     |
+|  +--------------------------------------------+
+|  |         Pure Pursuit Controller            |
+|  +--------------------------------------------+
++---------------------------------------------+
+         |                             ^
+         v                             |
+     /cmd_vel                   /global_costmap
+         |                             |
+         v                             |
++----------------+         +----------------------+
+| Ackermann      |         | Nav2 Planner Server  |
+| Drive Node     |         | (30m rolling window) |
++----------------+         +----------------------+
+         |                             ^
+         v                             |
+    Physical Robot  <--------------  /scan (Lidar)
 ```
 
 ### Key Components
 
-| Component | Package | Purpose |
-|-----------|---------|---------|
-| SLAM | slam_toolbox | Builds map, provides map->odom TF |
-| Global Planner | Nav2 Smac Hybrid-A* | Ackermann-aware path planning |
-| Local Costmap | Nav2 Costmap 2D | Obstacle detection from lidar |
-| Path Validator | exia_control.navigation | Checks path collisions |
-| Replan Manager | exia_control.navigation | Triggers replanning |
-| Path Follower | Pure Pursuit | Executes planned path |
+| Component | Purpose |
+|-----------|---------|
+| Mission Navigator | Follows predefined path, detects obstacles, plans detours |
+| Planner Server | Smac Hybrid-A* for computing detour paths |
+| Costmap | 30m rolling window in odom frame (no SLAM needed) |
+| Path Validator | Checks lookahead path for obstacles |
+| Pure Pursuit | Executes path with Ackermann kinematics |
+
+### State Machine
+
+```
+IDLE --> FOLLOWING --> BLOCKED --> PLANNING_DETOUR --> DETOURING
+                 ^                                          |
+                 |                                          |
+                 +------------- (rejoin path) <-------------+
+```
 
 ### Ackermann-Specific Parameters
 
@@ -296,82 +331,68 @@ The robot includes full SLAM and autonomous navigation capabilities using Nav2.
 |-----------|-------|-------------|
 | Minimum turning radius | 1.9m | wheelbase / tan(max_steering) |
 | Motion model | REEDS_SHEPP | Allows forward + reverse |
-| Robot footprint | 2.31m x 1.30m | With safety margin |
+| Robot footprint | 2.1m x 1.2m | Actual robot size |
 | Rotate in place | Disabled | Ackermann cannot rotate in place |
 
 ### Launch Commands
 
 ```bash
-# Start simulation first
+# Start simulation first (Terminal 1)
 ros2 launch exia_ground_description exia_ground_sim.launch.py
 
-# Terminal 2: SLAM only (for mapping)
-ros2 launch exia_ground_description slam.launch.py
+# Terminal 2: Mission navigation (RECOMMENDED)
+ros2 launch exia_ground_description mission_nav.launch.py
 
-# Terminal 2: SLAM + Navigation (for autonomous navigation)
-ros2 launch exia_ground_description slam_nav.launch.py
+# With specific path type
+ros2 launch exia_ground_description mission_nav.launch.py path_type:=square
 
-# Terminal 3: RViz with SLAM/Nav visualization
-rviz2 -d ~/exia_ws/src/exia_ground_description/rviz/exia_slam_nav.rviz
+# Terminal 3: RViz visualization
+rviz2 -d ~/exia_ws/src/exia_ground_description/rviz/exia_ground.rviz
 ```
 
-### Navigation Commands
+### Mission Navigator Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `path_type` | `figure_eight` | Predefined path (line, square, circle, figure_eight, slalom) |
+| `path_scale` | `3.0` | Scale factor for path size |
+| `target_speed` | `1.0` | Target speed (m/s) |
+| `lookahead_distance` | `2.0` | Pure Pursuit lookahead (m) |
+| `obstacle_lookahead` | `5.0` | Distance to check for obstacles (m) |
+| `detour_clearance` | `3.0` | Distance past obstacle to rejoin (m) |
+| `auto_start` | `true` | Start mission automatically |
+
+### Mission Services
 
 ```bash
-# Send navigation goal via command line
-ros2 topic pub /goal_pose geometry_msgs/msg/PoseStamped "{
-  header: {frame_id: 'map'},
-  pose: {position: {x: 5.0, y: 0.0, z: 0.0}, orientation: {w: 1.0}}
-}" -1
+# Start mission
+ros2 service call /mission/start std_srvs/srv/Trigger
 
-# Start/stop navigation
-ros2 service call /navigation/start std_srvs/srv/Trigger
-ros2 service call /navigation/stop std_srvs/srv/Trigger
+# Stop mission
+ros2 service call /mission/stop std_srvs/srv/Trigger
 
-# Force replanning
-ros2 service call /navigation/replan std_srvs/srv/Trigger
-
-# Save map when done
-ros2 run nav2_map_server map_saver_cli -f ~/exia_ws/maps/my_map
+# Reset mission (start from beginning)
+ros2 service call /mission/reset std_srvs/srv/Trigger
 ```
 
 ### Navigation Topics
 
 | Topic | Type | Description |
 |-------|------|-------------|
-| `/goal_pose` | geometry_msgs/PoseStamped | Navigation goal (set in RViz) |
-| `/map` | nav_msgs/OccupancyGrid | SLAM map |
-| `/global_costmap/costmap` | nav_msgs/OccupancyGrid | Global planning costmap |
-| `/local_costmap/costmap` | nav_msgs/OccupancyGrid | Local obstacle costmap |
-| `/plan` | nav_msgs/Path | Nav2 planned path |
-| `/planned_path` | nav_msgs/Path | Path being executed |
-| `/navigation/active` | std_msgs/Bool | Navigation status |
+| `/planned_path` | nav_msgs/Path | Current mission path |
+| `/path_markers` | visualization_msgs/MarkerArray | Waypoint visualization |
+| `/planner_server/global_costmap/costmap` | nav_msgs/OccupancyGrid | Obstacle costmap |
 
-### Replanning Triggers
+### Legacy SLAM Navigation
 
-1. **Path blocked** - New obstacle detected in path
-2. **Periodic** - Every 10 seconds (configurable)
-3. **Distance** - After traveling 5m (configurable)
-4. **Goal changed** - New goal received
-5. **Manual** - Via `/navigation/replan` service
+For advanced use cases requiring SLAM:
 
-### Configuration Files
+```bash
+# SLAM only (for mapping)
+ros2 launch exia_ground_description slam.launch.py
 
-| File | Purpose |
-|------|---------|
-| `config/slam_toolbox_params.yaml` | SLAM configuration |
-| `config/nav2_params.yaml` | Nav2 stack configuration |
-| `config/robot_localization.yaml` | EKF sensor fusion (optional) |
-
-### Navigation Module Structure
-
-```
-src/exia_control/navigation/
-├── __init__.py           # Module exports
-├── path_validator.py     # Validates paths against costmap
-├── planner_interface.py  # Interface to Nav2 A* planner
-├── replan_manager.py     # Decides when to replan
-└── costmap_monitor.py    # Monitors costmap for obstacles
+# SLAM + Navigation (if needed)
+ros2 launch exia_ground_description slam_nav_simple.launch.py
 ```
 
 ## ROS Topics
@@ -431,7 +452,8 @@ src/exia_control/navigation/
 - **Range**: 0.2m - 20m
 - **FOV**: 360 degrees
 - **Samples**: 360 per scan (1 degree resolution)
-- **Position**: Forward of center, on top of chassis (X=0.3m, Z=0.34m from base_link)
+- **Position**: Forward of center, lowered for obstacle detection (X=0.3m, Z=0.15m from base_link)
+- **Tilt**: 5 degrees down (0.087 rad) - hits ground at ~1.7m to detect low obstacles
 - **Simulation**: Gazebo Fortress GPU lidar sensor (requires Sensors system plugin)
 - **Hardware**: Slamtec RPlidar S3 via rplidar_ros package
 
@@ -488,6 +510,9 @@ rviz2 -d ~/exia_ws/src/exia_ground_description/rviz/exia_ground.rviz
 - robot_state_publisher
 - xacro
 - joint_state_publisher_gui (for state launch only)
+- slam_toolbox (`ros-humble-slam-toolbox`) - SLAM
+- nav2_bringup (`ros-humble-nav2-bringup`) - Navigation stack
+- nav2_smac_planner (`ros-humble-nav2-smac-planner`) - Ackermann-aware A* planner
 
 ## Key Files
 
@@ -505,7 +530,8 @@ rviz2 -d ~/exia_ws/src/exia_ground_description/rviz/exia_ground.rviz
 
 ### ROS2 Node Entry Points (`scripts/active/`)
 - `ackermann_drive_node.py` - Unified drive controller (cmd_vel -> motors)
-- `path_follower_node.py` - Pure Pursuit path following demo
+- `path_follower_node.py` - Pure Pursuit path following demo (predefined paths)
+- `navigation_node.py` - SLAM + A* navigation with obstacle avoidance
 - `ackermann_odometry.py` - Fallback odometry node
 
 ### Legacy Scripts (`scripts/archive/`)
@@ -523,6 +549,12 @@ rviz2 -d ~/exia_ws/src/exia_ground_description/rviz/exia_ground.rviz
 **Path Planning** (`planning/`)
 - `pure_pursuit.py` - PurePursuitConfig, PurePursuitController (geometric path tracking)
 - `paths.py` - Predefined paths (line, square, circle, figure-eight, slalom)
+
+**Navigation** (`navigation/`)
+- `path_validator.py` - PathValidator (checks path against costmap for collisions)
+- `planner_interface.py` - PlannerInterface (async interface to Nav2 A* planner)
+- `replan_manager.py` - ReplanManager (decides when to trigger replanning)
+- `costmap_monitor.py` - CostmapMonitor (subscribes to costmap updates)
 
 ### Visualization
 - `rviz/exia_ground.rviz` - RViz config (Fixed Frame: odom)
@@ -565,6 +597,26 @@ ign topic -l
 
 # Check if sensors are publishing in Gazebo
 ign topic -l | grep -E "(lidar|imu|scan)"
+
+# ===== Navigation Debugging =====
+
+# Check map is being published
+ros2 topic echo /map --once
+
+# Check navigation status
+ros2 topic echo /navigation/active --once
+
+# View planned path
+ros2 topic echo /planned_path --once
+
+# Check planner server status
+ros2 lifecycle get /planner_server
+
+# View TF map->odom transform (from SLAM)
+ros2 run tf2_ros tf2_echo map odom
+
+# Check costmap updates
+ros2 topic hz /planner_server/global_costmap/costmap
 ```
 
 ## Development Notes
@@ -583,6 +635,8 @@ ign topic -l | grep -E "(lidar|imu|scan)"
 - Ackermann steering has minimum turning radius - cannot turn sharply at high speeds
 - **Sensors require custom world**: The default `empty.sdf` doesn't include the Sensors system plugin. Use `exia_world.sdf` for IMU/Lidar to work
 - **Use `ign` not `gz`**: For Gazebo Fortress commands, use `ign topic -l` (not `gz topic -l`)
+- **Nav2 bt_navigator library issue**: The full Nav2 stack may have library compatibility issues with `bt_navigator`. Use `slam_nav_simple.launch.py` which bypasses this by only using the planner server
+- **Path planning in unknown space**: If planner fails with "no valid path found", ensure `allow_unknown: true` in nav2_params.yaml
 
 ## Hardware Deployment Notes
 

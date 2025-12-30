@@ -76,11 +76,13 @@ class AckermannDriveController:
         Returns:
             AckermannCommand for the HAL
         """
-        # Check for timeout
+        # Check for timeout (gap between commands)
+        # Note: Always update _last_cmd_time to prevent perpetual timeout
         if self._last_cmd_time is not None:
             dt = current_time - self._last_cmd_time
             if dt > self.config.cmd_timeout:
-                # Command timeout - stop the vehicle
+                # Command timeout - but update time so we can recover
+                self._last_cmd_time = current_time
                 return AckermannCommand(
                     steering_angle=0.0,
                     throttle=0.0,

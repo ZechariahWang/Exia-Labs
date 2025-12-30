@@ -2,6 +2,7 @@
 /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/launch/exia_ground_sim.launch.py
 /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/launch/exia_ground_state.launch.py
 /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/launch/slam_nav.launch.py
+/home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/launch/mission_nav.launch.py
 /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/launch/slam_nav_simple.launch.py
 /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/launch/slam.launch.py
 /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/launch/__pycache__/exia_ground_sim.launch.cpython-310.pyc
@@ -10,7 +11,6 @@
 /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/rviz/exia_slam_nav.rviz
 /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/config/robot_localization.yaml
 /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/config/hardware_config.yaml
-/home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/config/slam_toolbox_params.yaml
 /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/config/ackermann_controllers.yaml
 /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/config/nav2_params.yaml
 /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/worlds/exia_world.sdf
@@ -23,7 +23,6 @@
 /home/zech/exia_ws/install/exia_ground_description/lib/exia_ground_description/exia_control/navigation/planner_interface.py
 /home/zech/exia_ws/install/exia_ground_description/lib/exia_ground_description/exia_control/navigation/__init__.py
 /home/zech/exia_ws/install/exia_ground_description/lib/exia_ground_description/exia_control/navigation/path_validator.py
-/home/zech/exia_ws/install/exia_ground_description/lib/exia_ground_description/exia_control/navigation/costmap_monitor.py
 /home/zech/exia_ws/install/exia_ground_description/lib/exia_ground_description/exia_control/navigation/replan_manager.py
 /home/zech/exia_ws/install/exia_ground_description/lib/exia_ground_description/exia_control/planning/paths.py
 /home/zech/exia_ws/install/exia_ground_description/lib/exia_ground_description/exia_control/planning/__init__.py
@@ -31,7 +30,7 @@
 /home/zech/exia_ws/install/exia_ground_description/lib/exia_ground_description/ackermann_drive_node.py
 /home/zech/exia_ws/install/exia_ground_description/lib/exia_ground_description/path_follower_node.py
 /home/zech/exia_ws/install/exia_ground_description/lib/exia_ground_description/ackermann_odometry.py
-/home/zech/exia_ws/install/exia_ground_description/lib/exia_ground_description/navigation_node.py
+/home/zech/exia_ws/install/exia_ground_description/lib/exia_ground_description/mission_navigator_node.py
 /home/zech/exia_ws/install/exia_ground_description/share/ament_index/resource_index/package_run_dependencies/exia_ground_description
 /home/zech/exia_ws/install/exia_ground_description/share/ament_index/resource_index/parent_prefix_path/exia_ground_description
 /home/zech/exia_ws/install/exia_ground_description/share/exia_ground_description/environment/ament_prefix_path.sh

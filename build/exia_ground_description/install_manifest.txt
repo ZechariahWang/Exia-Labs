@@ -7,7 +7,6 @@
 /home/zech/exia_ws/install/exia_ground_description/lib/exia_ground_description/exia_control/navigation/planner_interface.py
 /home/zech/exia_ws/install/exia_ground_description/lib/exia_ground_description/exia_control/navigation/__init__.py
 /home/zech/exia_ws/install/exia_ground_description/lib/exia_ground_description/exia_control/navigation/path_validator.py
-/home/zech/exia_ws/install/exia_ground_description/lib/exia_ground_description/exia_control/navigation/replan_manager.py
 /home/zech/exia_ws/install/exia_ground_description/lib/exia_ground_description/exia_control/planning/paths.py
 /home/zech/exia_ws/install/exia_ground_description/lib/exia_ground_description/exia_control/planning/__init__.py
 /home/zech/exia_ws/install/exia_ground_description/lib/exia_ground_description/exia_control/planning/pure_pursuit.py

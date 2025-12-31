@@ -48,33 +48,17 @@ install(DIRECTORY src/exia_control
 )
 
 # ==================== Install Entry-Point Scripts ====================
-# Active scripts - ROS2 node executables that use the exia_control package
+# ROS2 node executables that use the exia_control package
 
 install(
   PROGRAMS
     scripts/active/ackermann_drive_node.py
-    scripts/active/path_follower_node.py
     scripts/active/ackermann_odometry.py
+    scripts/active/path_follower_node.py
     scripts/active/mission_navigator_node.py
     scripts/active/dynamic_navigator_node.py
+    scripts/active/xbox_teleop_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
-
-# Archive scripts - Legacy/reference scripts (not actively used)
-# These are kept for reference but not installed by default
-# To install archive scripts, uncomment the block below:
-# install(
-#   PROGRAMS
-#     scripts/archive/ackermann_hal_base.py
-#     scripts/archive/ackermann_hal_simulation.py
-#     scripts/archive/ackermann_hal_hardware.py
-#     scripts/archive/ackermann_controller.py
-#     scripts/archive/atv_controller.py
-#     scripts/archive/atv_hardware_interface.py
-#     scripts/archive/steering_controller.py
-#     scripts/archive/move_forward.py
-#     scripts/archive/waypoint_follower.py
-#   DESTINATION lib/${PROJECT_NAME}
-# )
 
 ament_package()

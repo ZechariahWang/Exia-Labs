@@ -51,6 +51,15 @@ from exia_control.navigation.planner_interface import (
     PlannerInterface, PlanningStatus
 )
 
+CUSTOM_WAYPOINTS = [
+    (0.0, 0.0),      # Start point
+    (5.0, 0.0),      # Point 2
+    (10.0, 0.0),     # Point 3
+    (15.0, 0.0),     # Point 4
+    (20.0, 0.0),     # Point 5 (end) - boundary wall at x=25
+]
+
+
 
 class NavigatorState(Enum):
     """Navigator state machine states."""
@@ -77,13 +86,14 @@ class MissionNavigator(Node):
         super().__init__('mission_navigator')
 
         # Declare parameters
-        self.declare_parameter('path_type', 'figure_eight')
+        self.declare_parameter('path_type', 'custom')  # Options: figure_eight, square, circle, line, slalom, custom
         self.declare_parameter('path_scale', 3.0)
         self.declare_parameter('target_speed', 1.0)
+        self.declare_parameter('custom_waypoints', '')
         self.declare_parameter('lookahead_distance', 2.0)
         self.declare_parameter('goal_tolerance', 1.0)
         self.declare_parameter('obstacle_lookahead', 5.0)
-        self.declare_parameter('detour_clearance', 5.0)  # Increased to go farther around obstacles
+        self.declare_parameter('detour_clearance', 5.0)  
         self.declare_parameter('auto_start', True)
         self.declare_parameter('control_rate', 20.0)
 
@@ -91,6 +101,7 @@ class MissionNavigator(Node):
         path_type = self.get_parameter('path_type').value
         path_scale = self.get_parameter('path_scale').value
         target_speed = self.get_parameter('target_speed').value
+        custom_waypoints = self.get_parameter('custom_waypoints').value
         lookahead = self.get_parameter('lookahead_distance').value
         self.goal_tolerance = self.get_parameter('goal_tolerance').value
         self.obstacle_lookahead = self.get_parameter('obstacle_lookahead').value
@@ -113,11 +124,14 @@ class MissionNavigator(Node):
         self.start_y = 0.0
 
         # Load mission path
-        self.mission_path = self._create_path(path_type, path_scale, target_speed)
+        self.mission_path = self._create_path(path_type, path_scale, target_speed, custom_waypoints)
         self.get_logger().info(
             f'Loaded {path_type} path with {len(self.mission_path)} waypoints, '
             f'scale={path_scale}, speed={target_speed}'
         )
+        if path_type == 'custom':
+            for i, wp in enumerate(self.mission_path.points):
+                self.get_logger().info(f'  Waypoint {i}: ({wp.x:.2f}, {wp.y:.2f})')
 
         # Pure Pursuit controller
         pp_config = PurePursuitConfig(
@@ -179,6 +193,19 @@ class MissionNavigator(Node):
         period = 1.0 / control_rate
         self.control_timer = self.create_timer(period, self.control_loop)
 
+        # Periodic path validation timer (WATO-inspired proactive checking)
+        self._path_validation_timer = self.create_timer(2.0, self._periodic_path_validation)
+        self._last_path_cost = 0.0
+        self._path_cost_increase_threshold = 500.0  # Trigger warning if cost jumps by this much
+
+        # Costmap change detection (WATO-inspired)
+        # FIX: Disabled by default - was causing too many false positives
+        # The main obstacle check in control_loop is sufficient
+        self._costmap_change_detection_enabled = False
+        self._last_costmap_obstacle_count = 0
+        self._costmap_change_cooldown = 1.0  # Rate limit to 1Hz
+        self._last_costmap_change_check = 0.0
+
         # Visualization timer (RViz)
         self.viz_timer = self.create_timer(1.0, self.publish_visualization)
 
@@ -209,8 +236,30 @@ class MissionNavigator(Node):
                 f'Mission auto-started at ({self.start_x:.2f}, {self.start_y:.2f})'
             )
 
-    def _create_path(self, path_type: str, scale: float, speed: float) -> PurePursuitPath:
-        """Create mission path from type name."""
+    def _create_path(self, path_type: str, scale: float, speed: float,
+                      custom_waypoints: str = '') -> PurePursuitPath:
+        """Create mission path from type name or custom waypoints.
+
+        Args:
+            path_type: One of 'figure_eight', 'square', 'circle', 'line', 'slalom', 'custom'
+            scale: Scale factor for predefined paths (ignored for custom)
+            speed: Target speed at each waypoint
+            custom_waypoints: Semicolon-separated x,y pairs (alternative to CUSTOM_WAYPOINTS list)
+
+        Returns:
+            PurePursuitPath with waypoints
+        """
+        # Handle custom waypoints from the CUSTOM_WAYPOINTS list at top of file
+        if path_type.lower() == 'custom':
+            path = PurePursuitPath()
+            for x, y in CUSTOM_WAYPOINTS:
+                path.add_point(float(x), float(y), speed=speed)
+            if len(path.points) == 0:
+                self.get_logger().error('CUSTOM_WAYPOINTS is empty! Using default figure-eight')
+                return create_scaled_path(FIGURE_EIGHT_PATH, scale=3.0, speed=speed)
+            return path
+
+        # Predefined paths
         paths = {
             'line': LINE_PATH,
             'square': SQUARE_PATH,
@@ -229,15 +278,90 @@ class MissionNavigator(Node):
         self.robot_speed = msg.twist.twist.linear.x
 
     def costmap_callback(self, msg: OccupancyGrid):
-        """Update costmap for obstacle detection."""
+        """Update costmap for obstacle detection with change detection (WATO-inspired)."""
         self.costmap = msg
         self.path_validator.update_costmap(msg)
+
         # Log once when first costmap received
         if not hasattr(self, '_costmap_received'):
             self._costmap_received = True
             self.get_logger().info(
                 f'Costmap received: {msg.info.width}x{msg.info.height} @ {msg.info.resolution}m'
             )
+
+        # FIX: Costmap change detection disabled - was causing too many false positives
+        # The main obstacle check in control_loop is sufficient for real obstacles
+        if not self._costmap_change_detection_enabled:
+            return
+
+        # ENHANCEMENT 2: Costmap change detection
+        # Only check for changes during FOLLOWING state
+        if self.state != NavigatorState.FOLLOWING:
+            return
+
+        now = self.get_clock().now().nanoseconds / 1e9
+        if now - self._last_costmap_change_check < self._costmap_change_cooldown:
+            return
+        self._last_costmap_change_check = now
+
+        # Count lethal cells (simplified change detection)
+        # FIX: Only count actual lethal (100+), not inscribed (99)
+        lethal_count = sum(1 for c in msg.data if c >= 100)
+
+        # Skip first comparison (establishing baseline)
+        if self._last_costmap_obstacle_count == 0:
+            self._last_costmap_obstacle_count = lethal_count
+            return
+
+        # Significant change in obstacle count?
+        # FIX: Increased threshold significantly to reduce false positives
+        change = abs(lethal_count - self._last_costmap_obstacle_count)
+        if change > 500:  # Much higher threshold
+            self.get_logger().info(f'Costmap changed: {change} lethal cells difference')
+
+            # Immediately validate current path
+            lookahead = self._create_lookahead_segment()
+            if lookahead and len(lookahead.poses) > 0:
+                result = self.path_validator.validate_path(lookahead, check_footprint=True)
+                if not result.is_valid:
+                    self.get_logger().warn('New obstacle detected in path via costmap change!')
+                    # Let normal control loop handle the blocking
+
+        self._last_costmap_obstacle_count = lethal_count
+
+    def _periodic_path_validation(self):
+        """Proactively check if path has become costly (WATO-inspired).
+
+        Runs every 2 seconds to detect slowly-appearing obstacles or
+        obstacles that weren't detected by the main control loop.
+        """
+        if self.state != NavigatorState.FOLLOWING:
+            return
+
+        if self.path_validator._costmap is None:
+            return
+
+        # Create lookahead segment and compute cost
+        lookahead = self._create_lookahead_segment()
+        if lookahead is None or len(lookahead.poses) == 0:
+            return
+
+        result = self.path_validator.validate_path(lookahead, check_footprint=False)
+
+        # Check if cost has increased significantly
+        cost_increase = result.total_cost - self._last_path_cost
+        if cost_increase > self._path_cost_increase_threshold:
+            self.get_logger().warn(
+                f'Path cost increased significantly: {self._last_path_cost:.0f} -> {result.total_cost:.0f}'
+            )
+
+        # Check if too many high-cost segments (>30% of path)
+        if len(lookahead.poses) > 0 and result.high_cost_segments > len(lookahead.poses) * 0.3:
+            self.get_logger().warn(
+                f'Path has {result.high_cost_segments}/{len(lookahead.poses)} high-cost segments'
+            )
+
+        self._last_path_cost = result.total_cost
 
     def control_loop(self):
         """Main control loop - state machine execution."""
@@ -282,11 +406,42 @@ class MissionNavigator(Node):
                 f'Waypoint {current_idx}/{len(self.mission_path)} reached'
             )
 
-        # Check for obstacles ahead
-        if self._check_path_blocked():
-            self.state = NavigatorState.BLOCKED
-            self.get_logger().warn('Obstacle detected in path!')
+        # FIX: Check if we're at or near the LAST waypoint - if so, complete mission
+        # This MUST be checked FIRST before obstacle detection to prevent infinite loops
+        final_wp = self.mission_path[-1]
+        dist_to_final = math.sqrt(
+            (final_wp.x - self.robot_x)**2 + (final_wp.y - self.robot_y)**2
+        )
+        is_at_last_waypoint = current_idx >= len(self.mission_path) - 1
+
+        # Complete mission if close enough to final waypoint
+        # Use 2x goal_tolerance to ensure we complete before false obstacle detection
+        if is_at_last_waypoint and dist_to_final < self.goal_tolerance * 2.0:
+            self.get_logger().info(
+                f'Mission complete! Reached final waypoint at ({final_wp.x:.1f}, {final_wp.y:.1f}), '
+                f'distance={dist_to_final:.2f}m'
+            )
+            self.state = NavigatorState.IDLE
+            self._publish_stop()
             return
+
+        # Also complete if we're very close to final goal regardless of waypoint index
+        # This handles edge cases where waypoint tracking gets confused
+        if dist_to_final < self.goal_tolerance:
+            self.get_logger().info(
+                f'Mission complete! Close to final goal ({dist_to_final:.2f}m)'
+            )
+            self.state = NavigatorState.IDLE
+            self._publish_stop()
+            return
+
+        # Check for obstacles ahead (but NOT if we're close to final goal)
+        # FIX: Use 3x goal_tolerance to avoid false positives from boundary walls past the goal
+        if dist_to_final > self.goal_tolerance * 3.0:
+            if self._check_path_blocked():
+                self.state = NavigatorState.BLOCKED
+                self.get_logger().warn('Obstacle detected in path!')
+                return
 
         # Execute Pure Pursuit
         cmd, goal_reached = self.pure_pursuit.compute_velocity(
@@ -370,9 +525,31 @@ class MissionNavigator(Node):
         ahead_y = self.robot_y + emergency_dist * math.sin(self.robot_yaw)
         cost = self.path_validator._get_cost_at_world(ahead_x, ahead_y)
         if cost >= self.path_validator.LETHAL_THRESHOLD:
-            self.get_logger().warn(f'Emergency stop during detour - obstacle at {emergency_dist}m!')
+            # Track consecutive emergency stops
+            if not hasattr(self, '_detour_estop_count'):
+                self._detour_estop_count = 0
+            self._detour_estop_count += 1
+
+            # After 10 consecutive emergency stops (~0.5 seconds), back up to gain clearance
+            if self._detour_estop_count >= 10:
+                self.get_logger().warn(
+                    f'Emergency stop during detour ({self._detour_estop_count}x) - backing up!'
+                )
+                self._detour_estop_count = 0
+                self.detour_path = None
+                self.detour_pure_pursuit = None
+                self.state = NavigatorState.BACKING_UP
+                return
+
+            self.get_logger().warn(
+                f'Emergency stop during detour - obstacle at {emergency_dist}m!',
+                throttle_duration_sec=2.0
+            )
             self._publish_stop()
             return
+
+        # Clear emergency stop counter if we're moving fine
+        self._detour_estop_count = 0
 
         # Check if we can rejoin mission path
         if self._can_rejoin_mission():
@@ -397,8 +574,8 @@ class MissionNavigator(Node):
         if not hasattr(self, '_backup_start_x'):
             self._backup_start_x = self.robot_x
             self._backup_start_y = self.robot_y
-            self._backup_target_dist = 3.0  # Back up 3 meters
-            self.get_logger().info('Starting backup maneuver (3m)')
+            self._backup_target_dist = 2.0  # Back up 2 meters (enough to clear inflation zone)
+            self.get_logger().info('Starting backup maneuver (2m)')
 
         # Calculate distance backed up
         dx = self.robot_x - self._backup_start_x
@@ -407,26 +584,38 @@ class MissionNavigator(Node):
 
         # Check if we've backed up enough
         if dist_backed >= self._backup_target_dist:
-            self.get_logger().info(f'Backup complete ({dist_backed:.2f}m), retrying detour planning')
-            # Clean up and return to BLOCKED to retry planning
+            self.get_logger().info(f'Backup complete ({dist_backed:.2f}m), resuming path following')
+            # Clean up and return to FOLLOWING to try the original path again
+            # If still blocked, the control loop will detect it and plan a detour
             del self._backup_start_x
             del self._backup_start_y
             del self._backup_target_dist
             self._plan_fail_count = 0  # Reset fail count
-            self.state = NavigatorState.BLOCKED
+
+            # Clear any detour state
+            self.detour_path = None
+            self.detour_pure_pursuit = None
+
+            # Resume mission path following - the obstacle check will trigger if still blocked
+            self.pure_pursuit.start()
+            self.state = NavigatorState.FOLLOWING
             return
 
-        # Check for obstacles behind (don't back into something)
-        behind_x = self.robot_x - 2.0 * math.cos(self.robot_yaw)
-        behind_y = self.robot_y - 2.0 * math.sin(self.robot_yaw)
+        # Check for obstacles immediately behind (don't back into something)
+        # Only check 1m behind - be more lenient since costmap edges can be marked as obstacles
+        behind_x = self.robot_x - 1.0 * math.cos(self.robot_yaw)
+        behind_y = self.robot_y - 1.0 * math.sin(self.robot_yaw)
         behind_cost = self.path_validator._get_cost_at_world(behind_x, behind_y)
 
-        if behind_cost >= self.path_validator.LETHAL_THRESHOLD:
-            self.get_logger().warn('Obstacle behind - cannot back up further')
+        # Only stop if it's a LETHAL obstacle (100), not just inflated (99)
+        if behind_cost >= 100:
+            self.get_logger().warn(f'Obstacle behind at ({behind_x:.1f}, {behind_y:.1f}) cost={behind_cost} - cannot back up')
             del self._backup_start_x
             del self._backup_start_y
             del self._backup_target_dist
-            self.state = NavigatorState.BLOCKED
+            # Try going forward to FOLLOWING instead of being stuck
+            self.pure_pursuit.start()
+            self.state = NavigatorState.FOLLOWING
             return
 
         # Command reverse motion
@@ -438,6 +627,30 @@ class MissionNavigator(Node):
     def _handle_blocked(self):
         """Handle blocked state - plan detour."""
         self._publish_stop()
+
+        # FIX: Check if we're already at or very close to the final goal
+        # If so, complete the mission instead of trying to detour
+        final_wp = self.mission_path[-1]
+        dist_to_final = math.sqrt(
+            (final_wp.x - self.robot_x)**2 + (final_wp.y - self.robot_y)**2
+        )
+
+        # FIX: Use 3x goal_tolerance to catch more edge cases
+        if dist_to_final < self.goal_tolerance * 3.0:
+            self.get_logger().info(
+                f'Near final goal ({dist_to_final:.1f}m away) - completing mission instead of detouring'
+            )
+            self.state = NavigatorState.IDLE
+            return
+
+        # FIX: Check if we're at the last waypoint index
+        current_idx = self.pure_pursuit.get_current_waypoint_index()
+        if current_idx >= len(self.mission_path) - 1:
+            self.get_logger().info(
+                f'At last waypoint index ({current_idx}) - completing mission'
+            )
+            self.state = NavigatorState.IDLE
+            return
 
         # Cooldown to prevent rapid re-planning
         if not hasattr(self, '_last_plan_attempt'):
@@ -452,12 +665,48 @@ class MissionNavigator(Node):
 
         self._last_plan_attempt = now
 
+        # FIX: Track consecutive blocked states to detect infinite loop
+        if not hasattr(self, '_blocked_count'):
+            self._blocked_count = 0
+            self._blocked_start_x = self.robot_x
+            self._blocked_start_y = self.robot_y
+
+        self._blocked_count += 1
+
+        # Check if robot has moved since first block detection
+        dx = self.robot_x - self._blocked_start_x
+        dy = self.robot_y - self._blocked_start_y
+        dist_moved = math.sqrt(dx*dx + dy*dy)
+
+        # If we've been blocked 5+ times without moving significantly, likely stuck in loop
+        if self._blocked_count >= 5 and dist_moved < 2.0:
+            self.get_logger().warn(
+                f'Possible infinite loop detected: {self._blocked_count} blocks, '
+                f'only moved {dist_moved:.1f}m. Completing mission.'
+            )
+            self._blocked_count = 0
+            self.state = NavigatorState.IDLE
+            return
+
         # Find rejoin point past obstacle
         self.detour_rejoin_idx = self._find_rejoin_waypoint()
         if self.detour_rejoin_idx < 0:
             self.get_logger().error('Cannot find rejoin point!')
             self.state = NavigatorState.IDLE
             return
+
+        # FIX: If rejoin point is the last waypoint and we're close, just complete
+        if self.detour_rejoin_idx >= len(self.mission_path) - 1:
+            rejoin_wp = self.mission_path[self.detour_rejoin_idx]
+            dist_to_rejoin = math.sqrt(
+                (rejoin_wp.x - self.robot_x)**2 + (rejoin_wp.y - self.robot_y)**2
+            )
+            if dist_to_rejoin < self.goal_tolerance * 4.0:
+                self.get_logger().info(
+                    f'Rejoin point is final goal and close ({dist_to_rejoin:.1f}m) - completing mission'
+                )
+                self.state = NavigatorState.IDLE
+                return
 
         # Request detour path
         self.state = NavigatorState.PLANNING_DETOUR
@@ -508,22 +757,71 @@ class MissionNavigator(Node):
 
         return not result.is_valid
 
+    def _get_adaptive_lookahead_distances(self) -> List[float]:
+        """Get lookahead distances based on current speed (WATO-inspired).
+
+        Adjusts obstacle detection distance based on speed for safer operation.
+        At higher speeds, look further ahead to allow more stopping distance.
+
+        Returns:
+            List of distances to check for obstacles
+        """
+        # Stopping distance ≈ v² / (2 * decel) + reaction_distance
+        # At 1.0 m/s with 2.0 m/s² decel: 0.25m stopping + 0.5m reaction = 0.75m
+        # Add 2x safety margin
+
+        base_dist = max(3.0, self.robot_speed * 2.0 + 2.0)
+
+        return [
+            base_dist,
+            base_dist + 1.0,
+            base_dist + 2.0,
+            base_dist + 3.0,
+            base_dist + 4.0
+        ]
+
     def _check_immediate_forward(self) -> bool:
         """Check for obstacles directly ahead of the robot.
 
         Checks points along the robot's current heading direction,
-        independent of the waypoint path.
+        independent of the waypoint path. Uses speed-adaptive lookahead.
+
+        FIX: Limits lookahead to not exceed distance to final goal.
+        This prevents detecting boundary walls beyond the mission endpoint.
         """
-        # Check points from 3m to 7m ahead - stop BEFORE entering inflation zone
-        # This gives enough clearance for the planner to work
-        for dist in [3.0, 4.0, 5.0, 6.0, 7.0]:
+        # ENHANCEMENT 5: Speed-adaptive lookahead distances
+        distances = self._get_adaptive_lookahead_distances()
+
+        # FIX: Compute distance to final goal and limit lookahead
+        final_wp = self.mission_path[-1]
+        dist_to_final = math.sqrt(
+            (final_wp.x - self.robot_x)**2 + (final_wp.y - self.robot_y)**2
+        )
+
+        # FIX: If we're already close to the final goal, don't check for obstacles
+        # This is the primary fix for the infinite loop issue
+        if dist_to_final < self.goal_tolerance * 2.0:
+            return False
+
+        # Limit lookahead to distance to final goal minus a safety margin
+        # Don't look past the goal - the goal itself should be clear
+        max_lookahead = max(2.0, dist_to_final - 1.0)  # At least 2m lookahead, stop 1m before goal
+
+        for dist in distances:
+            # FIX: Skip checks beyond the final goal
+            if dist > max_lookahead:
+                continue
+
             check_x = self.robot_x + dist * math.cos(self.robot_yaw)
             check_y = self.robot_y + dist * math.sin(self.robot_yaw)
             cost = self.path_validator._get_cost_at_world(check_x, check_y)
 
-            if cost >= self.path_validator.LETHAL_THRESHOLD:
+            # FIX: Only trigger on actual lethal obstacles (cost >= 100)
+            # Cost 99 is inscribed space (near but not in collision)
+            if cost >= 100:  # Explicit check for actual lethal, not LETHAL_THRESHOLD variable
                 self.get_logger().warn(
-                    f'Obstacle detected {dist:.1f}m ahead at ({check_x:.1f}, {check_y:.1f}), cost={cost}'
+                    f'Obstacle detected {dist:.1f}m ahead at ({check_x:.1f}, {check_y:.1f}), '
+                    f'cost={cost}, speed={self.robot_speed:.1f}m/s, dist_to_goal={dist_to_final:.1f}m'
                 )
                 return True
 
@@ -534,6 +832,9 @@ class MissionNavigator(Node):
 
         Interpolates between waypoints to ensure obstacles between waypoints
         are detected.
+
+        FIX: Limits lookahead to not exceed distance to final goal to prevent
+        detecting obstacles (like boundary walls) past the mission endpoint.
         """
         if self.mission_path is None:
             return None
@@ -544,6 +845,19 @@ class MissionNavigator(Node):
 
         # Get current index
         current_idx = self.pure_pursuit.get_current_waypoint_index()
+
+        # FIX: Compute distance to final goal and limit lookahead accordingly
+        final_wp = self.mission_path[-1]
+        dist_to_final = math.sqrt(
+            (final_wp.x - self.robot_x)**2 + (final_wp.y - self.robot_y)**2
+        )
+
+        # Don't create lookahead if we're very close to the goal
+        if dist_to_final < self.goal_tolerance * 2.0:
+            return path  # Return empty path - no obstacle checking needed
+
+        # Limit lookahead to distance to final goal (don't look past the goal)
+        effective_lookahead = min(self.obstacle_lookahead, dist_to_final)
 
         # Start from robot's current position
         prev_x, prev_y = self.robot_x, self.robot_y
@@ -580,24 +894,24 @@ class MissionNavigator(Node):
 
                 accumulated_dist += segment_dist / num_steps
 
-                if accumulated_dist >= self.obstacle_lookahead:
+                # FIX: Use effective_lookahead instead of self.obstacle_lookahead
+                if accumulated_dist >= effective_lookahead:
                     break
 
-            if accumulated_dist >= self.obstacle_lookahead:
+            if accumulated_dist >= effective_lookahead:
                 break
 
             prev_x, prev_y = wp.x, wp.y
 
         return path
 
-    def _find_rejoin_waypoint(self) -> int:
-        """Find waypoint to rejoin after detour.
+    def _find_rejoin_candidates(self, max_candidates: int = 3) -> List[dict]:
+        """Find multiple potential rejoin waypoints (WATO-inspired multi-candidate selection).
 
-        Finds a clear waypoint that is:
-        1. Ahead of the robot (in its heading direction)
-        2. Far enough away to clear the obstacle
-        3. Not blocked by obstacles
+        Returns:
+            List of candidate dictionaries with 'index', 'waypoint', 'distance', 'score'
         """
+        candidates = []
         current_idx = self.pure_pursuit.get_current_waypoint_index()
 
         # Robot's forward direction
@@ -608,7 +922,6 @@ class MissionNavigator(Node):
         min_skip = 2
         start_idx = min(current_idx + min_skip, len(self.mission_path) - 1)
 
-        # Find first clear waypoint that's ahead of the robot
         for i in range(start_idx, len(self.mission_path)):
             wp = self.mission_path[i]
 
@@ -617,25 +930,59 @@ class MissionNavigator(Node):
             dy = wp.y - self.robot_y
             dist = math.sqrt(dx*dx + dy*dy)
 
-            if dist < 0.1:
+            if dist < self.detour_clearance:
                 continue
 
-            # Check if waypoint is generally ahead (dot product > 0)
-            # Allow some tolerance for waypoints to the side
-            dot_product = (dx * heading_x + dy * heading_y) / dist
-            is_ahead = dot_product > -0.3  # Allow up to ~107 degrees from heading
+            # Check if waypoint is generally ahead
+            if dist > 0.1:
+                dot_product = (dx * heading_x + dy * heading_y) / dist
+                if dot_product < -0.3:  # Behind robot
+                    continue
+            else:
+                dot_product = 0.0
 
-            # Check if waypoint is clear and far enough
-            if is_ahead and dist >= self.detour_clearance:
-                if self._is_position_clear(wp.x, wp.y):
-                    self.get_logger().info(
-                        f'Rejoin waypoint found at index {i} '
-                        f'(distance: {dist:.2f}m, dot: {dot_product:.2f})'
-                    )
-                    return i
+            # Check if position is clear
+            if self._is_position_clear(wp.x, wp.y):
+                # Score: prefer closer points with good alignment
+                alignment_score = dot_product if dist > 0.1 else 0.0
+                distance_score = 1.0 / (dist + 1.0)  # Closer is better
+                score = alignment_score * 0.6 + distance_score * 0.4
+
+                candidates.append({
+                    'index': i,
+                    'waypoint': wp,
+                    'distance': dist,
+                    'alignment': dot_product,
+                    'score': score
+                })
+
+                if len(candidates) >= max_candidates:
+                    break
+
+        # Sort by score (highest first)
+        candidates.sort(key=lambda c: c['score'], reverse=True)
+        return candidates
+
+    def _find_rejoin_waypoint(self) -> int:
+        """Find best waypoint to rejoin after detour (WATO-inspired multi-candidate).
+
+        Uses _find_rejoin_candidates to evaluate multiple options and select the best one.
+        """
+        # ENHANCEMENT 4: Multi-candidate selection
+        candidates = self._find_rejoin_candidates(max_candidates=3)
+
+        if candidates:
+            best = candidates[0]
+            self.get_logger().info(
+                f'Selected rejoin candidate: waypoint {best["index"]}, '
+                f'dist={best["distance"]:.1f}m, alignment={best["alignment"]:.2f}, '
+                f'score={best["score"]:.2f} (evaluated {len(candidates)} candidates)'
+            )
+            return best['index']
 
         # Fallback: find ANY clear waypoint (even if behind)
         self.get_logger().warn('No forward rejoin point found, searching all waypoints')
+        current_idx = self.pure_pursuit.get_current_waypoint_index()
         for i in range(current_idx + 1, len(self.mission_path)):
             wp = self.mission_path[i]
             if self._is_position_clear(wp.x, wp.y):
@@ -728,14 +1075,40 @@ class MissionNavigator(Node):
         self.planner.plan_path_async(start, goal, self._detour_received)
 
     def _detour_received(self, result):
-        """Callback when detour path is received."""
+        """Callback when detour path is received (WATO-inspired cost evaluation)."""
         if result.status == PlanningStatus.SUCCEEDED and result.path:
+            detour_nav_path = result.path
+
+            # ENHANCEMENT 3: Validate and score the detour path
+            validation = self.path_validator.validate_path(detour_nav_path, check_footprint=True)
+
+            if not validation.is_valid:
+                self._plan_fail_count = getattr(self, '_plan_fail_count', 0) + 1
+                self.get_logger().warn(
+                    f'Detour path has collision at index {validation.blocked_index} '
+                    f'at ({validation.blocked_position[0]:.1f}, {validation.blocked_position[1]:.1f}) '
+                    f'(attempt {self._plan_fail_count})'
+                )
+
+                # After 2 failed detour attempts, back up and try original path
+                if self._plan_fail_count >= 2:
+                    self.get_logger().info('Multiple detour failures - backing up to try original path')
+                    self.state = NavigatorState.BACKING_UP
+                else:
+                    self.state = NavigatorState.BLOCKED
+                return
+
+            # Log path quality metrics (WATO-inspired cost tracking)
             self.get_logger().info(
-                f'Detour path received with {len(result.path.poses)} waypoints'
+                f'Detour path accepted: {len(detour_nav_path.poses)} poses, '
+                f'cost={validation.total_cost:.0f}, high_cost_segments={validation.high_cost_segments}'
             )
 
+            # Store cost for potential comparison with alternatives
+            self._current_detour_cost = validation.total_cost
+
             # Convert nav_msgs/Path to PurePursuitPath
-            self.detour_path = self._nav_path_to_pp_path(result.path)
+            self.detour_path = self._nav_path_to_pp_path(detour_nav_path)
 
             # Create Pure Pursuit for detour
             config = PurePursuitConfig(
@@ -841,6 +1214,11 @@ class MissionNavigator(Node):
         # Clear detour state
         self.detour_path = None
         self.detour_pure_pursuit = None
+
+        # FIX: Reset blocked counter on successful rejoin
+        self._blocked_count = 0
+        self._blocked_start_x = self.robot_x
+        self._blocked_start_y = self.robot_y
 
         self.state = NavigatorState.FOLLOWING
 

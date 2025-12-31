@@ -38,9 +38,18 @@ class PathValidator:
     # Costmap value thresholds
     # Nav2 trinary costmap: 0=free, 100=lethal, 255=unknown
     # In trinary mode, costs are: free(0), inscribed(99), lethal(100), unknown(255/-1)
-    LETHAL_THRESHOLD = 99       # Inscribed or lethal - definite collision
-    HIGH_COST_THRESHOLD = 50    # High inflation cost - should avoid
-    UNKNOWN_VALUE = 255         # Unknown space
+    #
+    # IMPORTANT: Cost 99 is INSCRIBED space (robot center can pass but footprint would
+    # touch obstacle). This is NOT a collision - it's a warning zone.
+    # Only cost >= 100 is actual LETHAL collision where robot center would hit obstacle.
+    #
+    # Using 99 as threshold causes FALSE POSITIVES because:
+    # - Costmap inflation creates inscribed zones around all obstacles
+    # - Robot can safely traverse inscribed space if careful
+    # - Only LETHAL (100+) means guaranteed collision
+    LETHAL_THRESHOLD = 100      # Only actual lethal obstacles (NOT inscribed space at 99)
+    HIGH_COST_THRESHOLD = 50    # High inflation cost - should avoid if possible
+    UNKNOWN_VALUE = 255         # Unknown space (treat as obstacle for safety)
 
     def __init__(self, robot_footprint: Optional[List[Tuple[float, float]]] = None):
         """

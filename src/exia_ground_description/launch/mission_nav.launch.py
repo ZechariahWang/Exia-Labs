@@ -50,8 +50,8 @@ def generate_launch_description():
 
     path_type_arg = DeclareLaunchArgument(
         'path_type',
-        default_value='figure_eight',
-        description='Predefined path type: line, square, circle, figure_eight, slalom'
+        default_value='custom',
+        description='Predefined path type: line, square, circle, figure_eight, slalom, custom'
     )
 
     # ==================== Planner Server ====================

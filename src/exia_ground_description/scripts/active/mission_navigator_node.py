@@ -19,10 +19,35 @@ Date: December 2025
 """
 
 import math
+import os
 import subprocess
+import sys
 import json
 from enum import Enum
 from typing import Optional, Tuple, List
+
+# Add package to path for module imports
+# Handles both source (development) and install (deployment) layouts
+def _setup_module_path():
+    # Method 1: Use ament_index to find installed package (most reliable)
+    try:
+        from ament_index_python.packages import get_package_prefix
+        pkg_prefix = get_package_prefix('exia_ground_description')
+        lib_path = os.path.join(pkg_prefix, 'lib', 'exia_ground_description')
+        if os.path.isdir(lib_path) and lib_path not in sys.path:
+            sys.path.insert(0, lib_path)
+        return
+    except Exception:
+        pass
+
+    # Method 2: Source layout (scripts/active/ -> src/exia_control)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    src_path = os.path.join(script_dir, '..', '..', 'src')
+    if os.path.isdir(os.path.join(src_path, 'exia_control')):
+        if src_path not in sys.path:
+            sys.path.insert(0, src_path)
+
+_setup_module_path()
 
 import rclpy
 from rclpy.node import Node
@@ -33,10 +58,6 @@ from geometry_msgs.msg import Twist, PoseStamped, Quaternion
 from nav_msgs.msg import Odometry, OccupancyGrid, Path
 from std_srvs.srv import Trigger
 from visualization_msgs.msg import Marker, MarkerArray
-
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
 from exia_control.planning.pure_pursuit import (
     PurePursuitController, PurePursuitConfig, Path as PurePursuitPath

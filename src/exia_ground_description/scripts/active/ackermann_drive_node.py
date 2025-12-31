@@ -24,13 +24,27 @@ import os
 import sys
 
 # Add package to path for module imports
-# scripts/active/ -> scripts/ -> exia_ground_description/ -> src/
-_script_dir = os.path.dirname(os.path.abspath(__file__))
-_scripts_dir = os.path.dirname(_script_dir)
-_package_dir = os.path.dirname(_scripts_dir)
-_src_dir = os.path.join(_package_dir, 'src')
-if _src_dir not in sys.path:
-    sys.path.insert(0, _src_dir)
+# Handles both source (development) and install (deployment) layouts
+def _setup_module_path():
+    # Method 1: Use ament_index to find installed package (most reliable)
+    try:
+        from ament_index_python.packages import get_package_prefix
+        pkg_prefix = get_package_prefix('exia_ground_description')
+        lib_path = os.path.join(pkg_prefix, 'lib', 'exia_ground_description')
+        if os.path.isdir(lib_path) and lib_path not in sys.path:
+            sys.path.insert(0, lib_path)
+        return
+    except Exception:
+        pass
+
+    # Method 2: Source layout (scripts/active/ -> src/exia_control)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    src_path = os.path.join(script_dir, '..', '..', 'src')
+    if os.path.isdir(os.path.join(src_path, 'exia_control')):
+        if src_path not in sys.path:
+            sys.path.insert(0, src_path)
+
+_setup_module_path()
 
 import rclpy
 from rclpy.node import Node

@@ -56,6 +56,7 @@ install(
     scripts/active/path_follower_node.py
     scripts/active/ackermann_odometry.py
     scripts/active/mission_navigator_node.py
+    scripts/active/dynamic_navigator_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

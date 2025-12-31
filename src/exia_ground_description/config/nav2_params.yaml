@@ -20,18 +20,18 @@
 planner_server:
   ros__parameters:
     use_sim_time: true
-    expected_planner_frequency: 1.0
+    expected_planner_frequency: 2.0           # Support 500ms replanning cycle
     planner_plugins: ["GridBased"]
 
     GridBased:
       plugin: "nav2_smac_planner/SmacPlannerHybrid"
-      tolerance: 2.0                          # Goal tolerance (m) - more forgiving
+      tolerance: 1.0                          # Tighter for dynamic goal-based navigation
       downsample_costmap: false
       downsampling_factor: 1
       allow_unknown: true                     # Allow planning through unknown space
-      max_iterations: 1000000                 # Increased for complex paths
+      max_iterations: 500000                  # Reduced for faster planning
       max_on_approach_iterations: 2000
-      max_planning_time: 10.0                 # More time for complex detours
+      max_planning_time: 0.4                  # Max 400ms to fit 500ms replan cycle
 
       # Ackermann-specific parameters
       motion_model_for_search: "DUBIN"        # Forward-only (no reverse)
@@ -49,7 +49,7 @@ planner_server:
       reverse_penalty: 10.0                   # Heavy penalty if reverse allowed
       change_penalty: 0.5                     # Penalty for direction changes
       non_straight_penalty: 1.2
-      cost_penalty: 2.0
+      cost_penalty: 3.5                       # Increased: strongly avoid near-obstacle cells
       retrospective_penalty: 0.01
       rotation_penalty: 2.0
 
@@ -57,19 +57,19 @@ planner_server:
       smooth_path: true
 
 # =============================================================================
-# PLANNER SERVER'S INTERNAL COSTMAP (uses odom frame, no SLAM needed)
+# PLANNER SERVER'S INTERNAL COSTMAP (uses map frame for SLAM-based planning)
 # =============================================================================
 global_costmap:
   global_costmap:
     ros__parameters:
       use_sim_time: true
-      update_frequency: 2.0
-      publish_frequency: 1.0
-      global_frame: odom
+      update_frequency: 5.0                   # Fast updates for dynamic replanning
+      publish_frequency: 2.0
+      global_frame: map                       # SLAM-based (was: odom)
       robot_base_frame: base_footprint
-      rolling_window: true                    # Rolling window in odom frame
-      width: 30                               # Larger for planning
-      height: 30
+      rolling_window: true                    # Rolling window in map frame
+      width: 50                               # Larger for goal-based planning
+      height: 50
       resolution: 0.1                         # Coarser for faster planning
       track_unknown_space: false              # Unknown = free for planning
       footprint: "[[1.05, 0.60], [1.05, -0.60], [-1.05, -0.60], [-1.05, 0.60]]"
@@ -95,9 +95,10 @@ global_costmap:
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        # FIX: Higher cost_scaling = sharper cost dropoff = less false inscribed zones
-        cost_scaling_factor: 5.0
-        inflation_radius: 1.0              # Covers robot half-width with small margin
+        # Lower cost_scaling = gentler gradient = robot stays further from obstacles
+        # Higher inflation_radius = larger buffer zone around obstacles
+        cost_scaling_factor: 2.5             # Reduced: gentler dropoff keeps robot further away
+        inflation_radius: 2.5                # Increased: accounts for turning radius + safety
 
       always_send_full_costmap: true
 
@@ -110,10 +111,9 @@ local_costmap:
       use_sim_time: true
       update_frequency: 5.0
       publish_frequency: 2.0
-      global_frame: odom
+      global_frame: map                       # SLAM-based (was: odom)
       robot_base_frame: base_footprint
       rolling_window: true
-      # FIX: Increased from 20 to 30 for better margin
       width: 30
       height: 30
       resolution: 0.05
@@ -141,9 +141,9 @@ local_costmap:
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        # FIX: Higher cost_scaling = sharper cost dropoff = less false inscribed zones
-        cost_scaling_factor: 5.0
-        inflation_radius: 1.0              # Covers robot half-width with small margin
+        # Lower cost_scaling = gentler gradient = robot stays further from obstacles
+        cost_scaling_factor: 2.5             # Reduced: gentler dropoff keeps robot further away
+        inflation_radius: 2.5                # Increased: accounts for turning radius + safety
 
       always_send_full_costmap: true
 
@@ -155,10 +155,9 @@ costmap_server:
     use_sim_time: true
     update_frequency: 5.0
     publish_frequency: 2.0
-    global_frame: odom
+    global_frame: map                       # SLAM-based (was: odom)
     robot_base_frame: base_footprint
     rolling_window: true
-    # FIX: Increased from 20 to 30 for better margin
     width: 30
     height: 30
     resolution: 0.05
@@ -185,8 +184,8 @@ costmap_server:
 
     inflation_layer:
       plugin: "nav2_costmap_2d::InflationLayer"
-      # FIX: Higher cost_scaling = sharper cost dropoff = less false inscribed zones
-      cost_scaling_factor: 5.0
-      inflation_radius: 1.0              # Covers robot half-width with small margin
+      # Lower cost_scaling = gentler gradient = robot stays further from obstacles
+      cost_scaling_factor: 2.5             # Reduced: gentler dropoff keeps robot further away
+      inflation_radius: 2.5                # Increased: accounts for turning radius + safety
 
     always_send_full_costmap: true

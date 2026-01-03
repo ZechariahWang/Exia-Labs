@@ -41,8 +41,13 @@ class ThreeMotorTeleopNode(Node):
         self.declare_parameter('max_steering_angle', 0.6)
         self.declare_parameter('max_speed', 5.0)
         self.declare_parameter('deadzone', 0.1)
-        self.declare_parameter('throttle_ramp_rate', 10.0)  # Fast response
+        self.declare_parameter('throttle_ramp_rate', 5.0)  # Configurable ramp rate (units per second)
         self.declare_parameter('steering_ramp_rate', 10.0)  # Fast response
+        self.declare_parameter('brake_ramp_rate', 8.0)  # Faster for safety
+
+        # Soft-start / warmup parameters
+        self.declare_parameter('max_initial_throttle', 0.3)  # 30% limit during warmup
+        self.declare_parameter('warmup_duration', 3.0)  # Seconds before full throttle allowed
 
         # Serial/Arduino parameters
         self.declare_parameter('serial_port', '/dev/ttyACM0')
@@ -61,6 +66,11 @@ class ThreeMotorTeleopNode(Node):
         self.deadzone = self.get_parameter('deadzone').value
         self.throttle_ramp_rate = self.get_parameter('throttle_ramp_rate').value
         self.steering_ramp_rate = self.get_parameter('steering_ramp_rate').value
+        self.brake_ramp_rate = self.get_parameter('brake_ramp_rate').value
+
+        # Soft-start / warmup parameters
+        self.max_initial_throttle = self.get_parameter('max_initial_throttle').value
+        self.warmup_duration = self.get_parameter('warmup_duration').value
 
         # Serial/Arduino parameters
         self.serial_port = self.get_parameter('serial_port').value
@@ -84,11 +94,20 @@ class ThreeMotorTeleopNode(Node):
         self._prev_buttons = []
         self._last_warn_time = 0.0
         self._last_serial_time = 0.0
-        self._serial_period = 0.05  # Send serial commands at 20Hz max
+        self._serial_period = 0.02  # Send serial commands at 50Hz for smoother control
         self._last_arm_time = 0.0
         self._arm_period = 0.3  # Re-send ARM every 300ms to prevent timeout
         self._triggers_initialized = False
         self._startup_safety_passed = False
+
+        # Warmup state for soft-start protection
+        self._warmup_start_time = None  # When robot first started moving
+        self._warmup_complete = False   # True after warmup_duration has passed
+
+        # Hysteresis state for servo outputs (prevents 1-degree oscillation)
+        self._last_steer_servo = 90
+        self._last_throttle_servo = 90
+        self._last_brake_servo = 0
 
         # Initialize serial connection to Arduino
         self.serial_conn = None
@@ -119,6 +138,8 @@ class ThreeMotorTeleopNode(Node):
         self.get_logger().info('Xbox Teleop started - RT: throttle, LT: brake, Left stick: steering')
         self.get_logger().info('Controls: A=enable, B=E-stop, Start=clear E-stop, Back=reset trim')
         self.get_logger().info(f'Serial: {self.serial_port} @ {self.baud_rate} baud')
+        self.get_logger().info(
+            f'Soft-start: {self.max_initial_throttle * 100:.0f}% max throttle for first {self.warmup_duration:.1f}s')
 
     def _apply_deadzone(self, value: float) -> float:
         if abs(value) < self.deadzone:
@@ -134,7 +155,7 @@ class ThreeMotorTeleopNode(Node):
         """
         pressed = (1.0 - raw_value) / 2.0
         pressed = self._clamp(pressed, 0.0, 1.0)
-        trigger_deadzone = 0.05  # 5% deadzone
+        trigger_deadzone = 0.08  # 8% deadzone to filter controller noise
         if pressed < trigger_deadzone:
             return 0.0
         return (pressed - trigger_deadzone) / (1.0 - trigger_deadzone)
@@ -148,6 +169,43 @@ class ThreeMotorTeleopNode(Node):
         if abs(diff) <= max_change:
             return target
         return current + max_change if diff > 0 else current - max_change
+
+    def _apply_warmup_limit(self, throttle: float) -> float:
+        """Limit throttle during warmup period to protect hardware from sudden acceleration.
+
+        During the first warmup_duration seconds of movement, throttle is limited
+        to max_initial_throttle (default 30%). After warmup, full throttle is available.
+        """
+        now = self.get_clock().now().nanoseconds / 1e9
+
+        # Start warmup timer when first non-zero throttle is detected
+        if throttle > 0.05:
+            if self._warmup_start_time is None:
+                self._warmup_start_time = now
+                self.get_logger().info(
+                    f'Warmup started - throttle limited to {self.max_initial_throttle * 100:.0f}% '
+                    f'for {self.warmup_duration:.1f}s')
+
+        # Check if warmup is complete
+        if self._warmup_start_time is not None:
+            elapsed = now - self._warmup_start_time
+            if elapsed >= self.warmup_duration:
+                if not self._warmup_complete:
+                    self._warmup_complete = True
+                    self.get_logger().info('Warmup complete - full throttle available')
+                return throttle  # No limit after warmup
+            else:
+                # During warmup, limit throttle
+                return min(throttle, self.max_initial_throttle)
+
+        return throttle
+
+    def _reset_warmup(self):
+        """Reset warmup state - called on E-stop, disable, or stop conditions."""
+        if self._warmup_start_time is not None or self._warmup_complete:
+            self._warmup_start_time = None
+            self._warmup_complete = False
+            self.get_logger().debug('Warmup state reset')
 
     def _init_serial(self):
         """Initialize serial connection to Arduino Mega."""
@@ -227,25 +285,37 @@ class ThreeMotorTeleopNode(Node):
             self.serial_conn = None  # Mark as disconnected
 
     def _steering_to_servo(self, steering_rad: float) -> int:
-        """Convert steering angle (radians) to servo angle (0-180)."""
+        """Convert steering angle (radians) to servo angle (0-180) with hysteresis."""
         # Map from [-max_steering, +max_steering] to [min, max]
         # Negative steering = left, positive = right
         normalized = (steering_rad + self.max_steering_angle) / (2.0 * self.max_steering_angle)
         normalized = self._clamp(normalized, 0.0, 1.0)
         servo_angle = self.steering_servo_min + normalized * (self.steering_servo_max - self.steering_servo_min)
-        return int(round(servo_angle))
+        new_angle = int(round(servo_angle))
+        # Hysteresis: only change if difference > 1 degree (prevents oscillation)
+        if abs(new_angle - self._last_steer_servo) > 1:
+            self._last_steer_servo = new_angle
+        return self._last_steer_servo
 
     def _throttle_to_servo(self, throttle_pct: float) -> int:
-        """Convert throttle percentage (0-1) to servo angle."""
+        """Convert throttle percentage (0-1) to servo angle with hysteresis."""
         throttle_pct = self._clamp(throttle_pct, 0.0, 1.0)
         servo_angle = self.throttle_servo_min + throttle_pct * (self.throttle_servo_max - self.throttle_servo_min)
-        return int(round(servo_angle))
+        new_angle = int(round(servo_angle))
+        # Hysteresis: only change if difference > 1 degree
+        if abs(new_angle - self._last_throttle_servo) > 1:
+            self._last_throttle_servo = new_angle
+        return self._last_throttle_servo
 
     def _brake_to_servo(self, brake_pct: float) -> int:
-        """Convert brake percentage (0-1) to servo angle."""
+        """Convert brake percentage (0-1) to servo angle with hysteresis."""
         brake_pct = self._clamp(brake_pct, 0.0, 1.0)
         servo_angle = self.brake_servo_min + brake_pct * (self.brake_servo_max - self.brake_servo_min)
-        return int(round(servo_angle))
+        new_angle = int(round(servo_angle))
+        # Hysteresis: only change if difference > 1 degree
+        if abs(new_angle - self._last_brake_servo) > 1:
+            self._last_brake_servo = new_angle
+        return self._last_brake_servo
 
     def _button_pressed(self, buttons: list, button_id: int) -> bool:
         if button_id >= len(buttons):
@@ -303,9 +373,13 @@ class ThreeMotorTeleopNode(Node):
                 self._publish_stop()
                 return
 
-        # Direct control - no ramping for instant response
-        self._current_throttle = target_throttle
-        self._current_brake = target_brake
+        # Smooth ramping for throttle/brake to reduce jitter
+        # Uses configurable ramp rates from ROS parameters
+        self._current_throttle = self._ramp_toward(self._current_throttle, target_throttle, self.throttle_ramp_rate, dt)
+        self._current_brake = self._ramp_toward(self._current_brake, target_brake, self.brake_ramp_rate, dt)
+
+        # Apply warmup limit - limits throttle during initial movement period
+        self._current_throttle = self._apply_warmup_limit(self._current_throttle)
 
         # Steering from left stick X - direct control
         target_steering = left_x * self.max_steering_angle + self.steering_trim
@@ -327,18 +401,23 @@ class ThreeMotorTeleopNode(Node):
         if self._button_pressed(buttons, self.BUTTON_A):
             self.enabled = not self.enabled
             self.get_logger().info(f'Teleop {"ENABLED" if self.enabled else "DISABLED"}')
+            if not self.enabled:
+                # Reset warmup when disabled for safety on re-enable
+                self._reset_warmup()
 
         if self._button_pressed(buttons, self.BUTTON_B):
             self.get_logger().warn('EMERGENCY STOP!')
             self.estop_active = True
             self.enabled = False
+            self._reset_warmup()  # Reset warmup on E-stop
             self._emergency_stop()
 
         if self._button_pressed(buttons, self.BUTTON_START):
             if self.estop_active:
                 self.estop_active = False
                 self.enabled = True
-                self.get_logger().info('E-stop cleared')
+                # Note: warmup already reset by E-stop, will start fresh
+                self.get_logger().info('E-stop cleared - warmup will restart on throttle')
                 if self.clear_estop_client.service_is_ready():
                     self.clear_estop_client.call_async(Trigger.Request())
 

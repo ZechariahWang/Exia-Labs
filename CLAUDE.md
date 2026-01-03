@@ -43,6 +43,9 @@ easy transition between simulation and real ATV hardware:
 
 ```
 exia_ws/
+├── arduino/
+│   └── exia_servo_controller/
+│       └── exia_servo_controller.ino  # Arduino Mega servo controller
 ├── src/
 │   └── exia_ground_description/
 │       ├── urdf/
@@ -66,6 +69,8 @@ exia_ws/
 │       ├── scripts/active/              # ROS2 node entry points
 │       │   ├── ackermann_drive_node.py  # Drive controller
 │       │   ├── ackermann_odometry.py    # Fallback odometry
+│       │   ├── xbox_teleop_node.py      # Xbox controller teleop
+│       │   ├── ps4_teleop_node.py       # PS4 DualShock teleop
 │       │   ├── path_follower_node.py    # Pure Pursuit demo
 │       │   ├── mission_navigator_node.py # Predefined path nav
 │       │   └── dynamic_navigator_node.py # Dynamic goal nav
@@ -193,6 +198,113 @@ ros2 topic pub /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.0}, angular: {z:
 ros2 service call /ackermann/emergency_stop std_srvs/srv/Trigger
 ```
 
+## Teleop Control
+
+Manual control using gamepad controllers. Two versions available:
+
+### Xbox 360/One Controller (`xbox_teleop_node.py`)
+
+| Input | Action |
+|-------|--------|
+| Left Stick X | Steering |
+| RT (Right Trigger) | Throttle |
+| LT (Left Trigger) | Brake |
+| A Button | Toggle enable/disable |
+| B Button | Emergency stop |
+| Start Button | Clear E-stop |
+| Back Button | Reset steering trim |
+
+```bash
+ros2 run joy joy_node &
+ros2 run exia_ground_description xbox_teleop_node.py
+```
+
+### PS4 DualShock 4 Controller (`ps4_teleop_node.py`)
+
+| Input | Action |
+|-------|--------|
+| Left Stick X | Steering |
+| R2 (Right Trigger) | Throttle |
+| L2 (Left Trigger) | Brake |
+| X (Cross) Button | Toggle enable/disable |
+| Circle Button | Emergency stop |
+| Options Button | Clear E-stop |
+| Share Button | Reset steering trim |
+
+```bash
+ros2 run joy joy_node &
+ros2 run exia_ground_description ps4_teleop_node.py
+```
+
+**Serial Communication:**
+- Port: `/dev/ttyACM0` (Arduino Mega)
+- Baud: 115200
+- Protocol: `S<steer>,T<throttle>,B<brake>\n`
+
+## Arduino Servo Controller
+
+The Arduino Mega runs `exia_servo_controller.ino` to control physical servos.
+
+**Pin Assignments:**
+| Pin | Function |
+|-----|----------|
+| 9 | Steering servo |
+| 10 | Throttle ESC |
+| 11 | Brake servo |
+| 13 | Status LED |
+
+**Serial Commands:**
+| Command | Description |
+|---------|-------------|
+| `ARM` | Enable servo control |
+| `DISARM` | Disable and safe servos |
+| `S90,T90,B0` | Set steering=90, throttle=90, brake=0 |
+
+**Safety Features:**
+- 2-second command timeout triggers emergency stop
+- Must send ARM before servo commands are accepted
+- LED indicates armed state
+
+## Motor Smoothing & Soft-Start
+
+Both Python and Arduino implement smoothing and rate limiting to prevent jittery movements and protect hardware.
+
+**Arduino (exponential filter + rate limiting):**
+```cpp
+// Smoothing
+const float SMOOTH_ALPHA = 0.25;  // 0.1=smooth, 0.5=responsive
+
+// Rate limiting (degrees per 10ms update cycle)
+const int MAX_STEERING_RATE = 5;   // Can increase after testing
+const int MAX_THROTTLE_RATE = 3;   // Slower for motor protection
+const int MAX_BRAKE_RATE = 10;     // Faster for safety
+```
+
+**Python (hysteresis + ramping + warmup):**
+- Servo values only change if difference > 1 degree (hysteresis)
+- Throttle/brake use configurable ramping
+- Trigger deadzone: 8%
+- Serial rate: 50Hz
+- **Soft-start**: Throttle limited to 30% for first 3 seconds
+
+**Configurable ROS Parameters:**
+```bash
+ros2 run exia_ground_description xbox_teleop_node.py --ros-args \
+  -p throttle_ramp_rate:=5.0 \
+  -p brake_ramp_rate:=8.0 \
+  -p max_initial_throttle:=0.3 \
+  -p warmup_duration:=3.0
+```
+
+**Tuning Parameters:**
+| Parameter | Location | Default | Effect |
+|-----------|----------|---------|--------|
+| `SMOOTH_ALPHA` | Arduino | 0.25 | Lower = smoother, slower response |
+| `MAX_THROTTLE_RATE` | Arduino | 3 | Max degrees per 10ms cycle |
+| `throttle_ramp_rate` | Python | 5.0 | Lower = gentler acceleration |
+| `max_initial_throttle` | Python | 0.3 | Throttle limit during warmup (30%) |
+| `warmup_duration` | Python | 3.0 | Seconds before full throttle allowed |
+
 ## Build Commands
 
 ```bash
@@ -222,6 +334,8 @@ source install/setup.bash
 | Node | Purpose |
 |------|---------|
 | `ackermann_drive_node.py` | cmd_vel -> motor commands, publishes odom |
+| `xbox_teleop_node.py` | Xbox controller -> servo commands via serial |
+| `ps4_teleop_node.py` | PS4 DualShock 4 -> servo commands via serial |
 | `dynamic_navigator_node.py` | Goal-based nav with 500ms replanning |
 | `mission_navigator_node.py` | Predefined path following |
 | `path_follower_node.py` | Pure Pursuit demo |

@@ -73,6 +73,7 @@ if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_
     "/home/exialabsargus/Exia-Labs/src/exia_ground_description/scripts/active/path_follower_node.py"
     "/home/exialabsargus/Exia-Labs/src/exia_ground_description/scripts/active/dynamic_navigator_node.py"
     "/home/exialabsargus/Exia-Labs/src/exia_ground_description/scripts/active/xbox_teleop_node.py"
+    "/home/exialabsargus/Exia-Labs/src/exia_ground_description/scripts/active/ps4_teleop_node.py"
     )
 endif()
 

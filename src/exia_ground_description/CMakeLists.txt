@@ -57,6 +57,7 @@ install(
     scripts/active/path_follower_node.py
     scripts/active/dynamic_navigator_node.py
     scripts/active/xbox_teleop_node.py
+    scripts/active/ps4_teleop_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

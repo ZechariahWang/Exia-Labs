@@ -33,6 +33,13 @@
   // ===================== SAFETY =====================
   const unsigned long TIMEOUT_MS = 2000;  // <-- CHANGED: was 500, now 2000
 
+  // ===================== SOFT-START / RATE LIMITING =====================
+  // Maximum degrees the servo can change per 10ms update cycle
+  // At 100Hz: rate * 100 = degrees per second
+  const int MAX_STEERING_RATE = 15;  // 1500 deg/sec - responsive steering
+  const int MAX_THROTTLE_RATE = 8;   // 800 deg/sec - smooth throttle ramp
+  const int MAX_BRAKE_RATE = 20;     // 2000 deg/sec - fast brake response for safety
+
   // ===================== OBJECTS =====================
   Servo steeringServo;
   Servo throttleServo;
@@ -43,9 +50,25 @@
   int currentThrottle = ESC_NEUTRAL;
   int currentBrake    = BRAKE_FULL;
 
+  // Smoothed servo positions (exponential filter)
+  float smoothSteering = STEER_CENTER;
+  float smoothThrottle = ESC_NEUTRAL;
+  float smoothBrake    = BRAKE_FULL;
+
+  // Rate-limited output positions (after both smoothing AND rate limiting)
+  // These are the actual values written to servos - prevents sudden jumps
+  float rateLimitedSteering = STEER_CENTER;
+  float rateLimitedThrottle = ESC_NEUTRAL;
+  float rateLimitedBrake    = BRAKE_FULL;
+
+  // Smoothing factor: 0.1 = very smooth, 0.5 = responsive
+  const float SMOOTH_ALPHA = 0.25;
+
   bool armed = false;
   bool safetyStop = true;
   unsigned long lastCommandTime = 0;
+  unsigned long lastServoUpdate = 0;
+  const unsigned long SERVO_UPDATE_INTERVAL = 10;  // Update servos every 10ms (100Hz)
 
   // ===================== SERIAL BUFFER =====================
   const int BUFFER_SIZE = 64;
@@ -97,12 +120,56 @@
       }
     }
 
+    // Update servos with smoothing at 100Hz
+    if (millis() - lastServoUpdate >= SERVO_UPDATE_INTERVAL) {
+      lastServoUpdate = millis();
+      updateServos();
+    }
+
     if (armed && millis() - lastCommandTime > TIMEOUT_MS) {
       emergencyStop();
       Serial.println("SAFETY TIMEOUT");
     }
 
     digitalWrite(LED_PIN, armed && !safetyStop);
+  }
+
+  // ==========================================================
+  // ===================== RATE LIMITING =======================
+  // ==========================================================
+  // Apply rate limiting to prevent sudden large servo movements
+  // Returns a value that moves toward target but limited by maxRate per cycle
+  float applyRateLimit(float current, float target, int maxRate) {
+    float diff = target - current;
+    if (abs(diff) <= (float)maxRate) {
+      return target;
+    }
+    return current + (diff > 0 ? (float)maxRate : -(float)maxRate);
+  }
+
+  // ==========================================================
+  // ===================== SERVO SMOOTHING ====================
+  // ==========================================================
+  void updateServos() {
+    if (!armed || safetyStop) {
+      return;
+    }
+
+    // Step 1: Exponential moving average for smooth transitions (reduces jitter)
+    smoothSteering = SMOOTH_ALPHA * currentSteering + (1.0 - SMOOTH_ALPHA) * smoothSteering;
+    smoothThrottle = SMOOTH_ALPHA * currentThrottle + (1.0 - SMOOTH_ALPHA) * smoothThrottle;
+    smoothBrake    = SMOOTH_ALPHA * currentBrake    + (1.0 - SMOOTH_ALPHA) * smoothBrake;
+
+    // Step 2: Apply rate limiting ON TOP of smoothing (soft-start protection)
+    // This prevents sudden large jumps that could damage motors/gears
+    rateLimitedSteering = applyRateLimit(rateLimitedSteering, smoothSteering, MAX_STEERING_RATE);
+    rateLimitedThrottle = applyRateLimit(rateLimitedThrottle, smoothThrottle, MAX_THROTTLE_RATE);
+    rateLimitedBrake    = applyRateLimit(rateLimitedBrake, smoothBrake, MAX_BRAKE_RATE);
+
+    // Write rate-limited values to servos (not just smoothed values)
+    steeringServo.write((int)(rateLimitedSteering + 0.5));
+    throttleServo.write((int)(rateLimitedThrottle + 0.5));
+    brakeServo.write((int)(rateLimitedBrake + 0.5));
   }
 
   // ==========================================================
@@ -113,8 +180,22 @@
       armed = true;
       safetyStop = false;
       lastCommandTime = millis();
+      // Initialize all values to safe positions
+      currentSteering = STEER_CENTER;
+      currentThrottle = ESC_NEUTRAL;
+      currentBrake = BRAKE_RELEASE;
+      // Initialize smooth values (exponential filter state)
+      smoothSteering = STEER_CENTER;
+      smoothThrottle = ESC_NEUTRAL;
+      smoothBrake = BRAKE_RELEASE;
+      // Initialize rate-limited values (prevents jumps on ARM)
+      rateLimitedSteering = STEER_CENTER;
+      rateLimitedThrottle = ESC_NEUTRAL;
+      rateLimitedBrake = BRAKE_RELEASE;
+      // Write initial positions to servos
       brakeServo.write(BRAKE_RELEASE);
       throttleServo.write(ESC_NEUTRAL);
+      steeringServo.write(STEER_CENTER);
       Serial.println("ARMED");
       return;
     }
@@ -149,19 +230,17 @@
       token = strtok(NULL, ",");
     }
 
+    // Update target values - smoothing in updateServos() handles actual writes
     if (steer != -1) {
       currentSteering = constrain(steer, 0, 180);
-      steeringServo.write(currentSteering);
     }
 
     if (throttle != -1) {
       currentThrottle = constrain(throttle, THROTTLE_MIN, THROTTLE_MAX);
-      throttleServo.write(currentThrottle);
     }
 
     if (brake != -1) {
       currentBrake = constrain(brake, 0, 180);
-      brakeServo.write(currentBrake);
     }
 
     lastCommandTime = millis();

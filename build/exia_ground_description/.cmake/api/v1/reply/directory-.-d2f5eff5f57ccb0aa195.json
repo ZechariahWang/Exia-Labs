@@ -78,7 +78,7 @@
 			{
 				"command" : 5,
 				"file" : 0,
-				"line" : 63,
+				"line" : 64,
 				"parent" : 0
 			},
 			{
@@ -329,7 +329,8 @@
 				"scripts/active/ackermann_odometry.py",
 				"scripts/active/path_follower_node.py",
 				"scripts/active/dynamic_navigator_node.py",
-				"scripts/active/xbox_teleop_node.py"
+				"scripts/active/xbox_teleop_node.py",
+				"scripts/active/ps4_teleop_node.py"
 			],
 			"type" : "file"
 		},

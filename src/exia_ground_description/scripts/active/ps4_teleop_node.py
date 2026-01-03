@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Xbox Teleop Node - Three-motor direct control (throttle, brake, steering)
+# PS4 DualShock 4 Teleop Node - Three-motor direct control (throttle, brake, steering)
 # Sends servo commands to Arduino Mega via serial on /dev/ttyACM0
 
 import rclpy
@@ -17,24 +17,23 @@ import time
 SERIAL_ERRORS = (serial.SerialException, OSError, termios.error)
 
 
-class ThreeMotorTeleopNode(Node):
+class PS4TeleopNode(Node):
 
-    # Xbox 360 controller axis mapping (Linux xpad driver)
+    # PS4 DualShock 4 controller axis mapping (xpadneo driver on Jetson)
+    # Note: xpadneo maps PS4 controller with Xbox-style trigger values
     AXIS_LEFT_STICK_X = 0   # Steering (-1.0 left, +1.0 right)
     AXIS_LEFT_STICK_Y = 1   # Unused
-    AXIS_LT = 2             # Brake (+1.0 not pressed, -1.0 fully pressed)
-    AXIS_RIGHT_STICK_X = 3  # Unused
-    AXIS_RIGHT_STICK_Y = 4  # Unused
-    AXIS_RT = 5             # Throttle (+1.0 not pressed, -1.0 fully pressed)
+    AXIS_L2 = 3             # Brake trigger (+1.0 released, -1.0 pressed) - Xbox-style
+    AXIS_R2 = 4             # Throttle trigger (+1.0 released, -1.0 pressed) - Xbox-style
 
-    # Button mapping
-    BUTTON_A = 0      # Toggle enable
-    BUTTON_B = 1      # E-stop
-    BUTTON_BACK = 6   # Reset steering trim
-    BUTTON_START = 7  # Clear E-stop
+    # Button mapping (PS4 DualShock 4)
+    BUTTON_CROSS = 0      # Toggle enable (X button)
+    BUTTON_CIRCLE = 1     # E-stop (O button)
+    BUTTON_SHARE = 8      # Reset steering trim
+    BUTTON_OPTIONS = 9    # Clear E-stop
 
     def __init__(self):
-        super().__init__('xbox_teleop_three_motor')
+        super().__init__('ps4_teleop_three_motor')
 
         # Parameters
         self.declare_parameter('wheel_radius', 0.3)
@@ -135,8 +134,8 @@ class ThreeMotorTeleopNode(Node):
         self.create_timer(0.2, self._keepalive_timer_callback)
         self._last_joy_time = self.get_clock().now()
 
-        self.get_logger().info('Xbox Teleop started - RT: throttle, LT: brake, Left stick: steering')
-        self.get_logger().info('Controls: A=enable, B=E-stop, Start=clear E-stop, Back=reset trim')
+        self.get_logger().info('PS4 Teleop started - R2: throttle, L2: brake, Left stick: steering')
+        self.get_logger().info('Controls: X=enable, Circle=E-stop, Options=clear E-stop, Share=reset trim')
         self.get_logger().info(f'Serial: {self.serial_port} @ {self.baud_rate} baud')
         self.get_logger().info(
             f'Soft-start: {self.max_initial_throttle * 100:.0f}% max throttle for first {self.warmup_duration:.1f}s')
@@ -150,7 +149,7 @@ class ThreeMotorTeleopNode(Node):
     def _apply_trigger_deadzone(self, raw_value: float) -> float:
         """Convert trigger value from [+1.0, -1.0] to [0.0, 1.0] with deadzone.
 
-        Xbox triggers: +1.0 = not pressed, -1.0 = fully pressed
+        Triggers (via Wireless Controller driver): +1.0 = not pressed, -1.0 = fully pressed
         Output: 0.0 = not pressed, 1.0 = fully pressed
         """
         pressed = (1.0 - raw_value) / 2.0
@@ -340,29 +339,28 @@ class ThreeMotorTeleopNode(Node):
             self._publish_stop()
             return
 
-        if len(msg.axes) < 6:
+        if len(msg.axes) < 5:
             return
 
         # Read controls - Left stick X for steering
         left_x = self._apply_deadzone(msg.axes[self.AXIS_LEFT_STICK_X])
 
-        # Triggers: +1.0 = not pressed, -1.0 = fully pressed
-        # Some controllers report 0.0 until first pressed
-        rt_raw = msg.axes[self.AXIS_RT]
-        lt_raw = msg.axes[self.AXIS_LT]
+        # Triggers (via xpadneo): +1.0 = not pressed, -1.0 = fully pressed (Xbox-style)
+        r2_raw = msg.axes[self.AXIS_R2]
+        l2_raw = msg.axes[self.AXIS_L2]
 
         # Trigger initialization: wait for non-zero value
         if not self._triggers_initialized:
-            if rt_raw != 0.0 or lt_raw != 0.0:
+            if r2_raw != 0.0 or l2_raw != 0.0:
                 self._triggers_initialized = True
             else:
-                # Until initialized, treat as not pressed
-                rt_raw = 1.0
-                lt_raw = 1.0
+                # Until initialized, treat as not pressed (+1.0 = released for Xbox-style)
+                r2_raw = 1.0
+                l2_raw = 1.0
 
         # Convert triggers to 0.0-1.0 range with deadzone
-        target_throttle = self._apply_trigger_deadzone(rt_raw)
-        target_brake = self._apply_trigger_deadzone(lt_raw)
+        target_throttle = self._apply_trigger_deadzone(r2_raw)
+        target_brake = self._apply_trigger_deadzone(l2_raw)
 
         # Startup safety: require triggers to be released before enabling control
         if not self._startup_safety_passed:
@@ -398,21 +396,21 @@ class ThreeMotorTeleopNode(Node):
         self._send_servo_commands(steering_servo, throttle_servo, brake_servo)
 
     def _process_buttons(self, buttons: list):
-        if self._button_pressed(buttons, self.BUTTON_A):
+        if self._button_pressed(buttons, self.BUTTON_CROSS):
             self.enabled = not self.enabled
             self.get_logger().info(f'Teleop {"ENABLED" if self.enabled else "DISABLED"}')
             if not self.enabled:
                 # Reset warmup when disabled for safety on re-enable
                 self._reset_warmup()
 
-        if self._button_pressed(buttons, self.BUTTON_B):
+        if self._button_pressed(buttons, self.BUTTON_CIRCLE):
             self.get_logger().warn('EMERGENCY STOP!')
             self.estop_active = True
             self.enabled = False
             self._reset_warmup()  # Reset warmup on E-stop
             self._emergency_stop()
 
-        if self._button_pressed(buttons, self.BUTTON_START):
+        if self._button_pressed(buttons, self.BUTTON_OPTIONS):
             if self.estop_active:
                 self.estop_active = False
                 self.enabled = True
@@ -421,7 +419,7 @@ class ThreeMotorTeleopNode(Node):
                 if self.clear_estop_client.service_is_ready():
                     self.clear_estop_client.call_async(Trigger.Request())
 
-        if self._button_pressed(buttons, self.BUTTON_BACK):
+        if self._button_pressed(buttons, self.BUTTON_SHARE):
             self.steering_trim = 0.0
             self.get_logger().info('Steering trim reset')
 
@@ -558,7 +556,7 @@ class ThreeMotorTeleopNode(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = ThreeMotorTeleopNode()
+    node = PS4TeleopNode()
 
     try:
         rclpy.spin(node)

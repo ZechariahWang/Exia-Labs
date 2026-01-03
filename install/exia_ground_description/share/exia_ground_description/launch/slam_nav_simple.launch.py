@@ -1,1 +1,0 @@
-/home/zech/exia_ws/src/exia_ground_description/launch/slam_nav_simple.launch.py

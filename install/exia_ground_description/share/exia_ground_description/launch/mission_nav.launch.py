@@ -1,1 +1,0 @@
-/home/zech/exia_ws/src/exia_ground_description/launch/mission_nav.launch.py

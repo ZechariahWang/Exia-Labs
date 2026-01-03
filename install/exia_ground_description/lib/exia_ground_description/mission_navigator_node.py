@@ -1,1 +1,0 @@
-/home/zech/exia_ws/src/exia_ground_description/scripts/active/mission_navigator_node.py

@@ -1,0 +1,75 @@
+-- The C compiler identification is GNU 11.4.0
+-- The CXX compiler identification is GNU 11.4.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /usr/bin/cc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Found ament_cmake: 1.3.12 (/opt/ros/humble/share/ament_cmake/cmake)
+-- Found Python3: /usr/bin/python3 (found version "3.10.12") found components: Interpreter 
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/exialabsargus/Exia-Labs/build/exia_ground_description
+-- Install configuration: ""
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/exia_ground_description/urdf
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/exia_ground_description/urdf/exia_ground.urdf.xacro
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/exia_ground_description/launch
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/exia_ground_description/launch/exia_ground_state.launch.py
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/exia_ground_description/launch/__pycache__
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/exia_ground_description/launch/__pycache__/exia_ground_sim.launch.cpython-310.pyc
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/exia_ground_description/launch/exia_ground_sim.launch.py
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/exia_ground_description/launch/dynamic_nav.launch.py
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/exia_ground_description/rviz
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/exia_ground_description/rviz/exia_ground.rviz
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/exia_ground_description/rviz/exia_slam_nav.rviz
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/exia_ground_description/config
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/exia_ground_description/config/ackermann_controllers.yaml
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/exia_ground_description/config/hardware_config.yaml
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/exia_ground_description/config/slam_toolbox_params.yaml
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/exia_ground_description/config/nav2_params.yaml
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/exia_ground_description/worlds
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/exia_ground_description/worlds/exia_world.sdf
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/lib/exia_ground_description/exia_control
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/lib/exia_ground_description/exia_control/planning
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/lib/exia_ground_description/exia_control/planning/paths.py
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/lib/exia_ground_description/exia_control/planning/__pycache__
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/lib/exia_ground_description/exia_control/planning/__init__.py
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/lib/exia_ground_description/exia_control/planning/pure_pursuit.py
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/lib/exia_ground_description/exia_control/navigation
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/lib/exia_ground_description/exia_control/navigation/__init__.py
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/lib/exia_ground_description/exia_control/navigation/planner_interface.py
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/lib/exia_ground_description/exia_control/navigation/path_validator.py
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/lib/exia_ground_description/exia_control/__pycache__
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/lib/exia_ground_description/exia_control/__init__.py
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/lib/exia_ground_description/exia_control/hal
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/lib/exia_ground_description/exia_control/hal/simulation.py
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/lib/exia_ground_description/exia_control/hal/__init__.py
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/lib/exia_ground_description/exia_control/hal/base.py
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/lib/exia_ground_description/exia_control/control
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/lib/exia_ground_description/exia_control/control/ackermann_drive.py
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/lib/exia_ground_description/exia_control/control/__init__.py
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/lib/exia_ground_description/ackermann_drive_node.py
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/lib/exia_ground_description/ackermann_odometry.py
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/lib/exia_ground_description/path_follower_node.py
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/lib/exia_ground_description/dynamic_navigator_node.py
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/lib/exia_ground_description/xbox_teleop_node.py
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/ament_index/resource_index/package_run_dependencies/exia_ground_description
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/ament_index/resource_index/parent_prefix_path/exia_ground_description
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/exia_ground_description/environment/ament_prefix_path.sh
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/exia_ground_description/environment/ament_prefix_path.dsv
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/exia_ground_description/environment/path.sh
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/exia_ground_description/environment/path.dsv
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/exia_ground_description/local_setup.bash
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/exia_ground_description/local_setup.sh
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/exia_ground_description/local_setup.zsh
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/exia_ground_description/local_setup.dsv
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/exia_ground_description/package.dsv
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/ament_index/resource_index/packages/exia_ground_description
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/exia_ground_description/cmake/exia_ground_descriptionConfig.cmake
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/exia_ground_description/cmake/exia_ground_descriptionConfig-version.cmake
+-- Installing: /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/exia_ground_description/package.xml

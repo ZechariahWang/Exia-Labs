@@ -1,1 +1,661 @@
-/home/zech/exia_ws/src/exia_ground_description/worlds/exia_world.sdf
+<?xml version="1.0" ?>
+<sdf version="1.8">
+  <world name="exia_world">
+    <!-- Physics -->
+    <physics name="1ms" type="ignored">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+
+    <!-- Required plugins for simulation -->
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+    <plugin filename="gz-sim-contact-system" name="gz::sim::systems::Contact"/>
+
+    <!-- SENSORS PLUGIN - Required for IMU, Lidar, Camera, etc. -->
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
+
+    <!-- Top-down camera view - raised for larger map -->
+    <gui fullscreen="0">
+      <plugin filename="GzScene3D" name="3D View">
+        <gz-gui>
+          <title>3D View</title>
+          <property type="bool" key="showTitleBar">false</property>
+        </gz-gui>
+        <engine>ogre2</engine>
+        <scene>scene</scene>
+        <ambient_light>0.4 0.4 0.4</ambient_light>
+        <background_color>0.8 0.8 0.8</background_color>
+        <camera_pose>0 0 30 0 1.5708 0</camera_pose>
+      </plugin>
+      <plugin filename="WorldControl" name="World control">
+        <gz-gui><title>World control</title></gz-gui>
+        <play_pause>true</play_pause>
+        <step>true</step>
+      </plugin>
+      <plugin filename="WorldStats" name="World stats">
+        <gz-gui><title>World stats</title></gz-gui>
+        <sim_time>true</sim_time>
+        <real_time>true</real_time>
+        <real_time_factor>true</real_time_factor>
+      </plugin>
+      <!-- Entity spawning tools -->
+      <plugin filename="Shapes" name="Shapes">
+        <gz-gui><title>Spawn Shapes</title></gz-gui>
+      </plugin>
+      <plugin filename="Transform" name="Transform">
+        <gz-gui><title>Transform</title></gz-gui>
+      </plugin>
+    </gui>
+
+    <!-- Lighting -->
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 20 0 0 0</pose>
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <attenuation>
+        <range>1000</range>
+        <constant>0.9</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <direction>-0.5 0.1 -0.9</direction>
+    </light>
+
+    <!-- Ground plane - 50m x 50m -->
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>60 60</size>
+            </plane>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>60 60</size>
+            </plane>
+          </geometry>
+          <material>
+            <ambient>0.4 0.4 0.4 1</ambient>
+            <diffuse>0.4 0.4 0.4 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ==================== BOUNDARY WALLS (50m x 50m area) ==================== -->
+    <!-- All walls are 1m tall for easy lidar detection -->
+
+    <!-- North boundary wall -->
+    <model name="boundary_north">
+      <static>true</static>
+      <pose>0 25 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>50 0.3 1.0</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>50 0.3 1.0</size></box></geometry>
+          <material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.3 0.3 0.3 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- South boundary wall -->
+    <model name="boundary_south">
+      <static>true</static>
+      <pose>0 -25 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>50 0.3 1.0</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>50 0.3 1.0</size></box></geometry>
+          <material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.3 0.3 0.3 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- East boundary wall -->
+    <model name="boundary_east">
+      <static>true</static>
+      <pose>25 0 0.5 0 0 1.5708</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>50 0.3 1.0</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>50 0.3 1.0</size></box></geometry>
+          <material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.3 0.3 0.3 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- West boundary wall -->
+    <model name="boundary_west">
+      <static>true</static>
+      <pose>-25 0 0.5 0 0 1.5708</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>50 0.3 1.0</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>50 0.3 1.0</size></box></geometry>
+          <material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.3 0.3 0.3 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ==================== INTERIOR WALLS - ZONE 1 (Center) ==================== -->
+
+    <!-- Central cross walls -->
+    <model name="wall_center_h1">
+      <static>true</static>
+      <pose>0 5 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>12 0.25 1.0</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>12 0.25 1.0</size></box></geometry>
+          <material><ambient>0.7 0.2 0.2 1</ambient><diffuse>0.7 0.2 0.2 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="wall_center_h2">
+      <static>true</static>
+      <pose>0 -5 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>12 0.25 1.0</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>12 0.25 1.0</size></box></geometry>
+          <material><ambient>0.2 0.2 0.7 1</ambient><diffuse>0.2 0.2 0.7 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ==================== INTERIOR WALLS - ZONE 2 (Northeast) ==================== -->
+
+    <model name="wall_ne_1">
+      <static>true</static>
+      <pose>15 15 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>10 0.25 1.0</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>10 0.25 1.0</size></box></geometry>
+          <material><ambient>0.8 0.4 0.1 1</ambient><diffuse>0.8 0.4 0.1 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="wall_ne_2">
+      <static>true</static>
+      <pose>12 12 0.5 0 0 1.5708</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>8 0.25 1.0</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>8 0.25 1.0</size></box></geometry>
+          <material><ambient>0.8 0.4 0.1 1</ambient><diffuse>0.8 0.4 0.1 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="wall_ne_3">
+      <static>true</static>
+      <pose>18 10 0.5 0 0 0.6</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>6 0.25 1.0</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>6 0.25 1.0</size></box></geometry>
+          <material><ambient>0.8 0.4 0.1 1</ambient><diffuse>0.8 0.4 0.1 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ==================== INTERIOR WALLS - ZONE 3 (Northwest) ==================== -->
+
+    <model name="wall_nw_1">
+      <static>true</static>
+      <pose>-15 15 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>10 0.25 1.0</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>10 0.25 1.0</size></box></geometry>
+          <material><ambient>0.1 0.6 0.8 1</ambient><diffuse>0.1 0.6 0.8 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="wall_nw_2">
+      <static>true</static>
+      <pose>-12 18 0.5 0 0 1.5708</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>8 0.25 1.0</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>8 0.25 1.0</size></box></geometry>
+          <material><ambient>0.1 0.6 0.8 1</ambient><diffuse>0.1 0.6 0.8 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="wall_nw_3">
+      <static>true</static>
+      <pose>-18 12 0.5 0 0 -0.4</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>7 0.25 1.0</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>7 0.25 1.0</size></box></geometry>
+          <material><ambient>0.1 0.6 0.8 1</ambient><diffuse>0.1 0.6 0.8 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ==================== INTERIOR WALLS - ZONE 4 (Southeast) ==================== -->
+
+    <model name="wall_se_1">
+      <static>true</static>
+      <pose>15 -15 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>10 0.25 1.0</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>10 0.25 1.0</size></box></geometry>
+          <material><ambient>0.6 0.1 0.6 1</ambient><diffuse>0.6 0.1 0.6 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="wall_se_2">
+      <static>true</static>
+      <pose>12 -12 0.5 0 0 1.5708</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>8 0.25 1.0</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>8 0.25 1.0</size></box></geometry>
+          <material><ambient>0.6 0.1 0.6 1</ambient><diffuse>0.6 0.1 0.6 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="wall_se_3">
+      <static>true</static>
+      <pose>18 -18 0.5 0 0 0.785</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>8 0.25 1.0</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>8 0.25 1.0</size></box></geometry>
+          <material><ambient>0.6 0.1 0.6 1</ambient><diffuse>0.6 0.1 0.6 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ==================== INTERIOR WALLS - ZONE 5 (Southwest) ==================== -->
+
+    <model name="wall_sw_1">
+      <static>true</static>
+      <pose>-15 -15 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>10 0.25 1.0</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>10 0.25 1.0</size></box></geometry>
+          <material><ambient>0.2 0.8 0.2 1</ambient><diffuse>0.2 0.8 0.2 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="wall_sw_2">
+      <static>true</static>
+      <pose>-12 -18 0.5 0 0 1.5708</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>8 0.25 1.0</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>8 0.25 1.0</size></box></geometry>
+          <material><ambient>0.2 0.8 0.2 1</ambient><diffuse>0.2 0.8 0.2 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="wall_sw_3">
+      <static>true</static>
+      <pose>-18 -12 0.5 0 0 -0.785</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>6 0.25 1.0</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>6 0.25 1.0</size></box></geometry>
+          <material><ambient>0.2 0.8 0.2 1</ambient><diffuse>0.2 0.8 0.2 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ==================== CORRIDOR WALLS ==================== -->
+
+    <!-- North corridor -->
+    <model name="corridor_n1">
+      <static>true</static>
+      <pose>-8 20 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>8 0.25 1.0</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>8 0.25 1.0</size></box></geometry>
+          <material><ambient>0.5 0.5 0.5 1</ambient><diffuse>0.5 0.5 0.5 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="corridor_n2">
+      <static>true</static>
+      <pose>8 20 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>8 0.25 1.0</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>8 0.25 1.0</size></box></geometry>
+          <material><ambient>0.5 0.5 0.5 1</ambient><diffuse>0.5 0.5 0.5 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- South corridor -->
+    <model name="corridor_s1">
+      <static>true</static>
+      <pose>-8 -20 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>8 0.25 1.0</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>8 0.25 1.0</size></box></geometry>
+          <material><ambient>0.5 0.5 0.5 1</ambient><diffuse>0.5 0.5 0.5 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="corridor_s2">
+      <static>true</static>
+      <pose>8 -20 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>8 0.25 1.0</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>8 0.25 1.0</size></box></geometry>
+          <material><ambient>0.5 0.5 0.5 1</ambient><diffuse>0.5 0.5 0.5 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- East corridor -->
+    <model name="corridor_e1">
+      <static>true</static>
+      <pose>20 -8 0.5 0 0 1.5708</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>8 0.25 1.0</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>8 0.25 1.0</size></box></geometry>
+          <material><ambient>0.5 0.5 0.5 1</ambient><diffuse>0.5 0.5 0.5 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="corridor_e2">
+      <static>true</static>
+      <pose>20 8 0.5 0 0 1.5708</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>8 0.25 1.0</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>8 0.25 1.0</size></box></geometry>
+          <material><ambient>0.5 0.5 0.5 1</ambient><diffuse>0.5 0.5 0.5 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- West corridor -->
+    <model name="corridor_w1">
+      <static>true</static>
+      <pose>-20 -8 0.5 0 0 1.5708</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>8 0.25 1.0</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>8 0.25 1.0</size></box></geometry>
+          <material><ambient>0.5 0.5 0.5 1</ambient><diffuse>0.5 0.5 0.5 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="corridor_w2">
+      <static>true</static>
+      <pose>-20 8 0.5 0 0 1.5708</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>8 0.25 1.0</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>8 0.25 1.0</size></box></geometry>
+          <material><ambient>0.5 0.5 0.5 1</ambient><diffuse>0.5 0.5 0.5 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ==================== L-SHAPED OBSTACLES ==================== -->
+
+    <!-- L-shape 1 (upper right) -->
+    <model name="l_shape_1a">
+      <static>true</static>
+      <pose>8 10 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>5 0.25 1.0</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>5 0.25 1.0</size></box></geometry>
+          <material><ambient>0.9 0.5 0.1 1</ambient><diffuse>0.9 0.5 0.1 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="l_shape_1b">
+      <static>true</static>
+      <pose>10.5 8 0.5 0 0 1.5708</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>4 0.25 1.0</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>4 0.25 1.0</size></box></geometry>
+          <material><ambient>0.9 0.5 0.1 1</ambient><diffuse>0.9 0.5 0.1 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- L-shape 2 (lower left) -->
+    <model name="l_shape_2a">
+      <static>true</static>
+      <pose>-8 -10 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>5 0.25 1.0</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>5 0.25 1.0</size></box></geometry>
+          <material><ambient>0.1 0.5 0.9 1</ambient><diffuse>0.1 0.5 0.9 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="l_shape_2b">
+      <static>true</static>
+      <pose>-10.5 -8 0.5 0 0 1.5708</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>4 0.25 1.0</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>4 0.25 1.0</size></box></geometry>
+          <material><ambient>0.1 0.5 0.9 1</ambient><diffuse>0.1 0.5 0.9 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ==================== CYLINDERS (Pillars) ==================== -->
+
+    <model name="pillar_1">
+      <static>true</static>
+      <pose>0 15 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.8</radius><length>1.0</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.8</radius><length>1.0</length></cylinder></geometry>
+          <material><ambient>0.6 0.3 0.1 1</ambient><diffuse>0.6 0.3 0.1 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="pillar_2">
+      <static>true</static>
+      <pose>0 -15 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.8</radius><length>1.0</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.8</radius><length>1.0</length></cylinder></geometry>
+          <material><ambient>0.6 0.3 0.1 1</ambient><diffuse>0.6 0.3 0.1 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="pillar_3">
+      <static>true</static>
+      <pose>15 0 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.8</radius><length>1.0</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.8</radius><length>1.0</length></cylinder></geometry>
+          <material><ambient>0.6 0.3 0.1 1</ambient><diffuse>0.6 0.3 0.1 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="pillar_4">
+      <static>true</static>
+      <pose>-15 0 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.8</radius><length>1.0</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.8</radius><length>1.0</length></cylinder></geometry>
+          <material><ambient>0.6 0.3 0.1 1</ambient><diffuse>0.6 0.3 0.1 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Corner pillars -->
+    <model name="pillar_ne">
+      <static>true</static>
+      <pose>20 20 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>1.0</radius><length>1.0</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>1.0</radius><length>1.0</length></cylinder></geometry>
+          <material><ambient>0.8 0.2 0.2 1</ambient><diffuse>0.8 0.2 0.2 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="pillar_nw">
+      <static>true</static>
+      <pose>-20 20 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>1.0</radius><length>1.0</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>1.0</radius><length>1.0</length></cylinder></geometry>
+          <material><ambient>0.2 0.2 0.8 1</ambient><diffuse>0.2 0.2 0.8 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="pillar_se">
+      <static>true</static>
+      <pose>20 -20 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>1.0</radius><length>1.0</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>1.0</radius><length>1.0</length></cylinder></geometry>
+          <material><ambient>0.2 0.8 0.2 1</ambient><diffuse>0.2 0.8 0.2 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="pillar_sw">
+      <static>true</static>
+      <pose>-20 -20 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>1.0</radius><length>1.0</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>1.0</radius><length>1.0</length></cylinder></geometry>
+          <material><ambient>0.8 0.8 0.2 1</ambient><diffuse>0.8 0.8 0.2 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+  </world>
+</sdf>

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # Xbox Teleop Node - Three-motor direct control (throttle, brake, steering)
+# Sends servo commands to Arduino Mega via serial on /dev/ttyACM0
 
 import rclpy
 from rclpy.node import Node
@@ -7,24 +8,23 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import Joy
 from std_msgs.msg import Float64MultiArray, Float64
 from std_srvs.srv import Trigger
+import serial
+import time
 
 
 class ThreeMotorTeleopNode(Node):
 
-    # Xbox controller axis mapping
-    AXIS_LEFT_STICK_X = 0   # Steering
+    # Xbox 360 controller axis mapping (Linux xpad driver)
+    AXIS_LEFT_STICK_X = 0   # Steering (-1.0 left, +1.0 right)
     AXIS_LEFT_STICK_Y = 1   # Unused
-    AXIS_LT = 2             # Brake (1.0 = not pressed, -1.0 = fully pressed)
-    AXIS_RIGHT_STICK_X = 3
-    AXIS_RT = 5             # Throttle (1.0 = not pressed, -1.0 = fully pressed)
-    AXIS_DPAD_Y = 7         # D-pad vertical (up=1, down=-1)
+    AXIS_LT = 2             # Brake (+1.0 not pressed, -1.0 fully pressed)
+    AXIS_RIGHT_STICK_X = 3  # Unused
+    AXIS_RIGHT_STICK_Y = 4  # Unused
+    AXIS_RT = 5             # Throttle (+1.0 not pressed, -1.0 fully pressed)
 
     # Button mapping
     BUTTON_A = 0      # Toggle enable
     BUTTON_B = 1      # E-stop
-    BUTTON_X = 2      # Slow mode
-    BUTTON_Y = 3      # Fast mode
-    BUTTON_LB = 4     # Normal mode
     BUTTON_BACK = 6   # Reset steering trim
     BUTTON_START = 7  # Clear E-stop
 
@@ -36,37 +36,56 @@ class ThreeMotorTeleopNode(Node):
         self.declare_parameter('max_steering_angle', 0.6)
         self.declare_parameter('max_speed', 5.0)
         self.declare_parameter('deadzone', 0.1)
-        self.declare_parameter('throttle_ramp_rate', 2.0)
-        self.declare_parameter('brake_ramp_rate', 3.0)
-        self.declare_parameter('steering_ramp_rate', 2.0)
-        self.declare_parameter('slow_factor', 0.5)
-        self.declare_parameter('normal_factor', 0.75)
-        self.declare_parameter('fast_factor', 1.0)
+        self.declare_parameter('throttle_ramp_rate', 10.0)  # Fast response
+        self.declare_parameter('steering_ramp_rate', 10.0)  # Fast response
+
+        # Serial/Arduino parameters
+        self.declare_parameter('serial_port', '/dev/ttyACM1')
+        self.declare_parameter('baud_rate', 115200)
+        self.declare_parameter('steering_servo_min', 0)    # Servo angle for full left
+        self.declare_parameter('steering_servo_max', 180)  # Servo angle for full right
+        self.declare_parameter('steering_servo_center', 90)  # Servo angle for center
+        self.declare_parameter('throttle_servo_min', 90)    # ESC neutral (no throttle)
+        self.declare_parameter('throttle_servo_max', 180)  # ESC full throttle
+        self.declare_parameter('brake_servo_min', 0)       # Servo angle for no brake
+        self.declare_parameter('brake_servo_max', 180)     # Servo angle for full brake
 
         self.wheel_radius = self.get_parameter('wheel_radius').value
         self.max_steering_angle = self.get_parameter('max_steering_angle').value
         self.max_speed = self.get_parameter('max_speed').value
         self.deadzone = self.get_parameter('deadzone').value
         self.throttle_ramp_rate = self.get_parameter('throttle_ramp_rate').value
-        self.brake_ramp_rate = self.get_parameter('brake_ramp_rate').value
         self.steering_ramp_rate = self.get_parameter('steering_ramp_rate').value
-        self.slow_factor = self.get_parameter('slow_factor').value
-        self.normal_factor = self.get_parameter('normal_factor').value
-        self.fast_factor = self.get_parameter('fast_factor').value
+
+        # Serial/Arduino parameters
+        self.serial_port = self.get_parameter('serial_port').value
+        self.baud_rate = self.get_parameter('baud_rate').value
+        self.steering_servo_min = self.get_parameter('steering_servo_min').value
+        self.steering_servo_max = self.get_parameter('steering_servo_max').value
+        self.steering_servo_center = self.get_parameter('steering_servo_center').value
+        self.throttle_servo_min = self.get_parameter('throttle_servo_min').value
+        self.throttle_servo_max = self.get_parameter('throttle_servo_max').value
+        self.brake_servo_min = self.get_parameter('brake_servo_min').value
+        self.brake_servo_max = self.get_parameter('brake_servo_max').value
 
         # State
         self.enabled = True
         self.estop_active = False
-        self.speed_mode = self.normal_factor
         self.steering_trim = 0.0
-        self.reverse_mode = False
         self._current_steering = 0.0
         self._current_throttle = 0.0
         self._current_brake = 0.0
         self._last_time = None
         self._prev_buttons = []
-        self._prev_dpad_y = 0.0
         self._last_warn_time = 0.0
+        self._last_serial_time = 0.0
+        self._serial_period = 0.05  # Send serial commands at 20Hz max
+        self._triggers_initialized = False
+        self._startup_safety_passed = False
+
+        # Initialize serial connection to Arduino
+        self.serial_conn = None
+        self._init_serial()
 
         # Publishers
         qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE)
@@ -88,13 +107,28 @@ class ThreeMotorTeleopNode(Node):
         self.create_timer(0.1, self._safety_timer_callback)
         self._last_joy_time = self.get_clock().now()
 
-        self.get_logger().info('Xbox Teleop started - LT: brake, RT: throttle, Left stick: steering, D-pad down: reverse') # hi
+        self.get_logger().info('Xbox Teleop started - RT: throttle, LT: brake, Left stick: steering')
+        self.get_logger().info('Controls: A=enable, B=E-stop, Start=clear E-stop, Back=reset trim')
+        self.get_logger().info(f'Serial: {self.serial_port} @ {self.baud_rate} baud')
 
     def _apply_deadzone(self, value: float) -> float:
         if abs(value) < self.deadzone:
             return 0.0
         sign = 1.0 if value > 0 else -1.0
         return sign * (abs(value) - self.deadzone) / (1.0 - self.deadzone)
+
+    def _apply_trigger_deadzone(self, raw_value: float) -> float:
+        """Convert trigger value from [+1.0, -1.0] to [0.0, 1.0] with deadzone.
+
+        Xbox triggers: +1.0 = not pressed, -1.0 = fully pressed
+        Output: 0.0 = not pressed, 1.0 = fully pressed
+        """
+        pressed = (1.0 - raw_value) / 2.0
+        pressed = self._clamp(pressed, 0.0, 1.0)
+        trigger_deadzone = 0.05  # 5% deadzone
+        if pressed < trigger_deadzone:
+            return 0.0
+        return (pressed - trigger_deadzone) / (1.0 - trigger_deadzone)
 
     def _clamp(self, value: float, min_val: float, max_val: float) -> float:
         return max(min_val, min(max_val, value))
@@ -105,6 +139,85 @@ class ThreeMotorTeleopNode(Node):
         if abs(diff) <= max_change:
             return target
         return current + max_change if diff > 0 else current - max_change
+
+    def _init_serial(self):
+        """Initialize serial connection to Arduino Mega."""
+        try:
+            self.serial_conn = serial.Serial(
+                port=self.serial_port,
+                baudrate=self.baud_rate,
+                timeout=0.1
+            )
+            time.sleep(2.0)  # Wait for Arduino to reset after serial connection
+            self.get_logger().info(f'Serial connected to {self.serial_port} at {self.baud_rate} baud')
+            # Send ARM command to Arduino
+            self._send_arm_command()
+        except serial.SerialException as e:
+            self.get_logger().error(f'Failed to open serial port {self.serial_port}: {e}')
+            self.serial_conn = None
+
+    def _send_arm_command(self):
+        """Send ARM command to Arduino to enable servo control."""
+        if self.serial_conn is None or not self.serial_conn.is_open:
+            return
+        try:
+            self.serial_conn.write(b"ARM\n")
+            self.serial_conn.flush()
+            time.sleep(0.1)
+            self.get_logger().info('Sent ARM command to Arduino')
+        except serial.SerialException as e:
+            self.get_logger().warn(f'Failed to send ARM: {e}')
+
+    def _send_disarm_command(self):
+        """Send DISARM command to Arduino."""
+        if self.serial_conn is None or not self.serial_conn.is_open:
+            return
+        try:
+            self.serial_conn.write(b"DISARM\n")
+            self.serial_conn.flush()
+            self.get_logger().info('Sent DISARM command to Arduino')
+        except serial.SerialException as e:
+            self.get_logger().warn(f'Failed to send DISARM: {e}')
+
+    def _send_servo_commands(self, steering_angle: int, throttle_angle: int, brake_angle: int, force: bool = False):
+        """Send servo angles to Arduino. Format: S<steer>,T<throttle>,B<brake>\n"""
+        if self.serial_conn is None or not self.serial_conn.is_open:
+            return
+
+        # Rate limit serial commands (unless forced)
+        now = time.time()
+        if not force and (now - self._last_serial_time) < self._serial_period:
+            return
+        self._last_serial_time = now
+
+        try:
+            cmd = f"S{steering_angle},T{throttle_angle},B{brake_angle}\n"
+            self.serial_conn.write(cmd.encode('utf-8'))
+            self.serial_conn.flush()
+        except (serial.SerialException, OSError) as e:
+            self.get_logger().warn(f'Serial write failed: {e}')
+            self.serial_conn = None  # Mark as disconnected
+
+    def _steering_to_servo(self, steering_rad: float) -> int:
+        """Convert steering angle (radians) to servo angle (0-180)."""
+        # Map from [-max_steering, +max_steering] to [min, max]
+        # Negative steering = left, positive = right
+        normalized = (steering_rad + self.max_steering_angle) / (2.0 * self.max_steering_angle)
+        normalized = self._clamp(normalized, 0.0, 1.0)
+        servo_angle = self.steering_servo_min + normalized * (self.steering_servo_max - self.steering_servo_min)
+        return int(round(servo_angle))
+
+    def _throttle_to_servo(self, throttle_pct: float) -> int:
+        """Convert throttle percentage (0-1) to servo angle."""
+        throttle_pct = self._clamp(throttle_pct, 0.0, 1.0)
+        servo_angle = self.throttle_servo_min + throttle_pct * (self.throttle_servo_max - self.throttle_servo_min)
+        return int(round(servo_angle))
+
+    def _brake_to_servo(self, brake_pct: float) -> int:
+        """Convert brake percentage (0-1) to servo angle."""
+        brake_pct = self._clamp(brake_pct, 0.0, 1.0)
+        servo_angle = self.brake_servo_min + brake_pct * (self.brake_servo_max - self.brake_servo_min)
+        return int(round(servo_angle))
 
     def _button_pressed(self, buttons: list, button_id: int) -> bool:
         if button_id >= len(buttons):
@@ -123,7 +236,6 @@ class ThreeMotorTeleopNode(Node):
         dt = self._clamp(dt, 0.001, 0.1)
 
         self._process_buttons(msg.buttons)
-        self._process_dpad(msg.axes)
         self._prev_buttons = list(msg.buttons)
 
         if not self.enabled or self.estop_active:
@@ -133,31 +245,55 @@ class ThreeMotorTeleopNode(Node):
         if len(msg.axes) < 6:
             return
 
-        # Read controls
-        # Left stick X for steering (positive = right, so negate for standard convention)
+        # Read controls - Left stick X for steering
         left_x = self._apply_deadzone(msg.axes[self.AXIS_LEFT_STICK_X])
 
-        # Triggers: 1.0 = not pressed, -1.0 = fully pressed
-        # Convert to 0.0 = not pressed, 1.0 = fully pressed
+        # Triggers: +1.0 = not pressed, -1.0 = fully pressed
+        # Some controllers report 0.0 until first pressed
         rt_raw = msg.axes[self.AXIS_RT]
         lt_raw = msg.axes[self.AXIS_LT]
-        target_throttle = self._clamp((1.0 - rt_raw) / 2.0, 0.0, 1.0) * self.speed_mode
-        target_brake = self._clamp((1.0 - lt_raw) / 2.0, 0.0, 1.0)
 
-        # Apply ramping
-        self._current_throttle = self._ramp_toward(self._current_throttle, target_throttle, self.throttle_ramp_rate, dt)
-        self._current_brake = self._ramp_toward(self._current_brake, target_brake, self.brake_ramp_rate, dt)
+        # Trigger initialization: wait for non-zero value
+        if not self._triggers_initialized:
+            if rt_raw != 0.0 or lt_raw != 0.0:
+                self._triggers_initialized = True
+            else:
+                # Until initialized, treat as not pressed
+                rt_raw = 1.0
+                lt_raw = 1.0
 
-        # Steering from left stick X
+        # Convert triggers to 0.0-1.0 range with deadzone
+        target_throttle = self._apply_trigger_deadzone(rt_raw)
+        target_brake = self._apply_trigger_deadzone(lt_raw)
+
+        # Startup safety: require triggers to be released before enabling control
+        if not self._startup_safety_passed:
+            if target_throttle < 0.1 and target_brake < 0.1:
+                self._startup_safety_passed = True
+                self.get_logger().info('Startup safety passed - controls enabled')
+            else:
+                self._publish_stop()
+                return
+
+        # Direct control - no ramping for instant response
+        self._current_throttle = target_throttle
+        self._current_brake = target_brake
+
+        # Steering from left stick X - direct control
         target_steering = left_x * self.max_steering_angle + self.steering_trim
-        self._current_steering = self._ramp_toward(self._current_steering, target_steering, self.steering_ramp_rate, dt)
-        self._current_steering = self._clamp(self._current_steering, -self.max_steering_angle, self.max_steering_angle)
+        self._current_steering = self._clamp(target_steering, -self.max_steering_angle, self.max_steering_angle)
 
         # Send commands
         self._send_steering(self._current_steering)
         self._send_throttle(self._current_throttle)
         self._send_brake(self._current_brake)
         self._publish_debug()
+
+        # Send servo commands to Arduino
+        steering_servo = self._steering_to_servo(self._current_steering)
+        throttle_servo = self._throttle_to_servo(self._current_throttle)
+        brake_servo = self._brake_to_servo(self._current_brake)
+        self._send_servo_commands(steering_servo, throttle_servo, brake_servo)
 
     def _process_buttons(self, buttons: list):
         if self._button_pressed(buttons, self.BUTTON_A):
@@ -169,18 +305,6 @@ class ThreeMotorTeleopNode(Node):
             self.estop_active = True
             self.enabled = False
             self._emergency_stop()
-
-        if self._button_pressed(buttons, self.BUTTON_X):
-            self.speed_mode = self.slow_factor
-            self.get_logger().info(f'Slow mode ({int(self.slow_factor * 100)}%)')
-
-        if self._button_pressed(buttons, self.BUTTON_Y):
-            self.speed_mode = self.fast_factor
-            self.get_logger().info(f'Fast mode ({int(self.fast_factor * 100)}%)')
-
-        if self._button_pressed(buttons, self.BUTTON_LB):
-            self.speed_mode = self.normal_factor
-            self.get_logger().info(f'Normal mode ({int(self.normal_factor * 100)}%)')
 
         if self._button_pressed(buttons, self.BUTTON_START):
             if self.estop_active:
@@ -194,21 +318,6 @@ class ThreeMotorTeleopNode(Node):
             self.steering_trim = 0.0
             self.get_logger().info('Steering trim reset')
 
-    def _process_dpad(self, axes: list):
-        if len(axes) <= self.AXIS_DPAD_Y:
-            return
-        dpad_y = axes[self.AXIS_DPAD_Y]
-        # Detect D-pad down press (transition from 0 to -1)
-        if dpad_y < -0.5 and self._prev_dpad_y > -0.5:
-            self.reverse_mode = not self.reverse_mode
-            self.get_logger().info(f'Reverse mode {"ON" if self.reverse_mode else "OFF"}')
-        # Detect D-pad up press (transition from 0 to 1) - also turns off reverse
-        elif dpad_y > 0.5 and self._prev_dpad_y < 0.5:
-            if self.reverse_mode:
-                self.reverse_mode = False
-                self.get_logger().info('Reverse mode OFF')
-        self._prev_dpad_y = dpad_y
-
     def _send_steering(self, angle: float):
         msg = Float64MultiArray()
         msg.data = [angle, angle]
@@ -216,8 +325,6 @@ class ThreeMotorTeleopNode(Node):
 
     def _send_throttle(self, throttle_pct: float):
         wheel_vel = (throttle_pct * self.max_speed) / self.wheel_radius
-        if self.reverse_mode:
-            wheel_vel = -wheel_vel
         msg = Float64MultiArray()
         msg.data = [wheel_vel, wheel_vel]
         self.throttle_pub.publish(msg)
@@ -240,6 +347,12 @@ class ThreeMotorTeleopNode(Node):
         steering_msg.data = [self._current_steering, self._current_steering]
         self.steering_pub.publish(steering_msg)
 
+        # Send servo stop commands to Arduino
+        steering_servo = self._steering_to_servo(self._current_steering)
+        throttle_servo = self._throttle_to_servo(0.0)
+        brake_servo = self._brake_to_servo(0.3)
+        self._send_servo_commands(steering_servo, throttle_servo, brake_servo)
+
     def _emergency_stop(self):
         throttle_msg = Float64MultiArray()
         throttle_msg.data = [0.0, 0.0]
@@ -251,6 +364,12 @@ class ThreeMotorTeleopNode(Node):
 
         self._current_throttle = 0.0
         self._current_brake = 1.0
+
+        # Send servo emergency stop commands to Arduino (full brake, no throttle)
+        steering_servo = self._steering_to_servo(self._current_steering)
+        throttle_servo = self._throttle_to_servo(0.0)
+        brake_servo = self._brake_to_servo(1.0)
+        self._send_servo_commands(steering_servo, throttle_servo, brake_servo, force=True)
 
         if self.estop_client.service_is_ready():
             self.estop_client.call_async(Trigger.Request())
@@ -269,13 +388,20 @@ class ThreeMotorTeleopNode(Node):
         self.brake_debug_pub.publish(msg)
 
     def _safety_timer_callback(self):
-        dt = (self.get_clock().now() - self._last_joy_time).nanoseconds / 1e9
-        if dt > 0.5 and self.enabled and not self.estop_active:
-            now = self.get_clock().now().nanoseconds / 1e9
-            if now - self._last_warn_time > 5.0:
-                self.get_logger().warn('No joystick input - stopping')
-                self._last_warn_time = now
-            self._publish_stop()
+        # Safety timeout disabled - Arduino handles its own timeout
+        pass
+
+    def close_serial(self):
+        """Close the serial connection to Arduino."""
+        if self.serial_conn is not None:
+            try:
+                if self.serial_conn.is_open:
+                    self._send_disarm_command()
+                    time.sleep(0.1)
+                    self.serial_conn.close()
+                    self.get_logger().info('Serial connection closed')
+            except (serial.SerialException, OSError):
+                pass  # Already disconnected
 
 
 def main(args=None):
@@ -288,6 +414,7 @@ def main(args=None):
         pass
     finally:
         node._publish_stop()
+        node.close_serial()
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()

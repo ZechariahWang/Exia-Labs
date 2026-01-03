@@ -9,7 +9,12 @@ from sensor_msgs.msg import Joy
 from std_msgs.msg import Float64MultiArray, Float64
 from std_srvs.srv import Trigger
 import serial
+import termios
 import time
+
+
+# Exception types for serial communication errors
+SERIAL_ERRORS = (serial.SerialException, OSError, termios.error)
 
 
 class ThreeMotorTeleopNode(Node):
@@ -40,7 +45,7 @@ class ThreeMotorTeleopNode(Node):
         self.declare_parameter('steering_ramp_rate', 10.0)  # Fast response
 
         # Serial/Arduino parameters
-        self.declare_parameter('serial_port', '/dev/ttyACM1')
+        self.declare_parameter('serial_port', '/dev/ttyACM0')
         self.declare_parameter('baud_rate', 115200)
         self.declare_parameter('steering_servo_min', 0)    # Servo angle for full left
         self.declare_parameter('steering_servo_max', 180)  # Servo angle for full right
@@ -80,6 +85,8 @@ class ThreeMotorTeleopNode(Node):
         self._last_warn_time = 0.0
         self._last_serial_time = 0.0
         self._serial_period = 0.05  # Send serial commands at 20Hz max
+        self._last_arm_time = 0.0
+        self._arm_period = 0.3  # Re-send ARM every 300ms to prevent timeout
         self._triggers_initialized = False
         self._startup_safety_passed = False
 
@@ -105,6 +112,8 @@ class ThreeMotorTeleopNode(Node):
 
         # Safety timer
         self.create_timer(0.1, self._safety_timer_callback)
+        # Keepalive timer - sends ARM and current position every 200ms to prevent Arduino timeout
+        self.create_timer(0.2, self._keepalive_timer_callback)
         self._last_joy_time = self.get_clock().now()
 
         self.get_logger().info('Xbox Teleop started - RT: throttle, LT: brake, Left stick: steering')
@@ -165,7 +174,7 @@ class ThreeMotorTeleopNode(Node):
             self.serial_conn.flush()
             time.sleep(0.1)
             self.get_logger().info('Sent ARM command to Arduino')
-        except serial.SerialException as e:
+        except SERIAL_ERRORS as e:
             self.get_logger().warn(f'Failed to send ARM: {e}')
 
     def _send_disarm_command(self):
@@ -176,16 +185,29 @@ class ThreeMotorTeleopNode(Node):
             self.serial_conn.write(b"DISARM\n")
             self.serial_conn.flush()
             self.get_logger().info('Sent DISARM command to Arduino')
-        except serial.SerialException as e:
+        except SERIAL_ERRORS as e:
             self.get_logger().warn(f'Failed to send DISARM: {e}')
 
     def _send_servo_commands(self, steering_angle: int, throttle_angle: int, brake_angle: int, force: bool = False):
         """Send servo angles to Arduino. Format: S<steer>,T<throttle>,B<brake>\n"""
+        now = time.time()
+
         if self.serial_conn is None or not self.serial_conn.is_open:
+            # Log disconnection warning once per second
+            if (now - self._last_warn_time) > 1.0:
+                self.get_logger().warn('Serial disconnected - commands not being sent')
+                self._last_warn_time = now
             return
 
+        # Periodically re-send ARM to prevent Arduino timeout
+        if (now - self._last_arm_time) > self._arm_period:
+            try:
+                self.serial_conn.write(b"ARM\n")
+                self._last_arm_time = now
+            except SERIAL_ERRORS:
+                pass  # Will be caught below
+
         # Rate limit serial commands (unless forced)
-        now = time.time()
         if not force and (now - self._last_serial_time) < self._serial_period:
             return
         self._last_serial_time = now
@@ -194,7 +216,13 @@ class ThreeMotorTeleopNode(Node):
             cmd = f"S{steering_angle},T{throttle_angle},B{brake_angle}\n"
             self.serial_conn.write(cmd.encode('utf-8'))
             self.serial_conn.flush()
-        except (serial.SerialException, OSError) as e:
+            # Debug: log every second what we're sending
+            if (now - self._last_warn_time) > 1.0:
+                self.get_logger().info(
+                    f'Sent: S{steering_angle} T{throttle_angle} B{brake_angle} | '
+                    f'throttle={self._current_throttle:.2f} brake={self._current_brake:.2f}')
+                self._last_warn_time = now
+        except SERIAL_ERRORS as e:
             self.get_logger().warn(f'Serial write failed: {e}')
             self.serial_conn = None  # Mark as disconnected
 
@@ -388,8 +416,53 @@ class ThreeMotorTeleopNode(Node):
         self.brake_debug_pub.publish(msg)
 
     def _safety_timer_callback(self):
-        # Safety timeout disabled - Arduino handles its own timeout
-        pass
+        """Read and log Arduino responses for debugging."""
+        if self.serial_conn is None or not self.serial_conn.is_open:
+            return
+
+        try:
+            # Read any available responses from Arduino
+            while self.serial_conn.in_waiting > 0:
+                line = self.serial_conn.readline().decode('utf-8', errors='ignore').strip()
+                if line:
+                    # Log important messages
+                    if 'TIMEOUT' in line or 'IGNORED' in line or 'DISARM' in line:
+                        self.get_logger().warn(f'Arduino: {line}')
+                    elif 'ARMED' in line:
+                        self.get_logger().info(f'Arduino: {line}')
+        except SERIAL_ERRORS:
+            pass  # Handled elsewhere
+
+    def _keepalive_timer_callback(self):
+        """Send keepalive to Arduino to prevent timeout, even when no joystick input."""
+        if self.serial_conn is None:
+            return
+
+        try:
+            if not self.serial_conn.is_open:
+                self.get_logger().warn('Serial port closed unexpectedly')
+                self.serial_conn = None
+                return
+        except SERIAL_ERRORS:
+            self.serial_conn = None
+            return
+
+        if not self.enabled or self.estop_active:
+            return
+
+        try:
+            # Send ARM to keep Arduino alive
+            self.serial_conn.write(b"ARM\n")
+            # Also send current servo positions
+            steering_servo = self._steering_to_servo(self._current_steering)
+            throttle_servo = self._throttle_to_servo(self._current_throttle)
+            brake_servo = self._brake_to_servo(self._current_brake)
+            cmd = f"S{steering_servo},T{throttle_servo},B{brake_servo}\n"
+            self.serial_conn.write(cmd.encode('utf-8'))
+            self.serial_conn.flush()  # Force send immediately
+        except SERIAL_ERRORS as e:
+            self.get_logger().warn(f'Keepalive failed: {e}')
+            self.serial_conn = None
 
     def close_serial(self):
         """Close the serial connection to Arduino."""
@@ -400,7 +473,7 @@ class ThreeMotorTeleopNode(Node):
                     time.sleep(0.1)
                     self.serial_conn.close()
                     self.get_logger().info('Serial connection closed')
-            except (serial.SerialException, OSError):
+            except SERIAL_ERRORS:
                 pass  # Already disconnected
 
 
@@ -413,7 +486,6 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     finally:
-        node._publish_stop()
         node.close_serial()
         node.destroy_node()
         if rclpy.ok():

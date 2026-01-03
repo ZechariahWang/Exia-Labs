@@ -1,128 +1,112 @@
 #!/usr/bin/env python3
-"""
-Xbox Controller Teleop Node
-
-Maps Xbox One controller to robot control:
-  - Left Stick Y: Forward/Backward speed
-  - Right Stick X: Steering
-  - Right Trigger (RT): Boost speed
-  - Left Trigger (LT): Brake
-  - A Button: Start/Stop (toggle)
-  - B Button: Emergency stop
-  - X Button: Slow mode
-  - Y Button: Fast mode
-
-Usage:
-    # Terminal 1: Start simulation
-    ros2 launch exia_ground_description exia_ground_sim.launch.py
-
-    # Terminal 2: Start joy driver
-    ros2 run joy joy_node
-
-    # Terminal 3: Start teleop
-    ros2 run exia_ground_description xbox_teleop_node.py
-
-Author: Zechariah Wang
-Date: December 2025
-"""
+# Xbox Teleop Node - Three-motor direct control (throttle, brake, steering)
 
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import Twist
+from rclpy.qos import QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import Joy
+from std_msgs.msg import Float64MultiArray, Float64
 from std_srvs.srv import Trigger
 
-"""
-note, idrk if this will work until tested on hardware
 
-# Terminal 1: Start simulation
-ros2 launch exia_ground_description exia_ground_sim.launch.py
+class ThreeMotorTeleopNode(Node):
 
-# Terminal 2: Start joy driver
-ros2 run joy joy_node
+    # Xbox controller axis mapping
+    AXIS_LEFT_STICK_X = 0   # Steering
+    AXIS_LEFT_STICK_Y = 1   # Unused
+    AXIS_LT = 2             # Brake (1.0 = not pressed, -1.0 = fully pressed)
+    AXIS_RIGHT_STICK_X = 3
+    AXIS_RT = 5             # Throttle (1.0 = not pressed, -1.0 = fully pressed)
+    AXIS_DPAD_Y = 7         # D-pad vertical (up=1, down=-1)
 
-# Terminal 3: Start Xbox teleop
-ros2 run exia_ground_description xbox_teleop_node.py
-
-"""
-
-
-class XboxTeleopNode(Node):
-    """Xbox controller teleop for Ackermann robot."""
-
-    # Xbox One Controller Mapping (may vary slightly)
-    AXIS_LEFT_STICK_X = 0      # Left stick horizontal
-    AXIS_LEFT_STICK_Y = 1      # Left stick vertical
-    AXIS_RIGHT_STICK_X = 3     # Right stick horizontal
-    AXIS_RIGHT_STICK_Y = 4     # Right stick vertical
-    AXIS_LT = 2                # Left trigger (1 to -1)
-    AXIS_RT = 5                # Right trigger (1 to -1)
-
-    BUTTON_A = 0
-    BUTTON_B = 1
-    BUTTON_X = 2
-    BUTTON_Y = 3
-    BUTTON_LB = 4
-    BUTTON_RB = 5
-    BUTTON_BACK = 6
-    BUTTON_START = 7
-    BUTTON_XBOX = 8
-    BUTTON_L_STICK = 9
-    BUTTON_R_STICK = 10
+    # Button mapping
+    BUTTON_A = 0      # Toggle enable
+    BUTTON_B = 1      # E-stop
+    BUTTON_X = 2      # Slow mode
+    BUTTON_Y = 3      # Fast mode
+    BUTTON_LB = 4     # Normal mode
+    BUTTON_BACK = 6   # Reset steering trim
+    BUTTON_START = 7  # Clear E-stop
 
     def __init__(self):
-        super().__init__('xbox_teleop')
+        super().__init__('xbox_teleop_three_motor')
 
         # Parameters
-        self.declare_parameter('max_speed', 2.0)          # m/s
-        self.declare_parameter('max_angular', 0.5)        # rad/s
-        self.declare_parameter('slow_factor', 0.3)        # Slow mode multiplier
-        self.declare_parameter('boost_factor', 1.5)       # Boost multiplier
-        self.declare_parameter('deadzone', 0.1)           # Stick deadzone
+        self.declare_parameter('wheel_radius', 0.3)
+        self.declare_parameter('max_steering_angle', 0.6)
+        self.declare_parameter('max_speed', 5.0)
+        self.declare_parameter('deadzone', 0.1)
+        self.declare_parameter('throttle_ramp_rate', 2.0)
+        self.declare_parameter('brake_ramp_rate', 3.0)
+        self.declare_parameter('steering_ramp_rate', 2.0)
+        self.declare_parameter('slow_factor', 0.5)
+        self.declare_parameter('normal_factor', 0.75)
+        self.declare_parameter('fast_factor', 1.0)
 
+        self.wheel_radius = self.get_parameter('wheel_radius').value
+        self.max_steering_angle = self.get_parameter('max_steering_angle').value
         self.max_speed = self.get_parameter('max_speed').value
-        self.max_angular = self.get_parameter('max_angular').value
-        self.slow_factor = self.get_parameter('slow_factor').value
-        self.boost_factor = self.get_parameter('boost_factor').value
         self.deadzone = self.get_parameter('deadzone').value
+        self.throttle_ramp_rate = self.get_parameter('throttle_ramp_rate').value
+        self.brake_ramp_rate = self.get_parameter('brake_ramp_rate').value
+        self.steering_ramp_rate = self.get_parameter('steering_ramp_rate').value
+        self.slow_factor = self.get_parameter('slow_factor').value
+        self.normal_factor = self.get_parameter('normal_factor').value
+        self.fast_factor = self.get_parameter('fast_factor').value
 
         # State
         self.enabled = True
-        self.speed_mode = 1.0  # 1.0 = normal, slow_factor = slow, boost_factor = fast
         self.estop_active = False
-
-        # Previous button states (for edge detection)
+        self.speed_mode = self.normal_factor
+        self.steering_trim = 0.0
+        self.reverse_mode = False
+        self._current_steering = 0.0
+        self._current_throttle = 0.0
+        self._current_brake = 0.0
+        self._last_time = None
         self._prev_buttons = []
+        self._prev_dpad_y = 0.0
+        self._last_warn_time = 0.0
 
         # Publishers
-        self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
+        qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE)
+        self.steering_pub = self.create_publisher(Float64MultiArray, '/steering_controller/commands', qos)
+        self.throttle_pub = self.create_publisher(Float64MultiArray, '/throttle_controller/commands', qos)
+        self.brake_pub = self.create_publisher(Float64MultiArray, '/brake_controller/commands', qos)
+        self.steering_debug_pub = self.create_publisher(Float64, '/teleop/steering_angle', 10)
+        self.throttle_debug_pub = self.create_publisher(Float64, '/teleop/throttle', 10)
+        self.brake_debug_pub = self.create_publisher(Float64, '/teleop/brake', 10)
 
-        # Subscribers
+        # Subscriber
         self.joy_sub = self.create_subscription(Joy, '/joy', self._joy_callback, 10)
 
-        # Service clients (optional - for e-stop)
+        # Service clients
         self.estop_client = self.create_client(Trigger, '/ackermann/emergency_stop')
         self.clear_estop_client = self.create_client(Trigger, '/ackermann/clear_estop')
 
-        self.get_logger().info('Xbox Teleop Node started')
-        self.get_logger().info('  A: Toggle enable/disable')
-        self.get_logger().info('  B: Emergency stop')
-        self.get_logger().info('  X: Slow mode')
-        self.get_logger().info('  Y: Fast mode')
-        self.get_logger().info('  Left Stick: Forward/Back')
-        self.get_logger().info('  Right Stick: Steering')
-        self.get_logger().info('  RT: Boost | LT: Brake')
+        # Safety timer
+        self.create_timer(0.1, self._safety_timer_callback)
+        self._last_joy_time = self.get_clock().now()
+
+        self.get_logger().info('Xbox Teleop started - LT: brake, RT: throttle, Left stick: steering, D-pad down: reverse')
 
     def _apply_deadzone(self, value: float) -> float:
-        """Apply deadzone to joystick input."""
         if abs(value) < self.deadzone:
             return 0.0
-        # Scale remaining range to 0-1
         sign = 1.0 if value > 0 else -1.0
         return sign * (abs(value) - self.deadzone) / (1.0 - self.deadzone)
 
+    def _clamp(self, value: float, min_val: float, max_val: float) -> float:
+        return max(min_val, min(max_val, value))
+
+    def _ramp_toward(self, current: float, target: float, rate: float, dt: float) -> float:
+        max_change = rate * dt
+        diff = target - current
+        if abs(diff) <= max_change:
+            return target
+        return current + max_change if diff > 0 else current - max_change
+
     def _button_pressed(self, buttons: list, button_id: int) -> bool:
-        """Check if button was just pressed (edge detection)."""
         if button_id >= len(buttons):
             return False
         current = buttons[button_id] == 1
@@ -130,33 +114,75 @@ class XboxTeleopNode(Node):
         return current and not previous
 
     def _joy_callback(self, msg: Joy):
-        """Process joystick input."""
+        self._last_joy_time = self.get_clock().now()
 
-        # Edge detection for buttons
-        if self._button_pressed(msg.buttons, self.BUTTON_A):
+        # Calculate dt
+        now = self.get_clock().now().nanoseconds / 1e9
+        dt = 0.02 if self._last_time is None else now - self._last_time
+        self._last_time = now
+        dt = self._clamp(dt, 0.001, 0.1)
+
+        self._process_buttons(msg.buttons)
+        self._process_dpad(msg.axes)
+        self._prev_buttons = list(msg.buttons)
+
+        if not self.enabled or self.estop_active:
+            self._publish_stop()
+            return
+
+        if len(msg.axes) < 6:
+            return
+
+        # Read controls
+        # Left stick X for steering (positive = right, so negate for standard convention)
+        left_x = self._apply_deadzone(msg.axes[self.AXIS_LEFT_STICK_X])
+
+        # Triggers: 1.0 = not pressed, -1.0 = fully pressed
+        # Convert to 0.0 = not pressed, 1.0 = fully pressed
+        rt_raw = msg.axes[self.AXIS_RT]
+        lt_raw = msg.axes[self.AXIS_LT]
+        target_throttle = self._clamp((1.0 - rt_raw) / 2.0, 0.0, 1.0) * self.speed_mode
+        target_brake = self._clamp((1.0 - lt_raw) / 2.0, 0.0, 1.0)
+
+        # Apply ramping
+        self._current_throttle = self._ramp_toward(self._current_throttle, target_throttle, self.throttle_ramp_rate, dt)
+        self._current_brake = self._ramp_toward(self._current_brake, target_brake, self.brake_ramp_rate, dt)
+
+        # Steering from left stick X
+        target_steering = left_x * self.max_steering_angle + self.steering_trim
+        self._current_steering = self._ramp_toward(self._current_steering, target_steering, self.steering_ramp_rate, dt)
+        self._current_steering = self._clamp(self._current_steering, -self.max_steering_angle, self.max_steering_angle)
+
+        # Send commands
+        self._send_steering(self._current_steering)
+        self._send_throttle(self._current_throttle)
+        self._send_brake(self._current_brake)
+        self._publish_debug()
+
+    def _process_buttons(self, buttons: list):
+        if self._button_pressed(buttons, self.BUTTON_A):
             self.enabled = not self.enabled
-            state = "ENABLED" if self.enabled else "DISABLED"
-            self.get_logger().info(f'Teleop {state}')
+            self.get_logger().info(f'Teleop {"ENABLED" if self.enabled else "DISABLED"}')
 
-        if self._button_pressed(msg.buttons, self.BUTTON_B):
+        if self._button_pressed(buttons, self.BUTTON_B):
             self.get_logger().warn('EMERGENCY STOP!')
             self.estop_active = True
             self.enabled = False
-            self._publish_stop()
-            # Call e-stop service if available
-            if self.estop_client.service_is_ready():
-                self.estop_client.call_async(Trigger.Request())
+            self._emergency_stop()
 
-        if self._button_pressed(msg.buttons, self.BUTTON_X):
+        if self._button_pressed(buttons, self.BUTTON_X):
             self.speed_mode = self.slow_factor
-            self.get_logger().info('Slow mode')
+            self.get_logger().info(f'Slow mode ({int(self.slow_factor * 100)}%)')
 
-        if self._button_pressed(msg.buttons, self.BUTTON_Y):
-            self.speed_mode = self.boost_factor
-            self.get_logger().info('Fast mode')
+        if self._button_pressed(buttons, self.BUTTON_Y):
+            self.speed_mode = self.fast_factor
+            self.get_logger().info(f'Fast mode ({int(self.fast_factor * 100)}%)')
 
-        if self._button_pressed(msg.buttons, self.BUTTON_START):
-            # Clear e-stop
+        if self._button_pressed(buttons, self.BUTTON_LB):
+            self.speed_mode = self.normal_factor
+            self.get_logger().info(f'Normal mode ({int(self.normal_factor * 100)}%)')
+
+        if self._button_pressed(buttons, self.BUTTON_START):
             if self.estop_active:
                 self.estop_active = False
                 self.enabled = True
@@ -164,65 +190,107 @@ class XboxTeleopNode(Node):
                 if self.clear_estop_client.service_is_ready():
                     self.clear_estop_client.call_async(Trigger.Request())
 
-        if self._button_pressed(msg.buttons, self.BUTTON_LB):
-            self.speed_mode = 1.0
-            self.get_logger().info('Normal mode')
+        if self._button_pressed(buttons, self.BUTTON_BACK):
+            self.steering_trim = 0.0
+            self.get_logger().info('Steering trim reset')
 
-        # Store button state for next iteration
-        self._prev_buttons = list(msg.buttons)
-
-        # If disabled or e-stopped, publish zero velocity
-        if not self.enabled or self.estop_active:
-            self._publish_stop()
+    def _process_dpad(self, axes: list):
+        if len(axes) <= self.AXIS_DPAD_Y:
             return
+        dpad_y = axes[self.AXIS_DPAD_Y]
+        # Detect D-pad down press (transition from 0 to -1)
+        if dpad_y < -0.5 and self._prev_dpad_y > -0.5:
+            self.reverse_mode = not self.reverse_mode
+            self.get_logger().info(f'Reverse mode {"ON" if self.reverse_mode else "OFF"}')
+        # Detect D-pad up press (transition from 0 to 1) - also turns off reverse
+        elif dpad_y > 0.5 and self._prev_dpad_y < 0.5:
+            if self.reverse_mode:
+                self.reverse_mode = False
+                self.get_logger().info('Reverse mode OFF')
+        self._prev_dpad_y = dpad_y
 
-        # Get axis values
-        axes = msg.axes
-        if len(axes) < 6:
-            return
+    def _send_steering(self, angle: float):
+        msg = Float64MultiArray()
+        msg.data = [angle, angle]
+        self.steering_pub.publish(msg)
 
-        # Apply deadzone
-        forward = self._apply_deadzone(axes[self.AXIS_LEFT_STICK_Y])
-        steering = self._apply_deadzone(axes[self.AXIS_RIGHT_STICK_X])
+    def _send_throttle(self, throttle_pct: float):
+        wheel_vel = (throttle_pct * self.max_speed) / self.wheel_radius
+        if self.reverse_mode:
+            wheel_vel = -wheel_vel
+        msg = Float64MultiArray()
+        msg.data = [wheel_vel, wheel_vel]
+        self.throttle_pub.publish(msg)
 
-        # Triggers: RT for boost, LT for brake
-        # Triggers go from 1.0 (not pressed) to -1.0 (fully pressed)
-        rt = (1.0 - axes[self.AXIS_RT]) / 2.0  # 0 to 1
-        lt = (1.0 - axes[self.AXIS_LT]) / 2.0  # 0 to 1
-
-        # Calculate speed with boost/brake
-        speed_multiplier = self.speed_mode
-        if rt > 0.1:
-            speed_multiplier *= (1.0 + rt * 0.5)  # Up to 50% boost from trigger
-        if lt > 0.1:
-            speed_multiplier *= (1.0 - lt * 0.8)  # Up to 80% reduction from brake
-
-        # Create twist message
-        cmd = Twist()
-        cmd.linear.x = forward * self.max_speed * speed_multiplier
-        cmd.angular.z = steering * self.max_angular * speed_multiplier
-
-        self.cmd_pub.publish(cmd)
+    def _send_brake(self, brake_pct: float):
+        msg = Float64MultiArray()
+        msg.data = [self._clamp(brake_pct, 0.0, 1.0)]
+        self.brake_pub.publish(msg)
 
     def _publish_stop(self):
-        """Publish zero velocity."""
-        cmd = Twist()
-        self.cmd_pub.publish(cmd)
+        throttle_msg = Float64MultiArray()
+        throttle_msg.data = [0.0, 0.0]
+        self.throttle_pub.publish(throttle_msg)
+
+        brake_msg = Float64MultiArray()
+        brake_msg.data = [0.3]
+        self.brake_pub.publish(brake_msg)
+
+        steering_msg = Float64MultiArray()
+        steering_msg.data = [self._current_steering, self._current_steering]
+        self.steering_pub.publish(steering_msg)
+
+    def _emergency_stop(self):
+        throttle_msg = Float64MultiArray()
+        throttle_msg.data = [0.0, 0.0]
+        self.throttle_pub.publish(throttle_msg)
+
+        brake_msg = Float64MultiArray()
+        brake_msg.data = [1.0]
+        self.brake_pub.publish(brake_msg)
+
+        self._current_throttle = 0.0
+        self._current_brake = 1.0
+
+        if self.estop_client.service_is_ready():
+            self.estop_client.call_async(Trigger.Request())
+
+    def _publish_debug(self):
+        msg = Float64()
+        msg.data = self._current_steering
+        self.steering_debug_pub.publish(msg)
+
+        msg = Float64()
+        msg.data = self._current_throttle
+        self.throttle_debug_pub.publish(msg)
+
+        msg = Float64()
+        msg.data = self._current_brake
+        self.brake_debug_pub.publish(msg)
+
+    def _safety_timer_callback(self):
+        dt = (self.get_clock().now() - self._last_joy_time).nanoseconds / 1e9
+        if dt > 0.5 and self.enabled and not self.estop_active:
+            now = self.get_clock().now().nanoseconds / 1e9
+            if now - self._last_warn_time > 5.0:
+                self.get_logger().warn('No joystick input - stopping')
+                self._last_warn_time = now
+            self._publish_stop()
 
 
 def main(args=None):
     rclpy.init(args=args)
-    node = XboxTeleopNode()
+    node = ThreeMotorTeleopNode()
 
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
     finally:
-        # Publish stop before shutting down
         node._publish_stop()
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':

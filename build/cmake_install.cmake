@@ -59,13 +59,20 @@ if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_
 endif()
 
 if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/exia_ground_description" TYPE DIRECTORY FILES "/home/zech/exia_ws/src/exia_ground_description/worlds")
+endif()
+
+if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/exia_ground_description" TYPE DIRECTORY FILES "/home/zech/exia_ws/src/exia_ground_description/src/exia_control" FILES_MATCHING REGEX "/[^/]*\\.py$")
+endif()
+
+if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
   file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/exia_ground_description" TYPE PROGRAM FILES
-    "/home/zech/exia_ws/src/exia_ground_description/scripts/move_forward.py"
-    "/home/zech/exia_ws/src/exia_ground_description/scripts/ackermann_controller.py"
-    "/home/zech/exia_ws/src/exia_ground_description/scripts/ackermann_odometry.py"
-    "/home/zech/exia_ws/src/exia_ground_description/scripts/steering_controller.py"
-    "/home/zech/exia_ws/src/exia_ground_description/scripts/atv_controller.py"
-    "/home/zech/exia_ws/src/exia_ground_description/scripts/atv_hardware_interface.py"
+    "/home/zech/exia_ws/src/exia_ground_description/scripts/active/ackermann_drive_node.py"
+    "/home/zech/exia_ws/src/exia_ground_description/scripts/active/ackermann_odometry.py"
+    "/home/zech/exia_ws/src/exia_ground_description/scripts/active/path_follower_node.py"
+    "/home/zech/exia_ws/src/exia_ground_description/scripts/active/dynamic_navigator_node.py"
+    "/home/zech/exia_ws/src/exia_ground_description/scripts/active/xbox_teleop_node.py"
     )
 endif()
 

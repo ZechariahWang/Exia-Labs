@@ -1,32 +1,11 @@
 #!/usr/bin/env python3
-"""
-Ackermann Drive Node - Entry Point
-
-ROS2 node that bridges cmd_vel to the three-motor Ackermann drive system.
-
-Subscribed Topics:
-    /cmd_vel (geometry_msgs/Twist) - Velocity commands
-
-Published Topics:
-    /odom (nav_msgs/Odometry) - Odometry estimate
-    /tf (odom -> base_footprint transform)
-
-Services:
-    /ackermann/emergency_stop - Trigger emergency stop
-    /ackermann/clear_estop    - Clear emergency stop
-
-Author: Zechariah Wang
-Date: December 2025
-"""
+# Ackermann Drive Node - Bridges cmd_vel to three-motor system, publishes odom
 
 import math
 import os
 import sys
 
-# Add package to path for module imports
-# Handles both source (development) and install (deployment) layouts
 def _setup_module_path():
-    # Method 1: Use ament_index to find installed package (most reliable)
     try:
         from ament_index_python.packages import get_package_prefix
         pkg_prefix = get_package_prefix('exia_ground_description')
@@ -36,8 +15,6 @@ def _setup_module_path():
         return
     except Exception:
         pass
-
-    # Method 2: Source layout (scripts/active/ -> src/exia_control)
     script_dir = os.path.dirname(os.path.abspath(__file__))
     src_path = os.path.join(script_dir, '..', '..', 'src')
     if os.path.isdir(os.path.join(src_path, 'exia_control')):
@@ -61,12 +38,11 @@ from exia_control.control.ackermann_drive import DriveControllerConfig
 
 
 class AckermannDriveNode(Node):
-    """ROS2 node for Ackermann drive control."""
 
     def __init__(self):
         super().__init__('ackermann_drive_node')
 
-        # Declare parameters
+        # Parameters
         self.declare_parameter('wheelbase', 1.3)
         self.declare_parameter('track_width', 1.1)
         self.declare_parameter('wheel_radius', 0.3)
@@ -78,7 +54,6 @@ class AckermannDriveNode(Node):
         self.declare_parameter('auto_brake_on_stop', True)
         self.declare_parameter('hal_type', 'simulation')
 
-        # Load parameters
         wheelbase = self.get_parameter('wheelbase').value
         track_width = self.get_parameter('track_width').value
         wheel_radius = self.get_parameter('wheel_radius').value
@@ -86,7 +61,7 @@ class AckermannDriveNode(Node):
         max_speed = self.get_parameter('max_speed').value
         hal_type = self.get_parameter('hal_type').value
 
-        # Create HAL config
+        # HAL and controller config
         hal_config = AckermannConfig(
             wheelbase=wheelbase,
             track_width=track_width,
@@ -95,7 +70,6 @@ class AckermannDriveNode(Node):
             max_speed=max_speed,
         )
 
-        # Create controller config
         ctrl_config = DriveControllerConfig(
             wheelbase=wheelbase,
             track_width=track_width,
@@ -111,7 +85,6 @@ class AckermannDriveNode(Node):
         if hal_type == 'simulation':
             self._hal = SimulationHAL(self, hal_config)
         else:
-            # Hardware HAL - import on demand
             from exia_control.hal.hardware import HardwareHAL
             self._hal = HardwareHAL(self, hal_config)
 
@@ -119,7 +92,6 @@ class AckermannDriveNode(Node):
             self.get_logger().error('Failed to initialize HAL!')
             return
 
-        # Initialize controller
         self._controller = AckermannDriveController(ctrl_config)
 
         # Publishers
@@ -129,7 +101,6 @@ class AckermannDriveNode(Node):
         self._throttle_debug_pub = self.create_publisher(Float64, '/ackermann/throttle', 10)
         self._brake_debug_pub = self.create_publisher(Float64, '/ackermann/brake', 10)
 
-        # TF broadcaster
         self._tf_broadcaster = TransformBroadcaster(self)
 
         # Subscribers
@@ -139,27 +110,23 @@ class AckermannDriveNode(Node):
         self.create_service(Trigger, '/ackermann/emergency_stop', self._estop_callback)
         self.create_service(Trigger, '/ackermann/clear_estop', self._clear_estop_callback)
 
-        # Control loop timer (50Hz)
+        # Odometry state
         self._last_time = self.get_clock().now()
         self._odom_x = 0.0
         self._odom_y = 0.0
         self._odom_yaw = 0.0
+
+        # Control loop at 50Hz
         self.create_timer(0.02, self._control_loop)
 
         self.get_logger().info('Ackermann Drive Node started')
-        self.get_logger().info(f'  Wheelbase: {wheelbase}m')
-        self.get_logger().info(f'  Track width: {track_width}m')
-        self.get_logger().info(f'  Max steering: {math.degrees(max_steering):.1f} deg')
-        self.get_logger().info(f'  Max speed: {max_speed} m/s')
-        self.get_logger().info(f'  HAL type: {hal_type}')
 
     def _cmd_vel_callback(self, msg: Twist):
-        """Handle incoming velocity commands."""
         current_time = self.get_clock().now().nanoseconds / 1e9
         command = self._controller.cmd_vel_to_ackermann(msg, current_time)
         self._hal.set_command(command)
 
-        # Publish debug info
+        # Debug publishers
         steering_msg = Float64()
         steering_msg.data = command.steering_angle
         self._steering_debug_pub.publish(steering_msg)
@@ -173,14 +140,13 @@ class AckermannDriveNode(Node):
         self._brake_debug_pub.publish(brake_msg)
 
     def _control_loop(self):
-        """Main control loop - update odometry."""
         now = self.get_clock().now()
         dt = (now - self._last_time).nanoseconds / 1e9
         self._last_time = now
 
         state = self._hal.get_state()
 
-        # Simple odometry integration
+        # Odometry integration
         v = state.linear_velocity
         omega = v * math.tan(state.steering_angle) / self._controller.config.wheelbase
 
@@ -188,12 +154,9 @@ class AckermannDriveNode(Node):
         self._odom_x += v * math.cos(self._odom_yaw) * dt
         self._odom_y += v * math.sin(self._odom_yaw) * dt
 
-        # Publish odometry
         self._publish_odometry(state, now)
 
     def _publish_odometry(self, state, timestamp):
-        """Publish odometry message and TF."""
-        # Odometry message
         odom = Odometry()
         odom.header.stamp = timestamp.to_msg()
         odom.header.frame_id = 'odom'
@@ -202,8 +165,6 @@ class AckermannDriveNode(Node):
         odom.pose.pose.position.x = self._odom_x
         odom.pose.pose.position.y = self._odom_y
         odom.pose.pose.position.z = 0.0
-
-        # Convert yaw to quaternion
         odom.pose.pose.orientation.z = math.sin(self._odom_yaw / 2)
         odom.pose.pose.orientation.w = math.cos(self._odom_yaw / 2)
 
@@ -222,14 +183,12 @@ class AckermannDriveNode(Node):
         self._tf_broadcaster.sendTransform(t)
 
     def _estop_callback(self, request, response):
-        """Emergency stop service callback."""
         self._hal.emergency_stop()
         response.success = True
         response.message = 'Emergency stop activated'
         return response
 
     def _clear_estop_callback(self, request, response):
-        """Clear emergency stop service callback."""
         if self._hal.clear_emergency_stop():
             response.success = True
             response.message = 'Emergency stop cleared'
@@ -239,7 +198,6 @@ class AckermannDriveNode(Node):
         return response
 
     def shutdown(self):
-        """Clean shutdown."""
         self._hal.shutdown()
 
 

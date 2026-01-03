@@ -1,15 +1,5 @@
 #!/usr/bin/env python3
-"""
-Ackermann odometry node for Exia Ground robot.
-Computes odometry from wheel velocities and steering angles.
-
-Subscribes to:
-- /joint_states (sensor_msgs/JointState)
-
-Publishes to:
-- /odom (nav_msgs/Odometry)
-- /tf (odom -> base_footprint transform)
-"""
+# Ackermann Odometry - Computes odometry from wheel velocities and steering angles
 
 import math
 import rclpy
@@ -21,7 +11,6 @@ from tf2_ros import TransformBroadcaster
 
 
 def quaternion_from_yaw(yaw: float) -> Quaternion:
-    """Create a quaternion from a yaw angle."""
     q = Quaternion()
     q.x = 0.0
     q.y = 0.0
@@ -31,12 +20,10 @@ def quaternion_from_yaw(yaw: float) -> Quaternion:
 
 
 class AckermannOdometry(Node):
-    """Computes odometry from Ackermann steering joint states."""
 
-    # Robot geometry (must match URDF)
-    WHEEL_RADIUS = 0.3      # meters
-    WHEEL_BASE = 1.3        # meters (front to rear axle)
-    TRACK_WIDTH = 1.1       # meters (left to right wheel)
+    WHEEL_RADIUS = 0.3
+    WHEEL_BASE = 1.3
+    TRACK_WIDTH = 1.1
 
     def __init__(self):
         super().__init__('ackermann_odometry')
@@ -45,8 +32,6 @@ class AckermannOdometry(Node):
         self.x = 0.0
         self.y = 0.0
         self.theta = 0.0
-
-        # Previous time for integration
         self.last_time = None
 
         # Publishers
@@ -60,16 +45,14 @@ class AckermannOdometry(Node):
         self.get_logger().info('Ackermann odometry node started')
 
     def joint_callback(self, msg: JointState):
-        """Process joint states and compute odometry."""
         current_time = self.get_clock().now()
 
         if self.last_time is None:
             self.last_time = current_time
             return
 
-        # Calculate dt
         dt = (current_time - self.last_time).nanoseconds / 1e9
-        if dt <= 0 or dt > 1.0:  # Skip invalid dt
+        if dt <= 0 or dt > 1.0:
             self.last_time = current_time
             return
 
@@ -80,23 +63,17 @@ class AckermannOdometry(Node):
         except (TypeError, ValueError):
             return
 
-        # Get rear wheel velocities (rad/s)
+        # Get wheel velocities and steering angles
         left_wheel_vel = joint_dict.get('rear_left_wheel_joint', 0.0)
         right_wheel_vel = joint_dict.get('rear_right_wheel_joint', 0.0)
-
-        # Get front steering angles (rad)
         left_steer = pos_dict.get('front_left_steer_joint', 0.0)
         right_steer = pos_dict.get('front_right_steer_joint', 0.0)
 
-        # Average wheel velocity -> linear velocity
         avg_wheel_vel = (left_wheel_vel + right_wheel_vel) / 2.0
         linear_vel = avg_wheel_vel * self.WHEEL_RADIUS
-
-        # Average steering angle
         avg_steer = (left_steer + right_steer) / 2.0
 
         # Angular velocity from Ackermann geometry
-        # omega = v * tan(steer_angle) / wheelbase
         if abs(avg_steer) > 0.001:
             angular_vel = linear_vel * math.tan(avg_steer) / self.WHEEL_BASE
         else:
@@ -110,29 +87,25 @@ class AckermannOdometry(Node):
         self.x += delta_x
         self.y += delta_y
         self.theta += delta_theta
-
-        # Normalize theta to [-pi, pi]
         self.theta = math.atan2(math.sin(self.theta), math.cos(self.theta))
 
-        # Publish odometry message
+        # Publish odometry
         odom_msg = Odometry()
         odom_msg.header.stamp = current_time.to_msg()
         odom_msg.header.frame_id = 'odom'
         odom_msg.child_frame_id = 'base_footprint'
 
-        # Position
         odom_msg.pose.pose.position.x = self.x
         odom_msg.pose.pose.position.y = self.y
         odom_msg.pose.pose.position.z = 0.0
         odom_msg.pose.pose.orientation = quaternion_from_yaw(self.theta)
 
-        # Velocity
         odom_msg.twist.twist.linear.x = linear_vel
         odom_msg.twist.twist.angular.z = angular_vel
 
         self.odom_pub.publish(odom_msg)
 
-        # Broadcast transform
+        # Broadcast TF
         t = TransformStamped()
         t.header.stamp = current_time.to_msg()
         t.header.frame_id = 'odom'
@@ -143,7 +116,6 @@ class AckermannOdometry(Node):
         t.transform.rotation = quaternion_from_yaw(self.theta)
 
         self.tf_broadcaster.sendTransform(t)
-
         self.last_time = current_time
 
 

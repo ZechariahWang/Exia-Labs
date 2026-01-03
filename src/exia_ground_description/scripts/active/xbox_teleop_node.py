@@ -88,7 +88,7 @@ class ThreeMotorTeleopNode(Node):
         self.create_timer(0.1, self._safety_timer_callback)
         self._last_joy_time = self.get_clock().now()
 
-        self.get_logger().info('Xbox Teleop started - LT: brake, RT: throttle, Left stick: steering, D-pad down: reverse')
+        self.get_logger().info('Xbox Teleop started - LT: brake, RT: throttle, Left stick: steering, D-pad down: reverse') # hi
 
     def _apply_deadzone(self, value: float) -> float:
         if abs(value) < self.deadzone:

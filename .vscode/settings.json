@@ -1,3 +1,11 @@
 {
-    "cmake.sourceDirectory": "/home/zech/exia_ws/src/exia_ground_description"
+    "cmake.sourceDirectory": "/home/zech/exia_ws/src/exia_ground_description",
+    "python.autoComplete.extraPaths": [
+        "/opt/ros/humble/lib/python3.10/site-packages",
+        "/opt/ros/humble/local/lib/python3.10/dist-packages"
+    ],
+    "python.analysis.extraPaths": [
+        "/opt/ros/humble/lib/python3.10/site-packages",
+        "/opt/ros/humble/local/lib/python3.10/dist-packages"
+    ]
 }

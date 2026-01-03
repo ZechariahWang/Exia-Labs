@@ -27,6 +27,7 @@ const int BUFFER_SIZE = 64;
 char buffer[BUFFER_SIZE];
 int bufferIndex = 0;
 
+// attach servos and move them to starting pos
 void setup() {
   Serial.begin(115200);
   steeringServo.attach(STEERING_PIN);
@@ -44,19 +45,22 @@ void setup() {
 
 void loop() {
   while (Serial.available()) {
-    char c = Serial.read();
+    char c = Serial.read(); // read the command
+
+    // if end of command, terminate it and reset buffer
     if (c == '\n' || c == '\r') {
       if (bufferIndex > 0) {
         buffer[bufferIndex] = '\0';
         processCommand(buffer);
         bufferIndex = 0;
       }
-    }
+    } // if not the end of the command, add command to buffer
     else if (bufferIndex < BUFFER_SIZE - 1) {
       buffer[bufferIndex++] = c;
     }
   }
 
+  // emergeency timeout
   if (armed && millis() - lastCommandTime > TIMEOUT_MS) {
     emergencyStop();
     Serial.println("TIMEOUT");
@@ -66,6 +70,8 @@ void loop() {
 }
 
 void processCommand(char* cmd) {
+
+  // if armed, reset brake
   if (strcasecmp(cmd, "ARM") == 0) {
     armed = true;
     lastCommandTime = millis();
@@ -76,6 +82,7 @@ void processCommand(char* cmd) {
     return;
   }
 
+  // if disarmeed, emergeency stop
   if (strcasecmp(cmd, "DISARM") == 0) {
     emergencyStop();
     Serial.println("DISARMED");
@@ -84,19 +91,22 @@ void processCommand(char* cmd) {
 
   if (!armed) return;
 
+
+  // commands are in thee form S90, T120, etc
   char cmdCopy[BUFFER_SIZE];
   strncpy(cmdCopy, cmd, BUFFER_SIZE);
 
   int steer = -1, throttle = -1, brake = -1;
 
   char* token = strtok(cmdCopy, ",");
-  while (token != NULL) {
+  while (token != NULL) { // parse through the entire command to geet thee target values
     if (token[0] == 'S' || token[0] == 's') steer = atoi(token + 1);
     else if (token[0] == 'T' || token[0] == 't') throttle = atoi(token + 1);
     else if (token[0] == 'B' || token[0] == 'b') brake = atoi(token + 1);
     token = strtok(NULL, ",");
   }
 
+  // seet the target value
   if (steer != -1) steeringServo.write(constrain(steer, 0, 180));
   if (throttle != -1) throttleServo.write(constrain(throttle, 0, 180));
   if (brake != -1) brakeServo.write(constrain(brake, 0, 180));
@@ -104,6 +114,7 @@ void processCommand(char* cmd) {
   lastCommandTime = millis();
 }
 
+// emergency stop
 void emergencyStop() {
   armed = false;
   throttleServo.write(ESC_NEUTRAL);

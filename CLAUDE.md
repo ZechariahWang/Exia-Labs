@@ -427,3 +427,5 @@ Hardware checklist:
 - Brake: Servo or linear actuator
 - Lidar: RPlidar S3 via rplidar_ros
 - IMU: Yahboom 10-axis driver
+
+Dont write any comments in the code.

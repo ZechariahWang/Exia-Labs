@@ -1,9 +1,9 @@
 #include <Servo.h>
 
-#define CH1_PIN 8
-#define CH2_PIN 9
-#define THROTTLE_PIN 12
-#define BRAKE_PIN 13
+#define CH1_PIN 2
+#define CH2_PIN 3
+#define THROTTLE_PIN 44
+#define BRAKE_PIN 45
 #define LED_PIN 4
 
 #define RC_CENTER 1500
@@ -11,9 +11,9 @@
 #define RC_MIN 900
 #define RC_MAX 2100
 
-#define THROTTLE_NEUTRAL 90
-#define THROTTLE_MAX 150
-#define BRAKE_NEUTRAL 90
+#define THROTTLE_NEUTRAL 0
+#define THROTTLE_MAX 180
+#define BRAKE_NEUTRAL 0
 #define BRAKE_MAX 150
 
 #define HEARTBEAT_MS 100
@@ -21,12 +21,18 @@
 #define SERIAL_TIMEOUT_MS 500
 #define STEERING_CHANGE_THRESHOLD 10
 
+#define OUTPUT_HYSTERESIS 1
+#define MAX_THROTTLE_RATE 2000.0f
+#define MAX_BRAKE_RATE 2000.0f
+#define MEDIAN_FILTER_SIZE 5
+
 Servo throttle;
 Servo brake;
 
 unsigned long lastHeartbeatTime = 0;
 unsigned long lastValidRCTime = 0;
 unsigned long lastSerialRxTime = 0;
+unsigned long lastLoopTime = 0;
 int lastSteeringValue = 0;
 bool rcLost = false;
 bool jetsonConnected = false;
@@ -34,16 +40,26 @@ bool jetsonConnected = false;
 int currentState = 0;
 int odriveError = 0;
 
+float currentThrottlePos = THROTTLE_NEUTRAL;
+float currentBrakePos = BRAKE_NEUTRAL;
+int lastThrottleOutput = THROTTLE_NEUTRAL;
+int lastBrakeOutput = BRAKE_NEUTRAL;
+
+int ch1Buffer[MEDIAN_FILTER_SIZE];
+int ch2Buffer[MEDIAN_FILTER_SIZE];
+int bufferIdx = 0;
+bool bufferReady = false;
+
 char serialBuffer[64];
-int bufferIndex = 0;
+int serialBufIndex = 0;
 
 void setup() {
     pinMode(CH1_PIN, INPUT);
     pinMode(CH2_PIN, INPUT);
     pinMode(LED_PIN, OUTPUT);
 
-    throttle.attach(THROTTLE_PIN);
-    brake.attach(BRAKE_PIN);
+    throttle.attach(THROTTLE_PIN, 1000, 2000);
+    brake.attach(BRAKE_PIN, 1000, 2000);
 
     throttle.write(THROTTLE_NEUTRAL);
     brake.write(BRAKE_NEUTRAL);
@@ -51,9 +67,15 @@ void setup() {
     Serial.begin(115200);
     delay(100);
 
+    for (int i = 0; i < MEDIAN_FILTER_SIZE; i++) {
+        ch1Buffer[i] = RC_CENTER;
+        ch2Buffer[i] = RC_CENTER;
+    }
+
     lastValidRCTime = millis();
     lastHeartbeatTime = millis();
     lastSerialRxTime = millis();
+    lastLoopTime = millis();
 
     digitalWrite(LED_PIN, LOW);
     Serial.println("READY");
@@ -89,13 +111,13 @@ void processSerialInput() {
         lastSerialRxTime = millis();
 
         if (c == '\n' || c == '\r') {
-            if (bufferIndex > 0) {
-                serialBuffer[bufferIndex] = '\0';
+            if (serialBufIndex > 0) {
+                serialBuffer[serialBufIndex] = '\0';
                 parseJetsonMessage(serialBuffer);
-                bufferIndex = 0;
+                serialBufIndex = 0;
             }
-        } else if (bufferIndex < 63) {
-            serialBuffer[bufferIndex++] = c;
+        } else if (serialBufIndex < 63) {
+            serialBuffer[serialBufIndex++] = c;
         }
     }
 }
@@ -130,7 +152,71 @@ bool isValidRC(int pulse) {
     return (pulse >= RC_MIN && pulse <= RC_MAX);
 }
 
-int rcToSteering(int pulse) {
+int getMedian(int* buf, int size) {
+    int sorted[MEDIAN_FILTER_SIZE];
+    for (int i = 0; i < size; i++) {
+        sorted[i] = buf[i];
+    }
+    for (int i = 0; i < size - 1; i++) {
+        for (int j = i + 1; j < size; j++) {
+            if (sorted[j] < sorted[i]) {
+                int temp = sorted[i];
+                sorted[i] = sorted[j];
+                sorted[j] = temp;
+            }
+        }
+    }
+    return sorted[size / 2];
+}
+
+void updateInputBuffer(int ch1Raw, int ch2Raw) {
+    if (isValidRC(ch1Raw)) {
+        ch1Buffer[bufferIdx] = ch1Raw;
+    }
+    if (isValidRC(ch2Raw)) {
+        ch2Buffer[bufferIdx] = ch2Raw;
+    }
+    bufferIdx = (bufferIdx + 1) % MEDIAN_FILTER_SIZE;
+    if (bufferIdx == 0) {
+        bufferReady = true;
+    }
+}
+
+int getFilteredCh1() {
+    if (!bufferReady) {
+        return ch1Buffer[0];
+    }
+    return getMedian(ch1Buffer, MEDIAN_FILTER_SIZE);
+}
+
+int getFilteredCh2() {
+    if (!bufferReady) {
+        return ch2Buffer[0];
+    }
+    return getMedian(ch2Buffer, MEDIAN_FILTER_SIZE);
+}
+
+float applyRateLimit(float current, float target, float maxRate, float dt) {
+    float maxChange = maxRate * dt;
+    float diff = target - current;
+    if (diff > maxChange) {
+        return current + maxChange;
+    } else if (diff < -maxChange) {
+        return current - maxChange;
+    }
+    return target;
+}
+
+void writeServoWithHysteresis(Servo& servo, float position, int& lastOutput) {
+    int newOutput = (int)(position + 0.5f);
+    if (abs(newOutput - lastOutput) >= OUTPUT_HYSTERESIS) {
+        servo.write(newOutput);
+        lastOutput = newOutput;
+    }
+}
+
+int rcToSteering(float smoothedPulse) {
+    int pulse = (int)(smoothedPulse + 0.5f);
     int centered = pulse - RC_CENTER;
     if (abs(centered) < RC_DEADZONE) {
         return 0;
@@ -139,47 +225,70 @@ int rcToSteering(int pulse) {
     return constrain(value, -1000, 1000);
 }
 
-void handleThrottleBrake(int ch2) {
-    if (!isValidRC(ch2)) {
-        throttle.write(THROTTLE_NEUTRAL);
-        brake.write(BRAKE_NEUTRAL);
-        return;
+void handleThrottleBrake(float smoothedCh2Val, float dt) {
+    int ch2 = (int)(smoothedCh2Val + 0.5f);
+
+    float targetThrottle = THROTTLE_NEUTRAL;
+    float targetBrake = BRAKE_NEUTRAL;
+
+    if (ch2 < RC_MIN || ch2 > RC_MAX) {
+        targetThrottle = THROTTLE_NEUTRAL;
+        targetBrake = BRAKE_NEUTRAL;
+    } else {
+        int delta = ch2 - RC_CENTER;
+
+        if (abs(delta) < RC_DEADZONE) {
+            targetThrottle = THROTTLE_NEUTRAL;
+            targetBrake = BRAKE_NEUTRAL;
+        }
+        else if (delta > 0) {
+            targetThrottle = map(delta, RC_DEADZONE, 500, THROTTLE_NEUTRAL, THROTTLE_MAX);
+            targetThrottle = constrain(targetThrottle, THROTTLE_NEUTRAL, THROTTLE_MAX);
+            targetBrake = BRAKE_NEUTRAL;
+        }
+        else {
+            targetBrake = map(-delta, RC_DEADZONE, 500, BRAKE_NEUTRAL, BRAKE_MAX);
+            targetBrake = constrain(targetBrake, BRAKE_NEUTRAL, BRAKE_MAX);
+            targetThrottle = THROTTLE_NEUTRAL;
+        }
     }
 
-    int delta = ch2 - RC_CENTER;
+    currentThrottlePos = applyRateLimit(currentThrottlePos, targetThrottle, MAX_THROTTLE_RATE, dt);
+    currentBrakePos = applyRateLimit(currentBrakePos, targetBrake, MAX_BRAKE_RATE, dt);
 
-    if (abs(delta) < RC_DEADZONE) {
-        throttle.write(THROTTLE_NEUTRAL);
-        brake.write(BRAKE_NEUTRAL);
-    }
-    else if (delta > 0) {
-        int t = map(delta, RC_DEADZONE, 500, THROTTLE_NEUTRAL, THROTTLE_MAX);
-        throttle.write(constrain(t, THROTTLE_NEUTRAL, THROTTLE_MAX));
-        brake.write(BRAKE_NEUTRAL);
-    }
-    else {
-        int b = map(-delta, RC_DEADZONE, 500, BRAKE_NEUTRAL, BRAKE_MAX);
-        brake.write(constrain(b, BRAKE_NEUTRAL, BRAKE_MAX));
-        throttle.write(THROTTLE_NEUTRAL);
-    }
+    writeServoWithHysteresis(throttle, currentThrottlePos, lastThrottleOutput);
+    writeServoWithHysteresis(brake, currentBrakePos, lastBrakeOutput);
 }
 
 void safeState() {
+    currentThrottlePos = THROTTLE_NEUTRAL;
+    currentBrakePos = BRAKE_MAX;
     throttle.write(THROTTLE_NEUTRAL);
     brake.write(BRAKE_MAX);
+    lastThrottleOutput = THROTTLE_NEUTRAL;
+    lastBrakeOutput = BRAKE_MAX;
     digitalWrite(LED_PIN, LOW);
 }
 
 void loop() {
     unsigned long now = millis();
+    float dt = (now - lastLoopTime) / 1000.0f;
+    if (dt < 0.001f) dt = 0.001f;
+    if (dt > 0.1f) dt = 0.1f;
+    lastLoopTime = now;
 
     processSerialInput();
 
-    int ch1 = readRCChannel(CH1_PIN);
-    int ch2 = readRCChannel(CH2_PIN);
+    int ch1Raw = readRCChannel(CH1_PIN);
+    int ch2Raw = readRCChannel(CH2_PIN);
 
-    bool ch1Valid = isValidRC(ch1);
-    bool ch2Valid = isValidRC(ch2);
+    updateInputBuffer(ch1Raw, ch2Raw);
+
+    int ch1Filtered = getFilteredCh1();
+    int ch2Filtered = getFilteredCh2();
+
+    bool ch1Valid = isValidRC(ch1Raw);
+    bool ch2Valid = isValidRC(ch2Raw);
 
     if (ch1Valid || ch2Valid) {
         lastValidRCTime = now;
@@ -202,7 +311,7 @@ void loop() {
     }
 
     if (ch1Valid) {
-        int steeringValue = rcToSteering(ch1);
+        int steeringValue = rcToSteering((float)ch1Filtered);
 
         if (abs(steeringValue - lastSteeringValue) > STEERING_CHANGE_THRESHOLD) {
             sendSteering(steeringValue);
@@ -214,7 +323,7 @@ void loop() {
         sendHeartbeat();
     }
 
-    handleThrottleBrake(ch2);
+    handleThrottleBrake((float)ch2Filtered, dt);
 
-    delay(20);
+    delay(10);
 }

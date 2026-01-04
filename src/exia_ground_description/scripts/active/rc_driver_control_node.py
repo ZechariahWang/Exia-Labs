@@ -25,11 +25,15 @@ class State(IntEnum):
     ESTOP = 4
     ERROR = 5
 
+cur_lim = 6
+
 @dataclass
 class ODriveConfig:
     vel_limit: float = 30.0
     accel_limit: float = 1.0
-    current_limit: float = 10.0
+    current_limit: float = cur_lim
+    torque_limit: float = 0.01
+    max_torque: float = 0.01
     position_gain: float = 20.0
     velocity_gain: float = 0.16
     velocity_integrator_gain: float = 0.32
@@ -70,6 +74,8 @@ class RCDriverControlNode(Node):
             vel_limit=self.get_parameter('vel_limit').value,
             accel_limit=self.get_parameter('accel_limit').value,
             current_limit=self.get_parameter('current_limit').value,
+            torque_limit=self.get_parameter('torque_limit').value,
+            max_torque=self.get_parameter('max_torque').value,
             position_gain=self.get_parameter('position_gain').value,
             velocity_gain=self.get_parameter('velocity_gain').value,
             velocity_integrator_gain=self.get_parameter('velocity_integrator_gain').value,
@@ -108,7 +114,9 @@ class RCDriverControlNode(Node):
         self.declare_parameter('baud_rate', 115200)
         self.declare_parameter('vel_limit', 30.0)
         self.declare_parameter('accel_limit', 1.0)
-        self.declare_parameter('current_limit', 10.0)
+        self.declare_parameter('current_limit', cur_lim)
+        self.declare_parameter('torque_limit', 0.01)
+        self.declare_parameter('max_torque', 0.01)
         self.declare_parameter('position_gain', 20.0)
         self.declare_parameter('velocity_gain', 0.16)
         self.declare_parameter('velocity_integrator_gain', 0.32)
@@ -197,11 +205,18 @@ class RCDriverControlNode(Node):
             return
 
         try:
+            self.axis.config.motor.current_soft_max = self.odrive_config.current_limit
+            self.axis.config.motor.current_hard_max = self.odrive_config.current_limit + 10.0
+            self.get_logger().info(f'Set current_soft_max={self.odrive_config.current_limit}A, current_hard_max={self.odrive_config.current_limit + 10.0}A')
+        except Exception as e:
+            self.get_logger().warn(f'Could not set current limits: {e}')
+
+        try:
             ctrl = self.axis.controller
             ctrl.config.control_mode = ControlMode.POSITION_CONTROL
             ctrl.config.input_mode = InputMode.PASSTHROUGH
             ctrl.config.vel_limit = self.odrive_config.vel_limit
-            self.get_logger().info(f'ODrive configured: vel_limit={self.odrive_config.vel_limit}')
+            self.get_logger().info(f'ODrive configured: POSITION_CONTROL, vel_limit={self.odrive_config.vel_limit}')
         except Exception as e:
             self.get_logger().warn(f'ODrive configuration warning: {e}')
 

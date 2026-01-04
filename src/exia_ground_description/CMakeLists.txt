@@ -58,6 +58,7 @@ install(
     scripts/active/dynamic_navigator_node.py
     scripts/active/xbox_teleop_node.py
     scripts/active/ps4_teleop_node.py
+    scripts/active/rc_driver_control_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

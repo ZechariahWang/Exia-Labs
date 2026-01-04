@@ -78,7 +78,7 @@
 			{
 				"command" : 5,
 				"file" : 0,
-				"line" : 64,
+				"line" : 65,
 				"parent" : 0
 			},
 			{
@@ -330,7 +330,8 @@
 				"scripts/active/path_follower_node.py",
 				"scripts/active/dynamic_navigator_node.py",
 				"scripts/active/xbox_teleop_node.py",
-				"scripts/active/ps4_teleop_node.py"
+				"scripts/active/ps4_teleop_node.py",
+				"scripts/active/rc_driver_control_node.py"
 			],
 			"type" : "file"
 		},

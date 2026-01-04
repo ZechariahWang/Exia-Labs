@@ -28,6 +28,7 @@
 /home/exialabsargus/Exia-Labs/install/exia_ground_description/lib/exia_ground_description/dynamic_navigator_node.py
 /home/exialabsargus/Exia-Labs/install/exia_ground_description/lib/exia_ground_description/xbox_teleop_node.py
 /home/exialabsargus/Exia-Labs/install/exia_ground_description/lib/exia_ground_description/ps4_teleop_node.py
+/home/exialabsargus/Exia-Labs/install/exia_ground_description/lib/exia_ground_description/rc_driver_control_node.py
 /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/ament_index/resource_index/package_run_dependencies/exia_ground_description
 /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/ament_index/resource_index/parent_prefix_path/exia_ground_description
 /home/exialabsargus/Exia-Labs/install/exia_ground_description/share/exia_ground_description/environment/ament_prefix_path.sh

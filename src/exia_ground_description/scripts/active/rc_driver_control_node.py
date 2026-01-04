@@ -41,6 +41,8 @@ class SafetyConfig:
     feedback_rate: float = 20.0
     control_rate: float = 50.0
     ramp_rate: float = 20.0
+    smoothing_alpha: float = 0.15
+    scurve_sharpness: float = 3.0
 
 class RCDriverControlNode(Node):
     def __init__(self):
@@ -79,6 +81,8 @@ class RCDriverControlNode(Node):
             feedback_rate=self.get_parameter('feedback_rate').value,
             control_rate=self.get_parameter('control_rate').value,
             ramp_rate=self.get_parameter('ramp_rate').value,
+            smoothing_alpha=self.get_parameter('smoothing_alpha').value,
+            scurve_sharpness=self.get_parameter('scurve_sharpness').value,
         )
 
         self.steering_pub = self.create_publisher(Float64, '/odrive/steering_position', 10)
@@ -113,6 +117,8 @@ class RCDriverControlNode(Node):
         self.declare_parameter('feedback_rate', 20.0)
         self.declare_parameter('control_rate', 50.0)
         self.declare_parameter('ramp_rate', 20.0)
+        self.declare_parameter('smoothing_alpha', 0.15)
+        self.declare_parameter('scurve_sharpness', 3.0)
         self.declare_parameter('turns_per_steering_rad', 1.0)
 
     def _init_serial(self) -> bool:
@@ -248,13 +254,26 @@ class RCDriverControlNode(Node):
         self.current_target = target_turns
 
     def _apply_ramp(self, dt: float):
-        max_step = self.safety_config.ramp_rate * dt
         error = self.current_target - self.smoothed_target
 
-        if abs(error) <= max_step:
+        if abs(error) < 0.001:
             self.smoothed_target = self.current_target
-        else:
-            self.smoothed_target += max_step if error > 0 else -max_step
+            return
+
+        alpha = self.safety_config.smoothing_alpha
+        sharpness = self.safety_config.scurve_sharpness
+
+        normalized_error = min(abs(error) / self.safety_config.max_position, 1.0)
+        scurve_factor = normalized_error ** sharpness
+        dynamic_alpha = alpha + (1.0 - alpha) * scurve_factor
+
+        max_step = self.safety_config.ramp_rate * dt
+        weighted_step = error * dynamic_alpha
+
+        if abs(weighted_step) > max_step:
+            weighted_step = max_step if error > 0 else -max_step
+
+        self.smoothed_target += weighted_step
 
     def _send_to_odrive(self):
         if self.axis is None or self.state != State.ARMED:

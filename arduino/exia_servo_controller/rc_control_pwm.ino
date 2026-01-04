@@ -12,9 +12,9 @@
 #define RC_MAX 2100
 
 #define THROTTLE_NEUTRAL 0
-#define THROTTLE_MAX 180
-#define BRAKE_NEUTRAL 0
-#define BRAKE_MAX 150
+#define THROTTLE_MAX 75
+#define BRAKE_NEUTRAL 180
+#define BRAKE_MAX 80
 
 #define HEARTBEAT_MS 100
 #define RC_TIMEOUT_MS 500
@@ -248,7 +248,7 @@ void handleThrottleBrake(float smoothedCh2Val, float dt) {
         }
         else {
             targetBrake = map(-delta, RC_DEADZONE, 500, BRAKE_NEUTRAL, BRAKE_MAX);
-            targetBrake = constrain(targetBrake, BRAKE_NEUTRAL, BRAKE_MAX);
+            targetBrake = constrain(targetBrake, BRAKE_MAX, BRAKE_NEUTRAL);
             targetThrottle = THROTTLE_NEUTRAL;
         }
     }
@@ -281,6 +281,9 @@ void loop() {
 
     int ch1Raw = readRCChannel(CH1_PIN);
     int ch2Raw = readRCChannel(CH2_PIN);
+
+    String val = String(ch1Raw) + " " + (ch2Raw);
+    Serial.println(val);
 
     updateInputBuffer(ch1Raw, ch2Raw);
 

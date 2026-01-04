@@ -25,7 +25,7 @@ class State(IntEnum):
     ESTOP = 4
     ERROR = 5
 
-cur_lim = 6
+cur_lim = 10
 
 @dataclass
 class ODriveConfig:

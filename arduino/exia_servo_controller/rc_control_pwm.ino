@@ -23,6 +23,7 @@
 #define HEARTBEAT_MS 100
 #define RC_TIMEOUT_MS 500
 #define SERIAL_TIMEOUT_MS 500
+#define JETSON_TIMEOUT_MS 300
 #define STEERING_CHANGE_THRESHOLD 10
 
 // median filter constants
@@ -72,8 +73,13 @@ void setup() {
     throttle.write(THROTTLE_NEUTRAL);
     brake.write(BRAKE_NEUTRAL);
 
-    Serial.begin(115200); // note: might need to change later, serial vaud rate
-    delay(100);
+    Serial.begin(115200);
+    while (true) {
+        if (Serial.available() && Serial.read() == 'C') {
+            break;
+        }
+        delay(100);
+    }
 
     // prefill buffer values
     for (int i = 0; i < MEDIAN_FILTER_SIZE; i++) {
@@ -296,11 +302,16 @@ void loop() {
 
     processSerialInput();
 
+    // unsure abt this 
+    // if (jetsonConnected && (now - lastSerialRxTime > JETSON_TIMEOUT_MS)) {
+    //     jetsonConnected = false;
+    //     sendEmergencyStop();
+    //     safeState();
+    //     return;
+    // }
+
     int ch1Raw = readRCChannel(CH1_PIN);
     int ch2Raw = readRCChannel(CH2_PIN);
-
-    String val = String(ch1Raw) + " " + (ch2Raw);
-    Serial.println(val);
 
     updateInputBuffer(ch1Raw, ch2Raw);
 

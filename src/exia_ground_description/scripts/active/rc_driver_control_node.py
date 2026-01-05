@@ -115,7 +115,7 @@ class RCDriverControlNode(Node):
         self.get_logger().info('RC Driver Control Node started')
 
     def _declare_parameters(self):
-        self.declare_parameter('serial_port', '/dev/ttyACM0')
+        self.declare_parameter('serial_port', '/dev/arduino_control')
         self.declare_parameter('baud_rate', 115200)
         self.declare_parameter('vel_limit', 15.0)  # (was 30.0)
         self.declare_parameter('accel_limit', 1.0)
@@ -140,13 +140,27 @@ class RCDriverControlNode(Node):
             self.serial_conn = serial.Serial(
                 port=self.serial_port,
                 baudrate=self.baud_rate,
-                timeout=0.01
+                timeout=0.1
             )
             self.get_logger().info(f'Serial connected: {self.serial_port}')
-            self.get_logger().info('Waiting for Arduino to boot...')
-            time.sleep(2.0)
+            self.get_logger().info('Performing handshake with Arduino...')
+
             self.serial_conn.reset_input_buffer()
-            return True
+            for attempt in range(50):
+                self.serial_conn.write(b'C')
+                self.serial_conn.flush()
+                time.sleep(0.1)
+                if self.serial_conn.in_waiting > 0:
+                    response = self.serial_conn.readline().decode('utf-8', errors='ignore').strip()
+                    if response == 'READY':
+                        self.get_logger().info('Arduino handshake complete')
+                        self.serial_conn.timeout = 0.01
+                        return True
+
+            self.get_logger().error('Arduino handshake timeout')
+            self.serial_conn.close()
+            self.serial_conn = None
+            return False
         except Exception as e:
             self.get_logger().error(f'Serial connection failed: {e}')
             self.serial_conn = None

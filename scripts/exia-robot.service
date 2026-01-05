@@ -1,0 +1,21 @@
+[Unit]
+Description=Exia Ground Robot RC Driver Control
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=exialabsargus
+Group=exialabsargus
+WorkingDirectory=/home/exialabsargus/Exia-Labs
+ExecStart=/home/exialabsargus/Exia-Labs/scripts/exia_startup.sh
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+Environment="HOME=/home/exialabsargus"
+Environment="PATH=/usr/local/bin:/usr/bin:/bin:/home/exialabsargus/.local/bin"
+
+[Install]
+WantedBy=multi-user.target

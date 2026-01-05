@@ -1,26 +1,31 @@
 #include <Servo.h>
 
+// define channel pins
 #define CH1_PIN 2
 #define CH2_PIN 3
 #define THROTTLE_PIN 44
 #define BRAKE_PIN 45
 #define LED_PIN 4
 
+// standard pwm signal vals
 #define RC_CENTER 1500
 #define RC_DEADZONE 60
 #define RC_MIN 900
 #define RC_MAX 2100
 
+// DONT TOUCH PLS, these have been set on hardware, motor movement positions
 #define THROTTLE_NEUTRAL 0
 #define THROTTLE_MAX 75
 #define BRAKE_NEUTRAL 180
 #define BRAKE_MAX 80
 
+// timing constants
 #define HEARTBEAT_MS 100
 #define RC_TIMEOUT_MS 500
 #define SERIAL_TIMEOUT_MS 500
 #define STEERING_CHANGE_THRESHOLD 10
 
+// median filter constants
 #define OUTPUT_HYSTERESIS 1
 #define MAX_THROTTLE_RATE 2000.0f
 #define MAX_BRAKE_RATE 2000.0f
@@ -54,24 +59,29 @@ char serialBuffer[64];
 int serialBufIndex = 0;
 
 void setup() {
+
+    // config pin modes
     pinMode(CH1_PIN, INPUT);
     pinMode(CH2_PIN, INPUT);
     pinMode(LED_PIN, OUTPUT);
 
+    // attach servos to their pins, write init vals
     throttle.attach(THROTTLE_PIN, 1000, 2000);
     brake.attach(BRAKE_PIN, 1000, 2000);
 
     throttle.write(THROTTLE_NEUTRAL);
     brake.write(BRAKE_NEUTRAL);
 
-    Serial.begin(115200);
+    Serial.begin(115200); // note: might need to change later, serial vaud rate
     delay(100);
 
+    // prefill buffer values
     for (int i = 0; i < MEDIAN_FILTER_SIZE; i++) {
         ch1Buffer[i] = RC_CENTER;
         ch2Buffer[i] = RC_CENTER;
     }
 
+    // timestamp is curr time
     lastValidRCTime = millis();
     lastHeartbeatTime = millis();
     lastSerialRxTime = millis();
@@ -81,6 +91,7 @@ void setup() {
     Serial.println("READY");
 }
 
+// send steering command as "S500 example"
 void sendSteering(int value) {
     value = constrain(value, -1000, 1000);
     Serial.print("S");
@@ -88,19 +99,23 @@ void sendSteering(int value) {
     lastHeartbeatTime = millis();
 }
 
+// send h, this will show arduino is still alvie
 void sendHeartbeat() {
     Serial.println("H");
     lastHeartbeatTime = millis();
 }
 
+// if this happens, uh oh signalk was lost
 void sendRCLost() {
     Serial.println("L");
 }
 
+// if recieved, rc signal is back
 void sendRCRecovered() {
     Serial.println("R");
 }
 
+// send emerecny stop noti
 void sendEmergencyStop() {
     Serial.println("E");
 }
@@ -110,13 +125,13 @@ void processSerialInput() {
         char c = Serial.read();
         lastSerialRxTime = millis();
 
-        if (c == '\n' || c == '\r') {
+        if (c == '\n' || c == '\r') { // on new line, reset buffer and parse new message
             if (serialBufIndex > 0) {
                 serialBuffer[serialBufIndex] = '\0';
                 parseJetsonMessage(serialBuffer);
                 serialBufIndex = 0;
             }
-        } else if (serialBufIndex < 63) {
+        } else if (serialBufIndex < 63) { // otherwise, add add characher to current buffer
             serialBuffer[serialBufIndex++] = c;
         }
     }
@@ -127,7 +142,7 @@ void parseJetsonMessage(const char* msg) {
         jetsonConnected = true;
     }
     else if (msg[0] == 'Z') {
-        currentState = atoi(msg + 1);
+        currentState = atoi(msg + 1); // turns string into integer (ascii to int)
         jetsonConnected = true;
         if (currentState == 3) {
             digitalWrite(LED_PIN, HIGH);
@@ -140,6 +155,7 @@ void parseJetsonMessage(const char* msg) {
     }
 }
 
+// read rc value, wait up to 25ms
 int readRCChannel(int pin) {
     int pulse = pulseIn(pin, HIGH, 25000);
     if (pulse == 0) {
@@ -215,6 +231,7 @@ void writeServoWithHysteresis(Servo& servo, float position, int& lastOutput) {
     }
 }
 
+// map 1000-2000 us to -1000 to +1000
 int rcToSteering(float smoothedPulse) {
     int pulse = (int)(smoothedPulse + 0.5f);
     int centered = pulse - RC_CENTER;
@@ -231,7 +248,7 @@ void handleThrottleBrake(float smoothedCh2Val, float dt) {
     float targetThrottle = THROTTLE_NEUTRAL;
     float targetBrake = BRAKE_NEUTRAL;
 
-    if (ch2 < RC_MIN || ch2 > RC_MAX) {
+    if (ch2 < RC_MIN || ch2 > RC_MAX) { 
         targetThrottle = THROTTLE_NEUTRAL;
         targetBrake = BRAKE_NEUTRAL;
     } else {
@@ -313,7 +330,7 @@ void loop() {
         return;
     }
 
-    if (ch1Valid) {
+    if (ch1Valid) { // send steering val to ros2
         int steeringValue = rcToSteering((float)ch1Filtered);
 
         if (abs(steeringValue - lastSteeringValue) > STEERING_CHANGE_THRESHOLD) {

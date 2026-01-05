@@ -7,6 +7,28 @@
 #define BRAKE_PIN 45
 #define LED_PIN 4
 
+#define ENABLE_GEARSHIFT 1
+
+#if ENABLE_GEARSHIFT
+#define CH3_PIN 18
+#define GEAR_SERVO_PIN 46
+
+#define CH3_UP_THRESHOLD 1750
+#define CH3_DOWN_THRESHOLD 1250
+
+#define GEAR_LOW_POS 30
+#define GEAR_HIGH_POS 70
+#define GEAR_NEUTRAL_POS 110
+#define GEAR_REVERSE_POS 150
+
+#define MAX_GEAR_RATE 100.0f
+#define NUM_GEARS 4
+
+const int GEAR_SERVO_POSITIONS[NUM_GEARS] = {
+    GEAR_LOW_POS, GEAR_HIGH_POS, GEAR_NEUTRAL_POS, GEAR_REVERSE_POS
+};
+#endif
+
 // standard pwm signal vals
 #define RC_CENTER 1500
 #define RC_DEADZONE 60
@@ -30,10 +52,23 @@
 #define OUTPUT_HYSTERESIS 1
 #define MAX_THROTTLE_RATE 2000.0f
 #define MAX_BRAKE_RATE 2000.0f
-#define MEDIAN_FILTER_SIZE 5
+#define MEDIAN_FILTER_SIZE 7
 
 Servo throttle;
 Servo brake;
+
+#if ENABLE_GEARSHIFT
+enum GearState { GEAR_LOW = 0, GEAR_HIGH = 1, GEAR_NEUTRAL = 2, GEAR_REVERSE = 3 };
+enum Ch3Position { CH3_POS_UP, CH3_POS_CENTER, CH3_POS_DOWN };
+enum SwitchLatchState { LATCH_READY, LATCH_WAITING };
+
+Servo gearServo;
+GearState currentGear = GEAR_NEUTRAL;
+SwitchLatchState switchLatch = LATCH_READY;
+float currentGearPos = GEAR_NEUTRAL_POS;
+int lastGearOutput = GEAR_NEUTRAL_POS;
+int ch3Buffer[MEDIAN_FILTER_SIZE];
+#endif
 
 unsigned long lastHeartbeatTime = 0;
 unsigned long lastValidRCTime = 0;
@@ -65,13 +100,26 @@ void setup() {
     pinMode(CH1_PIN, INPUT);
     pinMode(CH2_PIN, INPUT);
     pinMode(LED_PIN, OUTPUT);
+#if ENABLE_GEARSHIFT
+    pinMode(CH3_PIN, INPUT);
+#endif
 
     // attach servos to their pins, write init vals
     throttle.attach(THROTTLE_PIN, 1000, 2000);
     brake.attach(BRAKE_PIN, 1000, 2000);
+#if ENABLE_GEARSHIFT
+    gearServo.attach(GEAR_SERVO_PIN, 1000, 2000);
+#endif
 
     throttle.write(THROTTLE_NEUTRAL);
     brake.write(BRAKE_NEUTRAL);
+#if ENABLE_GEARSHIFT
+    gearServo.write(GEAR_NEUTRAL_POS);
+    currentGear = GEAR_NEUTRAL;
+    currentGearPos = GEAR_NEUTRAL_POS;
+    lastGearOutput = GEAR_NEUTRAL_POS;
+    switchLatch = LATCH_READY;
+#endif
 
     Serial.begin(115200);
     while (true) {
@@ -85,6 +133,9 @@ void setup() {
     for (int i = 0; i < MEDIAN_FILTER_SIZE; i++) {
         ch1Buffer[i] = RC_CENTER;
         ch2Buffer[i] = RC_CENTER;
+#if ENABLE_GEARSHIFT
+        ch3Buffer[i] = RC_CENTER;
+#endif
     }
 
     // timestamp is curr time
@@ -191,13 +242,18 @@ int getMedian(int* buf, int size) {
     return sorted[size / 2];
 }
 
-void updateInputBuffer(int ch1Raw, int ch2Raw) {
+void updateInputBuffer(int ch1Raw, int ch2Raw, int ch3Raw) {
     if (isValidRC(ch1Raw)) {
         ch1Buffer[bufferIdx] = ch1Raw;
     }
     if (isValidRC(ch2Raw)) {
         ch2Buffer[bufferIdx] = ch2Raw;
     }
+#if ENABLE_GEARSHIFT
+    if (isValidRC(ch3Raw)) {
+        ch3Buffer[bufferIdx] = ch3Raw;
+    }
+#endif
     bufferIdx = (bufferIdx + 1) % MEDIAN_FILTER_SIZE;
     if (bufferIdx == 0) {
         bufferReady = true;
@@ -217,6 +273,65 @@ int getFilteredCh2() {
     }
     return getMedian(ch2Buffer, MEDIAN_FILTER_SIZE);
 }
+
+#if ENABLE_GEARSHIFT
+int getFilteredCh3() {
+    if (!bufferReady) return ch3Buffer[0];
+    return getMedian(ch3Buffer, MEDIAN_FILTER_SIZE);
+}
+
+Ch3Position getCh3Position(int pwmValue) {
+    if (pwmValue > CH3_UP_THRESHOLD) return CH3_POS_UP;
+    if (pwmValue < CH3_DOWN_THRESHOLD) return CH3_POS_DOWN;
+    return CH3_POS_CENTER;
+}
+
+void sendGearChange(GearState gear) {
+    Serial.print("G");
+    Serial.println((int)gear);
+    lastHeartbeatTime = millis();
+}
+
+void shiftGearForward() {
+    if (currentGear < GEAR_REVERSE) {
+        currentGear = (GearState)(currentGear + 1);
+        sendGearChange(currentGear);
+    }
+}
+
+void shiftGearBackward() {
+    if (currentGear > GEAR_LOW) {
+        currentGear = (GearState)(currentGear - 1);
+        sendGearChange(currentGear);
+    }
+}
+
+void processGearShift(int ch3Filtered, bool rcLostFlag) {
+    if (rcLostFlag) return;
+
+    Ch3Position pos = getCh3Position(ch3Filtered);
+
+    if (switchLatch == LATCH_READY) {
+        if (pos == CH3_POS_UP) {
+            shiftGearForward();
+            switchLatch = LATCH_WAITING;
+        } else if (pos == CH3_POS_DOWN) {
+            shiftGearBackward();
+            switchLatch = LATCH_WAITING;
+        }
+    } else {
+        if (pos == CH3_POS_CENTER) {
+            switchLatch = LATCH_READY;
+        }
+    }
+}
+
+void updateGearServo(float dt) {
+    float targetPos = (float)GEAR_SERVO_POSITIONS[currentGear];
+    currentGearPos = applyRateLimit(currentGearPos, targetPos, MAX_GEAR_RATE, dt);
+    writeServoWithHysteresis(gearServo, currentGearPos, lastGearOutput);
+}
+#endif
 
 float applyRateLimit(float current, float target, float maxRate, float dt) {
     float maxChange = maxRate * dt;
@@ -290,6 +405,13 @@ void safeState() {
     brake.write(BRAKE_MAX);
     lastThrottleOutput = THROTTLE_NEUTRAL;
     lastBrakeOutput = BRAKE_MAX;
+#if ENABLE_GEARSHIFT
+    currentGear = GEAR_NEUTRAL;
+    currentGearPos = GEAR_NEUTRAL_POS;
+    gearServo.write(GEAR_NEUTRAL_POS);
+    lastGearOutput = GEAR_NEUTRAL_POS;
+    switchLatch = LATCH_READY;
+#endif
     digitalWrite(LED_PIN, LOW);
 }
 
@@ -312,16 +434,31 @@ void loop() {
 
     int ch1Raw = readRCChannel(CH1_PIN);
     int ch2Raw = readRCChannel(CH2_PIN);
+#if ENABLE_GEARSHIFT
+    int ch3Raw = readRCChannel(CH3_PIN);
+#else
+    int ch3Raw = -1;
+#endif
 
-    updateInputBuffer(ch1Raw, ch2Raw);
+    updateInputBuffer(ch1Raw, ch2Raw, ch3Raw);
 
     int ch1Filtered = getFilteredCh1();
     int ch2Filtered = getFilteredCh2();
+#if ENABLE_GEARSHIFT
+    int ch3Filtered = getFilteredCh3();
+#endif
 
     bool ch1Valid = isValidRC(ch1Raw);
     bool ch2Valid = isValidRC(ch2Raw);
+#if ENABLE_GEARSHIFT
+    bool ch3Valid = isValidRC(ch3Raw);
+#endif
 
+#if ENABLE_GEARSHIFT
+    if (ch1Valid || ch2Valid || ch3Valid) {
+#else
     if (ch1Valid || ch2Valid) {
+#endif
         lastValidRCTime = now;
 
         if (rcLost) {
@@ -355,6 +492,13 @@ void loop() {
     }
 
     handleThrottleBrake((float)ch2Filtered, dt);
+
+#if ENABLE_GEARSHIFT
+    if (!rcLost) {
+        processGearShift(ch3Filtered, rcLost);
+    }
+    updateGearServo(dt);
+#endif
 
     delay(10);
 }

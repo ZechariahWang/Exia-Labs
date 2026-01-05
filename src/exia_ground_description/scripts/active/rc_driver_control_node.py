@@ -26,14 +26,14 @@ class State(IntEnum):
     ESTOP = 4
     ERROR = 5
 
-cur_lim = 25  # (was 10) increased for ATV steering torque demands
+cur_lim = 15  # (was 10) increased for ATV steering torque demands
 
 # param declaration
 @dataclass
 class ODriveConfig:
     vel_limit: float = 15.0  # (was 30.0) reduced - steering doesn't need high speed
     accel_limit: float = 1.0
-    current_limit: float = cur_lim  # now 25A (was 10A)
+    current_limit: float = cur_lim  # now 15A (was 10A)
     torque_limit: float = 0.01  # unused - only current limits matter for ODrive
     max_torque: float = 0.01  # unused - only current limits matter for ODrive
     position_gain: float = 20.0

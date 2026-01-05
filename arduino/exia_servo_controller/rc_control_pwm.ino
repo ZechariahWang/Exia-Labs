@@ -52,7 +52,7 @@ const int GEAR_SERVO_POSITIONS[NUM_GEARS] = {
 #define OUTPUT_HYSTERESIS 1
 #define MAX_THROTTLE_RATE 2000.0f
 #define MAX_BRAKE_RATE 2000.0f
-#define MEDIAN_FILTER_SIZE 7
+#define MEDIAN_FILTER_SIZE 3
 
 Servo throttle;
 Servo brake;

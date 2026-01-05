@@ -26,7 +26,7 @@ class State(IntEnum):
     ESTOP = 4
     ERROR = 5
 
-cur_lim = 15  # (was 10) increased for ATV steering torque demands
+cur_lim = 25  # (was 10) increased for ATV steering torque demands
 
 # param declaration
 @dataclass
@@ -63,6 +63,7 @@ class RCDriverControlNode(Node):
         self.last_command_time = time.monotonic()
         self.last_feedback_time = time.monotonic()
         self.anchor_position = 0.0
+        self.anchor_initialized = False
         self.current_target = 0.0
         self.smoothed_target = 0.0
         self.rc_lost = False
@@ -143,24 +144,11 @@ class RCDriverControlNode(Node):
                 timeout=0.1
             )
             self.get_logger().info(f'Serial connected: {self.serial_port}')
-            self.get_logger().info('Performing handshake with Arduino...')
-
+            time.sleep(1.0)
             self.serial_conn.reset_input_buffer()
-            for attempt in range(50):
-                self.serial_conn.write(b'C')
-                self.serial_conn.flush()
-                time.sleep(0.1)
-                if self.serial_conn.in_waiting > 0:
-                    response = self.serial_conn.readline().decode('utf-8', errors='ignore').strip()
-                    if response == 'READY':
-                        self.get_logger().info('Arduino handshake complete')
-                        self.serial_conn.timeout = 0.01
-                        return True
-
-            self.get_logger().error('Arduino handshake timeout')
-            self.serial_conn.close()
-            self.serial_conn = None
-            return False
+            self.serial_conn.timeout = 0.01
+            self.get_logger().info('Serial ready (no handshake)')
+            return True
         except Exception as e:
             self.get_logger().error(f'Serial connection failed: {e}')
             self.serial_conn = None
@@ -255,7 +243,7 @@ class RCDriverControlNode(Node):
                 return True
 
             self.axis.requested_state = AxisState.CLOSED_LOOP_CONTROL
-            timeout = 5.0
+            timeout = 2
             start = time.monotonic()
             while self.axis.current_state != AxisState.CLOSED_LOOP_CONTROL:
                 if time.monotonic() - start > timeout:
@@ -269,15 +257,19 @@ class RCDriverControlNode(Node):
             self.get_logger().error(f'ODrive calibration failed: {e}')
             return False
 
-    # motor pos when it arms, all motions relative to this location
-    def _set_anchor(self):
+    def _set_anchor(self, force=False):
         if self.axis is None:
+            return
+
+        if self.anchor_initialized and not force:
+            self.get_logger().info(f'Anchor already set at {self.anchor_position:.3f} rev, skipping')
             return
 
         try:
             self.anchor_position = self.axis.pos_estimate
             self.current_target = 0.0
             self.smoothed_target = 0.0
+            self.anchor_initialized = True
             self.get_logger().info(f'Anchor set at {self.anchor_position:.3f} rev')
         except Exception as e:
             self.get_logger().error(f'Failed to set anchor: {e}')
@@ -471,7 +463,7 @@ class RCDriverControlNode(Node):
             lines_read += 1
             self.get_logger().info(f'Serial RX: {line}')
 
-            cmd = self._parse_command(line)
+            cmd = self.parse_command(line)
             if cmd is None:
                 continue
 
@@ -542,12 +534,21 @@ class RCDriverControlNode(Node):
                 self._transition_state(State.ERROR)
 
         if self.state == State.ERROR:
-            if now - self.last_command_time > 5.0:
+            if now - self.last_command_time > 0.25:
                 self.get_logger().info('Attempting error recovery...')
-                if self._connect_odrive() and self._calibrate_odrive():
-                    self._set_anchor()
-                    self._transition_state(State.ARMED)
-                    self._write_serial('Z3')
+                try:
+                    if self.odrive is not None:
+                        self.odrive.clear_errors()
+                    if self._calibrate_odrive():
+                        self._set_anchor()
+                        self._transition_state(State.ARMED)
+                        self._write_serial('Z3')
+                except Exception as e:
+                    self.get_logger().warn(f'Quick recovery failed: {e}, trying full reconnect')
+                    if self._connect_odrive() and self._calibrate_odrive():
+                        self._set_anchor()
+                        self._transition_state(State.ARMED)
+                        self._write_serial('Z3')
 
     def _estop_callback(self, _request, response):
         self._emergency_stop()

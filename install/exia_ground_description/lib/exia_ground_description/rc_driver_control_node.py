@@ -17,6 +17,7 @@ try:
 except ImportError:
     ODRIVE_AVAILABLE = False
 
+# state map vals
 class State(IntEnum):
     IDLE = 0
     CONNECTING = 1
@@ -25,15 +26,16 @@ class State(IntEnum):
     ESTOP = 4
     ERROR = 5
 
-cur_lim = 10
+cur_lim = 15  # (was 10) increased for ATV steering torque demands
 
+# param declaration
 @dataclass
 class ODriveConfig:
-    vel_limit: float = 30.0
+    vel_limit: float = 15.0  # (was 30.0) reduced - steering doesn't need high speed
     accel_limit: float = 1.0
-    current_limit: float = cur_lim
-    torque_limit: float = 0.01
-    max_torque: float = 0.01
+    current_limit: float = cur_lim  # now 15A (was 10A)
+    torque_limit: float = 0.01  # unused - only current limits matter for ODrive
+    max_torque: float = 0.01  # unused - only current limits matter for ODrive
     position_gain: float = 20.0
     velocity_gain: float = 0.16
     velocity_integrator_gain: float = 0.32
@@ -44,12 +46,15 @@ class SafetyConfig:
     command_timeout: float = 0.5
     feedback_rate: float = 20.0
     control_rate: float = 50.0
-    ramp_rate: float = 20.0
-    smoothing_alpha: float = 0.15
+    ramp_rate: float = 10.0  # (was 20.0) slower ramp = less peak torque demand
+    smoothing_alpha: float = 0.1  # (was 0.15) more filtering = smoother commands
     scurve_sharpness: float = 3.0
 
 class RCDriverControlNode(Node):
     def __init__(self):
+
+        # init params, publishers and subscribers
+
         super().__init__('rc_driver_control_node')
 
         self._declare_parameters()
@@ -110,9 +115,9 @@ class RCDriverControlNode(Node):
         self.get_logger().info('RC Driver Control Node started')
 
     def _declare_parameters(self):
-        self.declare_parameter('serial_port', '/dev/ttyACM0')
+        self.declare_parameter('serial_port', '/dev/arduino_control')
         self.declare_parameter('baud_rate', 115200)
-        self.declare_parameter('vel_limit', 30.0)
+        self.declare_parameter('vel_limit', 15.0)  # (was 30.0)
         self.declare_parameter('accel_limit', 1.0)
         self.declare_parameter('current_limit', cur_lim)
         self.declare_parameter('torque_limit', 0.01)
@@ -124,28 +129,44 @@ class RCDriverControlNode(Node):
         self.declare_parameter('command_timeout', 0.5)
         self.declare_parameter('feedback_rate', 20.0)
         self.declare_parameter('control_rate', 50.0)
-        self.declare_parameter('ramp_rate', 20.0)
-        self.declare_parameter('smoothing_alpha', 0.15)
+        self.declare_parameter('ramp_rate', 10.0)  # (was 20.0)
+        self.declare_parameter('smoothing_alpha', 0.1)  # (was 0.15)
         self.declare_parameter('scurve_sharpness', 3.0)
         self.declare_parameter('turns_per_steering_rad', 1.0)
 
+    # init serial connection to arduino
     def _init_serial(self) -> bool:
         try:
             self.serial_conn = serial.Serial(
                 port=self.serial_port,
                 baudrate=self.baud_rate,
-                timeout=0.01
+                timeout=0.1
             )
             self.get_logger().info(f'Serial connected: {self.serial_port}')
-            self.get_logger().info('Waiting for Arduino to boot...')
-            time.sleep(2.0)
+            self.get_logger().info('Performing handshake with Arduino...')
+
             self.serial_conn.reset_input_buffer()
-            return True
+            for attempt in range(50):
+                self.serial_conn.write(b'C')
+                self.serial_conn.flush()
+                time.sleep(0.1)
+                if self.serial_conn.in_waiting > 0:
+                    response = self.serial_conn.readline().decode('utf-8', errors='ignore').strip()
+                    if response == 'READY':
+                        self.get_logger().info('Arduino handshake complete')
+                        self.serial_conn.timeout = 0.01
+                        return True
+
+            self.get_logger().error('Arduino handshake timeout')
+            self.serial_conn.close()
+            self.serial_conn = None
+            return False
         except Exception as e:
             self.get_logger().error(f'Serial connection failed: {e}')
             self.serial_conn = None
             return False
 
+    # read serial inputs
     def _read_serial(self) -> Optional[str]:
         if self.serial_conn is None:
             return None
@@ -166,6 +187,7 @@ class RCDriverControlNode(Node):
             self.get_logger().warn(f'Serial read error: {e}')
         return None
 
+    # Write to serial
     def _write_serial(self, msg: str) -> bool:
         if self.serial_conn is None:
             return False
@@ -179,6 +201,7 @@ class RCDriverControlNode(Node):
             self.get_logger().warn(f'Serial write error: {e}')
             return False
 
+    # Find odrive motor
     def _connect_odrive(self) -> bool:
         if not ODRIVE_AVAILABLE:
             self.get_logger().error('ODrive library not available')
@@ -200,6 +223,7 @@ class RCDriverControlNode(Node):
             self.get_logger().error(f'ODrive connection failed: {e}')
             return False
 
+    # config odrive settings, will need to ask later for more config settings
     def _configure_odrive(self):
         if self.axis is None:
             return
@@ -220,6 +244,7 @@ class RCDriverControlNode(Node):
         except Exception as e:
             self.get_logger().warn(f'ODrive configuration warning: {e}')
 
+    # calibrate o drive motor
     def _calibrate_odrive(self) -> bool:
         if self.axis is None:
             return False
@@ -244,6 +269,7 @@ class RCDriverControlNode(Node):
             self.get_logger().error(f'ODrive calibration failed: {e}')
             return False
 
+    # motor pos when it arms, all motions relative to this location
     def _set_anchor(self):
         if self.axis is None:
             return
@@ -256,6 +282,7 @@ class RCDriverControlNode(Node):
         except Exception as e:
             self.get_logger().error(f'Failed to set anchor: {e}')
 
+    # set the motor target pos
     def _command_position(self, normalized: float):
         if self.axis is None or self.state != State.ARMED:
             return
@@ -268,6 +295,7 @@ class RCDriverControlNode(Node):
 
         self.current_target = target_turns
 
+    # apply s curve motion profiling
     def _apply_ramp(self, dt: float):
         error = self.current_target - self.smoothed_target
 
@@ -290,6 +318,7 @@ class RCDriverControlNode(Node):
 
         self.smoothed_target += weighted_step
 
+    # send smoothed position to odrive
     def _send_to_odrive(self):
         if self.axis is None or self.state != State.ARMED:
             return
@@ -301,6 +330,7 @@ class RCDriverControlNode(Node):
             self.get_logger().error(f'ODrive command failed: {e}')
             self._transition_state(State.ERROR)
 
+    # read current odrive motor state
     def _get_feedback(self) -> dict:
         if self.axis is None:
             return {'pos': 0.0, 'vel': 0.0, 'err': 1}
@@ -320,7 +350,18 @@ class RCDriverControlNode(Node):
 
         try:
             if self.axis.active_errors != 0:
-                self.get_logger().error(f'ODrive errors: 0x{self.axis.active_errors:X}')
+                err = self.axis.active_errors
+                self.get_logger().error(f'ODrive error: 0x{err:08X}')
+                if err & 0x800:
+                    self.get_logger().error('  -> SPINOUT_DETECTED (position error too large)')
+                if err & 0x1000:
+                    self.get_logger().error('  -> CURRENT_LIMIT_VIOLATION')
+                if err & 0x20:
+                    self.get_logger().error('  -> DRV_FAULT (driver chip fault)')
+                if err & 0x40:
+                    self.get_logger().error('  -> MISSING_INPUT')
+                if err & 0x08:
+                    self.get_logger().error('  -> MISSING_ESTIMATE')
                 return False
             if not self.axis.is_armed:
                 self.get_logger().warn('ODrive disarmed')
@@ -377,7 +418,8 @@ class RCDriverControlNode(Node):
             msg.data = new_state.name
             self.state_pub.publish(msg)
 
-    def _parse_command(self, msg: str) -> Optional[dict]:
+    # parse the type of serial command
+    def parse_command(self, msg: str) -> Optional[dict]:
         if not msg:
             return None
 
@@ -401,11 +443,13 @@ class RCDriverControlNode(Node):
         return None
 
     def _control_loop(self):
+        # first , try to connect the odrive motor
         if self.state == State.CONNECTING:
             if self._connect_odrive():
                 self._transition_state(State.CALIBRATING)
             return
 
+        # lessgo, motor connected nex calibrate
         if self.state == State.CALIBRATING:
             if self._calibrate_odrive():
                 self._set_anchor()
@@ -418,6 +462,7 @@ class RCDriverControlNode(Node):
         if self.state not in [State.ARMED, State.ESTOP]:
             return
 
+        # once connected and calibrated start reading serial commands from arduino
         lines_read = 0
         while True:
             line = self._read_serial()
@@ -432,6 +477,7 @@ class RCDriverControlNode(Node):
 
             self.last_command_time = time.monotonic()
 
+            # depending on the serial input timek, execute the command
             if cmd['type'] == 'steering':
                 if self.state == State.ARMED:
                     normalized = cmd['value'] / 1000.0
@@ -464,6 +510,7 @@ class RCDriverControlNode(Node):
             pos_msg.data = self.smoothed_target
             self.steering_pub.publish(pos_msg)
 
+    # reads the current info from the motor, and return it
     def _feedback_loop(self):
         if self.state not in [State.ARMED, State.ESTOP]:
             return
@@ -477,6 +524,7 @@ class RCDriverControlNode(Node):
         self._write_serial(msg)
         self.last_feedback_time = time.monotonic()
 
+    # monitors motor status, and attempts recovery if needed
     def _watchdog_callback(self):
         now = time.monotonic()
 

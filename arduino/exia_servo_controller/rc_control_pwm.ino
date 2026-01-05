@@ -5,27 +5,26 @@
 #define CH2_PIN 3
 #define THROTTLE_PIN 44
 #define BRAKE_PIN 45
-#define LED_PIN 4
+#define LED_PIN 21
 
 #define ENABLE_GEARSHIFT 1
 
 #if ENABLE_GEARSHIFT
-#define CH3_PIN 18
+#define CH3_PIN 4
 #define GEAR_SERVO_PIN 46
 
 #define CH3_UP_THRESHOLD 1750
 #define CH3_DOWN_THRESHOLD 1250
 
-#define GEAR_LOW_POS 30
-#define GEAR_HIGH_POS 70
-#define GEAR_NEUTRAL_POS 110
-#define GEAR_REVERSE_POS 150
+#define GEAR_HIGH_POS 110
+#define GEAR_NEUTRAL_POS 80
+#define GEAR_REVERSE_POS 57
 
 #define MAX_GEAR_RATE 100.0f
-#define NUM_GEARS 4
+#define NUM_GEARS 3
 
 const int GEAR_SERVO_POSITIONS[NUM_GEARS] = {
-    GEAR_LOW_POS, GEAR_HIGH_POS, GEAR_NEUTRAL_POS, GEAR_REVERSE_POS
+    GEAR_REVERSE_POS, GEAR_NEUTRAL_POS, GEAR_HIGH_POS
 };
 #endif
 
@@ -40,6 +39,7 @@ const int GEAR_SERVO_POSITIONS[NUM_GEARS] = {
 #define THROTTLE_MAX 75
 #define BRAKE_NEUTRAL 180
 #define BRAKE_MAX 80
+#define BRAKE_THRESHOLD_FOR_SHIFT 140
 
 // timing constants
 #define HEARTBEAT_MS 100
@@ -58,7 +58,7 @@ Servo throttle;
 Servo brake;
 
 #if ENABLE_GEARSHIFT
-enum GearState { GEAR_LOW = 0, GEAR_HIGH = 1, GEAR_NEUTRAL = 2, GEAR_REVERSE = 3 };
+enum GearState { GEAR_REVERSE = 0, GEAR_NEUTRAL = 1, GEAR_HIGH = 2 };
 enum Ch3Position { CH3_POS_UP, CH3_POS_CENTER, CH3_POS_DOWN };
 enum SwitchLatchState { LATCH_READY, LATCH_WAITING };
 
@@ -122,12 +122,15 @@ void setup() {
 #endif
 
     Serial.begin(115200);
-    while (true) {
-        if (Serial.available() && Serial.read() == 'C') {
-            break;
-        }
-        delay(100);
-    }
+    delay(1000);
+    Serial.println("READY");
+    // Handshake bypassed for testing
+    // while (true) {
+    //     if (Serial.available() && Serial.read() == 'C') {
+    //         break;
+    //     }
+    //     delay(100);
+    // }
 
     // prefill buffer values
     for (int i = 0; i < MEDIAN_FILTER_SIZE; i++) {
@@ -281,8 +284,8 @@ int getFilteredCh3() {
 }
 
 Ch3Position getCh3Position(int pwmValue) {
-    if (pwmValue > CH3_UP_THRESHOLD) return CH3_POS_UP;
-    if (pwmValue < CH3_DOWN_THRESHOLD) return CH3_POS_DOWN;
+    if (pwmValue < CH3_DOWN_THRESHOLD) return CH3_POS_UP;
+    if (pwmValue > CH3_UP_THRESHOLD) return CH3_POS_DOWN;
     return CH3_POS_CENTER;
 }
 
@@ -293,29 +296,36 @@ void sendGearChange(GearState gear) {
 }
 
 void shiftGearForward() {
-    if (currentGear < GEAR_REVERSE) {
+    if (currentGear < GEAR_HIGH) {
         currentGear = (GearState)(currentGear + 1);
         sendGearChange(currentGear);
     }
 }
 
 void shiftGearBackward() {
-    if (currentGear > GEAR_LOW) {
+    if (currentGear > GEAR_REVERSE) {
         currentGear = (GearState)(currentGear - 1);
         sendGearChange(currentGear);
     }
 }
 
+bool isBrakeEngaged() {
+    return currentBrakePos < BRAKE_THRESHOLD_FOR_SHIFT;
+}
+
 void processGearShift(int ch3Filtered, bool rcLostFlag) {
     if (rcLostFlag) return;
+
+    String val = String(ch3Filtered);
+    Serial.println(val);
 
     Ch3Position pos = getCh3Position(ch3Filtered);
 
     if (switchLatch == LATCH_READY) {
-        if (pos == CH3_POS_UP) {
+        if (pos == CH3_POS_UP && isBrakeEngaged()) {
             shiftGearForward();
             switchLatch = LATCH_WAITING;
-        } else if (pos == CH3_POS_DOWN) {
+        } else if (pos == CH3_POS_DOWN && isBrakeEngaged()) {
             shiftGearBackward();
             switchLatch = LATCH_WAITING;
         }
@@ -452,6 +462,15 @@ void loop() {
     bool ch2Valid = isValidRC(ch2Raw);
 #if ENABLE_GEARSHIFT
     bool ch3Valid = isValidRC(ch3Raw);
+
+    Serial.print("CH3:");
+    Serial.print(ch3Raw);
+    Serial.print(" F:");
+    Serial.print(ch3Filtered);
+    Serial.print(" G:");
+    Serial.print(currentGear);
+    Serial.print(" L:");
+    Serial.println(switchLatch);
 #endif
 
 #if ENABLE_GEARSHIFT

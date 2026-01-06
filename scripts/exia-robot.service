@@ -1,6 +1,6 @@
 [Unit]
 Description=Exia Ground Robot RC Driver Control
-After=network.target
+After=network.target local-fs.target
 Wants=network.target
 
 [Service]
@@ -15,7 +15,7 @@ StandardOutput=journal
 StandardError=journal
 
 Environment="HOME=/home/exialabsargus"
-Environment="PATH=/usr/local/bin:/usr/bin:/bin:/home/exialabsargus/.local/bin"
+Environment="PATH=/home/exialabsargus/bin:/usr/local/bin:/usr/bin:/bin:/home/exialabsargus/.local/bin"
 
 [Install]
 WantedBy=multi-user.target

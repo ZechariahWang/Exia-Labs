@@ -26,7 +26,7 @@ class State(IntEnum):
     ESTOP = 4
     ERROR = 5
 
-cur_lim = 25  # (was 10) increased for ATV steering torque demands
+cur_lim = 20  # (was 10) increased for ATV steering torque demands
 
 # param declaration
 @dataclass
@@ -43,7 +43,7 @@ class ODriveConfig:
 @dataclass
 class SafetyConfig:
     max_position: float = 6
-    command_timeout: float = 0.5
+    command_timeout: float = 1.0
     feedback_rate: float = 20.0
     control_rate: float = 50.0
     ramp_rate: float = 10.0  # (was 20.0) slower ramp = less peak torque demand
@@ -62,6 +62,8 @@ class RCDriverControlNode(Node):
         self.state = State.IDLE
         self.last_command_time = time.monotonic()
         self.last_feedback_time = time.monotonic()
+        self.armed_time = 0.0
+        self.startup_grace_period = 180.0
         self.anchor_position = 0.0
         self.anchor_initialized = False
         self.current_target = 0.0
@@ -127,7 +129,7 @@ class RCDriverControlNode(Node):
         self.declare_parameter('velocity_gain', 0.16)
         self.declare_parameter('velocity_integrator_gain', 0.32)
         self.declare_parameter('max_position', 6)
-        self.declare_parameter('command_timeout', 0.5)
+        self.declare_parameter('command_timeout', 1.0)
         self.declare_parameter('feedback_rate', 20.0)
         self.declare_parameter('control_rate', 50.0)
         self.declare_parameter('ramp_rate', 10.0)  # (was 20.0)
@@ -405,6 +407,7 @@ class RCDriverControlNode(Node):
 
             if new_state == State.ARMED:
                 self.last_command_time = time.monotonic()
+                self.armed_time = time.monotonic()
 
             msg = String()
             msg.data = new_state.name
@@ -521,8 +524,11 @@ class RCDriverControlNode(Node):
         now = time.monotonic()
 
         if self.state == State.ARMED:
+            time_since_armed = now - self.armed_time
+            in_grace_period = time_since_armed < self.startup_grace_period
+
             time_since_cmd = now - self.last_command_time
-            if time_since_cmd > self.safety_config.command_timeout:
+            if time_since_cmd > self.safety_config.command_timeout and not in_grace_period:
                 if not hasattr(self, '_timeout_warned') or not self._timeout_warned:
                     self.get_logger().warn(f'Command timeout ({time_since_cmd:.2f}s) - entering safe state')
                     self._timeout_warned = True

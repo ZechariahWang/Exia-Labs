@@ -68,8 +68,8 @@ global_costmap:
       global_frame: map                       # SLAM-based (was: odom)
       robot_base_frame: base_footprint
       rolling_window: true                    # Rolling window in map frame
-      width: 50                               # Larger for goal-based planning
-      height: 50
+      width: 100                              # Large enough for goal (24,24) ~34m away
+      height: 100
       resolution: 0.1                         # Coarser for faster planning
       track_unknown_space: false              # Unknown = free for planning
       footprint: "[[1.05, 0.60], [1.05, -0.60], [-1.05, -0.60], [-1.05, 0.60]]"

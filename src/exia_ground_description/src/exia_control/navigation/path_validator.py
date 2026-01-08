@@ -258,12 +258,10 @@ class PathValidator:
         grid_x = int((x - info.origin.position.x) / info.resolution)
         grid_y = int((y - info.origin.position.y) / info.resolution)
 
-        # Bounds check
         if 0 <= grid_x < info.width and 0 <= grid_y < info.height:
             return int(self._costmap_data[grid_y, grid_x])
 
-        # Out of bounds - treat as unknown
-        return self.UNKNOWN_VALUE
+        return 0
 
     def _transform_footprint(self, x: float, y: float,
                             yaw: float) -> List[Tuple[float, float]]:

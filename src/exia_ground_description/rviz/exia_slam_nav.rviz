@@ -92,6 +92,8 @@ Visualization Manager:
           Value: false
         lidar_link:
           Value: true
+        lidar_3d_link:
+          Value: true
         map:
           Value: true
         odom:
@@ -307,6 +309,52 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /odom
       Value: true
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: rgb
+      Class: rviz_default_plugins/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: RGB8
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: 3D Lidar Points
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.05
+      Style: Points
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /points
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: OctoMap
+      Namespaces:
+        {}
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /occupied_cells_vis_array
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -352,20 +400,26 @@ Visualization Manager:
   Value: true
   Views:
     Current:
-      Class: rviz_default_plugins/TopDownOrtho
+      Class: rviz_default_plugins/ThirdPersonFollower
+      Distance: 12
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.06
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
+      Focal Point:
+        X: 0
+        Y: 0
+        Z: 0
+      Focal Shape Fixed Size: true
+      Focal Shape Size: 0.05
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.01
-      Scale: 15
+      Pitch: 0.5
       Target Frame: base_link
-      Value: TopDownOrtho (rviz_default_plugins)
-      X: 0
-      Y: 0
+      Value: ThirdPersonFollower (rviz_default_plugins)
+      Yaw: 3.14159
     Saved: ~
 Window Geometry:
   Displays:

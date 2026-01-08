@@ -1,0 +1,1274 @@
+<?xml version="1.0" ?>
+<sdf version="1.8">
+  <world name="hills_world">
+    <physics name="1ms" type="ignored">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+    <plugin filename="gz-sim-contact-system" name="gz::sim::systems::Contact"/>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
+
+    <gui fullscreen="0">
+      <plugin filename="GzScene3D" name="3D View">
+        <gz-gui>
+          <title>3D View</title>
+          <property type="bool" key="showTitleBar">false</property>
+        </gz-gui>
+        <engine>ogre2</engine>
+        <scene>scene</scene>
+        <ambient_light>0.4 0.5 0.4</ambient_light>
+        <background_color>0.6 0.7 0.85</background_color>
+        <camera_pose>0 0 50 0 1.5708 0</camera_pose>
+      </plugin>
+      <plugin filename="WorldControl" name="World control">
+        <gz-gui><title>World control</title></gz-gui>
+        <play_pause>true</play_pause>
+        <step>true</step>
+      </plugin>
+      <plugin filename="WorldStats" name="World stats">
+        <gz-gui><title>World stats</title></gz-gui>
+        <sim_time>true</sim_time>
+        <real_time>true</real_time>
+        <real_time_factor>true</real_time_factor>
+      </plugin>
+    </gui>
+
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 50 0 0 0</pose>
+      <diffuse>0.8 0.8 0.75 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <attenuation>
+        <range>1000</range>
+        <constant>0.9</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <direction>-0.3 0.15 -0.9</direction>
+    </light>
+
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>100 100</size>
+            </plane>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>100 100</size>
+            </plane>
+          </geometry>
+          <material>
+            <ambient>0.3 0.5 0.25 1</ambient>
+            <diffuse>0.3 0.5 0.25 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="hill_ne">
+      <static>true</static>
+      <pose>12 12 1.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>12 12 3</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>12 12 3</size></box></geometry>
+          <material><ambient>0.35 0.55 0.3 1</ambient><diffuse>0.35 0.55 0.3 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="hill_nw">
+      <static>true</static>
+      <pose>-12 12 2.0 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>10 14 4</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>10 14 4</size></box></geometry>
+          <material><ambient>0.32 0.52 0.28 1</ambient><diffuse>0.32 0.52 0.28 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="hill_se">
+      <static>true</static>
+      <pose>12 -12 1.25 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>14 10 2.5</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>14 10 2.5</size></box></geometry>
+          <material><ambient>0.38 0.58 0.32 1</ambient><diffuse>0.38 0.58 0.32 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="hill_sw">
+      <static>true</static>
+      <pose>-12 -12 1.75 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>12 12 3.5</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>12 12 3.5</size></box></geometry>
+          <material><ambient>0.34 0.54 0.29 1</ambient><diffuse>0.34 0.54 0.29 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="ridge_north">
+      <static>true</static>
+      <pose>0 20 1.25 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>20 6 2.5</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>20 6 2.5</size></box></geometry>
+          <material><ambient>0.36 0.56 0.31 1</ambient><diffuse>0.36 0.56 0.31 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="ridge_south">
+      <static>true</static>
+      <pose>0 -20 1.0 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>18 5 2</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>18 5 2</size></box></geometry>
+          <material><ambient>0.33 0.53 0.28 1</ambient><diffuse>0.33 0.53 0.28 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_perimeter_000">
+      <static>true</static>
+      <pose>7.28 -22.82 2.82 0 0 3.84</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.29</radius><length>5.65</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.29</radius><length>5.65</length></cylinder></geometry>
+          <material><ambient>0.41 0.20 0.10 1</ambient><diffuse>0.41 0.20 0.10 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_perimeter_001">
+      <static>true</static>
+      <pose>18.64 16.45 2.61 0 0 4.56</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.33</radius><length>5.22</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.33</radius><length>5.22</length></cylinder></geometry>
+          <material><ambient>0.42 0.23 0.15 1</ambient><diffuse>0.42 0.23 0.15 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_perimeter_002">
+      <static>true</static>
+      <pose>15.74 20.42 2.85 0 0 5.47</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.33</radius><length>5.70</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.33</radius><length>5.70</length></cylinder></geometry>
+          <material><ambient>0.43 0.25 0.16 1</ambient><diffuse>0.43 0.25 0.16 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_perimeter_003">
+      <static>true</static>
+      <pose>27.30 4.92 2.81 0 0 5.49</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.28</radius><length>5.63</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.28</radius><length>5.63</length></cylinder></geometry>
+          <material><ambient>0.35 0.27 0.16 1</ambient><diffuse>0.35 0.27 0.16 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_perimeter_004">
+      <static>true</static>
+      <pose>-26.99 -1.24 2.32 0 0 4.50</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.28</radius><length>4.64</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.28</radius><length>4.64</length></cylinder></geometry>
+          <material><ambient>0.37 0.28 0.18 1</ambient><diffuse>0.37 0.28 0.18 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_perimeter_005">
+      <static>true</static>
+      <pose>22.77 13.89 2.20 0 0 1.74</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.33</radius><length>4.41</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.33</radius><length>4.41</length></cylinder></geometry>
+          <material><ambient>0.49 0.21 0.15 1</ambient><diffuse>0.49 0.21 0.15 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_perimeter_006">
+      <static>true</static>
+      <pose>8.06 20.99 2.56 0 0 0.54</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.28</radius><length>5.12</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.28</radius><length>5.12</length></cylinder></geometry>
+          <material><ambient>0.38 0.26 0.17 1</ambient><diffuse>0.38 0.26 0.17 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_perimeter_007">
+      <static>true</static>
+      <pose>-24.24 10.01 2.84 0 0 3.01</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.26</radius><length>5.68</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.26</radius><length>5.68</length></cylinder></geometry>
+          <material><ambient>0.39 0.25 0.14 1</ambient><diffuse>0.39 0.25 0.14 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_perimeter_008">
+      <static>true</static>
+      <pose>26.27 -2.97 2.85 0 0 2.41</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.36</radius><length>5.70</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.36</radius><length>5.70</length></cylinder></geometry>
+          <material><ambient>0.41 0.25 0.14 1</ambient><diffuse>0.41 0.25 0.14 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_perimeter_009">
+      <static>true</static>
+      <pose>20.49 13.91 2.78 0 0 0.77</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.26</radius><length>5.56</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.26</radius><length>5.56</length></cylinder></geometry>
+          <material><ambient>0.42 0.23 0.18 1</ambient><diffuse>0.42 0.23 0.18 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_perimeter_010">
+      <static>true</static>
+      <pose>-22.00 -5.35 2.78 0 0 6.00</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.32</radius><length>5.55</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.32</radius><length>5.55</length></cylinder></geometry>
+          <material><ambient>0.46 0.23 0.15 1</ambient><diffuse>0.46 0.23 0.15 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_perimeter_011">
+      <static>true</static>
+      <pose>-21.52 -7.30 2.06 0 0 4.64</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.39</radius><length>4.11</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.39</radius><length>4.11</length></cylinder></geometry>
+          <material><ambient>0.38 0.28 0.10 1</ambient><diffuse>0.38 0.28 0.10 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_perimeter_012">
+      <static>true</static>
+      <pose>15.38 -23.21 2.95 0 0 6.08</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.36</radius><length>5.89</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.36</radius><length>5.89</length></cylinder></geometry>
+          <material><ambient>0.43 0.28 0.16 1</ambient><diffuse>0.43 0.28 0.16 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_perimeter_013">
+      <static>true</static>
+      <pose>-22.87 -4.51 2.74 0 0 5.33</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.32</radius><length>5.48</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.32</radius><length>5.48</length></cylinder></geometry>
+          <material><ambient>0.41 0.21 0.12 1</ambient><diffuse>0.41 0.21 0.12 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_perimeter_014">
+      <static>true</static>
+      <pose>2.82 -24.14 2.04 0 0 4.69</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.39</radius><length>4.07</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.39</radius><length>4.07</length></cylinder></geometry>
+          <material><ambient>0.50 0.22 0.15 1</ambient><diffuse>0.50 0.22 0.15 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_perimeter_015">
+      <static>true</static>
+      <pose>-22.23 0.59 2.99 0 0 4.90</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.30</radius><length>5.98</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.30</radius><length>5.98</length></cylinder></geometry>
+          <material><ambient>0.40 0.22 0.18 1</ambient><diffuse>0.40 0.22 0.18 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_perimeter_016">
+      <static>true</static>
+      <pose>20.60 18.84 2.69 0 0 0.73</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.39</radius><length>5.38</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.39</radius><length>5.38</length></cylinder></geometry>
+          <material><ambient>0.40 0.26 0.15 1</ambient><diffuse>0.40 0.26 0.15 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_perimeter_017">
+      <static>true</static>
+      <pose>23.31 8.55 2.10 0 0 5.96</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.35</radius><length>4.19</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.35</radius><length>4.19</length></cylinder></geometry>
+          <material><ambient>0.42 0.24 0.12 1</ambient><diffuse>0.42 0.24 0.12 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_perimeter_018">
+      <static>true</static>
+      <pose>-6.73 21.52 2.92 0 0 5.13</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.38</radius><length>5.83</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.38</radius><length>5.83</length></cylinder></geometry>
+          <material><ambient>0.36 0.20 0.14 1</ambient><diffuse>0.36 0.20 0.14 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_perimeter_019">
+      <static>true</static>
+      <pose>23.51 -12.23 2.06 0 0 5.05</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.34</radius><length>4.12</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.34</radius><length>4.12</length></cylinder></geometry>
+          <material><ambient>0.39 0.25 0.11 1</ambient><diffuse>0.39 0.25 0.11 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_perimeter_020">
+      <static>true</static>
+      <pose>-26.38 3.09 2.03 0 0 1.76</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.36</radius><length>4.05</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.36</radius><length>4.05</length></cylinder></geometry>
+          <material><ambient>0.49 0.29 0.11 1</ambient><diffuse>0.49 0.29 0.11 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_perimeter_021">
+      <static>true</static>
+      <pose>22.50 1.16 2.11 0 0 6.00</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.39</radius><length>4.23</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.39</radius><length>4.23</length></cylinder></geometry>
+          <material><ambient>0.42 0.21 0.14 1</ambient><diffuse>0.42 0.21 0.14 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_perimeter_022">
+      <static>true</static>
+      <pose>-19.18 15.81 2.14 0 0 6.04</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.38</radius><length>4.27</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.38</radius><length>4.27</length></cylinder></geometry>
+          <material><ambient>0.38 0.28 0.19 1</ambient><diffuse>0.38 0.28 0.19 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_perimeter_023">
+      <static>true</static>
+      <pose>-1.93 26.56 2.16 0 0 5.75</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.26</radius><length>4.33</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.26</radius><length>4.33</length></cylinder></geometry>
+          <material><ambient>0.46 0.29 0.11 1</ambient><diffuse>0.46 0.29 0.11 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_perimeter_024">
+      <static>true</static>
+      <pose>27.41 4.36 2.50 0 0 4.36</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.29</radius><length>5.00</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.29</radius><length>5.00</length></cylinder></geometry>
+          <material><ambient>0.49 0.25 0.10 1</ambient><diffuse>0.49 0.25 0.10 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_perimeter_025">
+      <static>true</static>
+      <pose>-20.23 19.20 2.60 0 0 1.82</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.36</radius><length>5.20</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.36</radius><length>5.20</length></cylinder></geometry>
+          <material><ambient>0.42 0.24 0.17 1</ambient><diffuse>0.42 0.24 0.17 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_perimeter_026">
+      <static>true</static>
+      <pose>-23.56 1.55 2.10 0 0 1.09</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.38</radius><length>4.21</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.38</radius><length>4.21</length></cylinder></geometry>
+          <material><ambient>0.35 0.27 0.20 1</ambient><diffuse>0.35 0.27 0.20 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_perimeter_027">
+      <static>true</static>
+      <pose>-17.14 -16.47 2.45 0 0 3.04</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.29</radius><length>4.91</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.29</radius><length>4.91</length></cylinder></geometry>
+          <material><ambient>0.45 0.27 0.17 1</ambient><diffuse>0.45 0.27 0.17 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_perimeter_028">
+      <static>true</static>
+      <pose>9.54 23.70 2.02 0 0 4.99</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.26</radius><length>4.04</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.26</radius><length>4.04</length></cylinder></geometry>
+          <material><ambient>0.35 0.27 0.14 1</ambient><diffuse>0.35 0.27 0.14 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_perimeter_029">
+      <static>true</static>
+      <pose>14.22 17.49 2.51 0 0 2.43</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.38</radius><length>5.02</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.38</radius><length>5.02</length></cylinder></geometry>
+          <material><ambient>0.47 0.21 0.19 1</ambient><diffuse>0.47 0.21 0.19 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_scatter_000">
+      <static>true</static>
+      <pose>5.50 -0.45 2.33 0 0 5.10</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.22</radius><length>4.66</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.22</radius><length>4.66</length></cylinder></geometry>
+          <material><ambient>0.48 0.29 0.12 1</ambient><diffuse>0.48 0.29 0.12 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_scatter_001">
+      <static>true</static>
+      <pose>6.70 2.26 2.41 0 0 3.73</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.28</radius><length>4.82</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.28</radius><length>4.82</length></cylinder></geometry>
+          <material><ambient>0.49 0.25 0.17 1</ambient><diffuse>0.49 0.25 0.17 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_scatter_002">
+      <static>true</static>
+      <pose>7.41 2.26 2.42 0 0 0.66</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.30</radius><length>4.85</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.30</radius><length>4.85</length></cylinder></geometry>
+          <material><ambient>0.45 0.20 0.15 1</ambient><diffuse>0.45 0.20 0.15 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_scatter_003">
+      <static>true</static>
+      <pose>6.70 2.40 2.26 0 0 0.17</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.21</radius><length>4.52</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.21</radius><length>4.52</length></cylinder></geometry>
+          <material><ambient>0.40 0.21 0.13 1</ambient><diffuse>0.40 0.21 0.13 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_scatter_004">
+      <static>true</static>
+      <pose>-5.52 1.66 2.38 0 0 0.81</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.35</radius><length>4.75</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.35</radius><length>4.75</length></cylinder></geometry>
+          <material><ambient>0.45 0.25 0.18 1</ambient><diffuse>0.45 0.25 0.18 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_scatter_005">
+      <static>true</static>
+      <pose>-5.00 -0.13 2.39 0 0 5.09</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.31</radius><length>4.78</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.31</radius><length>4.78</length></cylinder></geometry>
+          <material><ambient>0.46 0.26 0.15 1</ambient><diffuse>0.46 0.26 0.15 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_scatter_006">
+      <static>true</static>
+      <pose>-7.85 0.03 2.43 0 0 4.84</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.26</radius><length>4.87</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.26</radius><length>4.87</length></cylinder></geometry>
+          <material><ambient>0.41 0.24 0.14 1</ambient><diffuse>0.41 0.24 0.14 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_scatter_007">
+      <static>true</static>
+      <pose>2.82 10.25 2.33 0 0 0.16</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.33</radius><length>4.66</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.33</radius><length>4.66</length></cylinder></geometry>
+          <material><ambient>0.38 0.26 0.14 1</ambient><diffuse>0.38 0.26 0.14 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_scatter_008">
+      <static>true</static>
+      <pose>2.55 6.65 2.07 0 0 2.68</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.22</radius><length>4.14</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.22</radius><length>4.14</length></cylinder></geometry>
+          <material><ambient>0.36 0.22 0.19 1</ambient><diffuse>0.36 0.22 0.19 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_scatter_009">
+      <static>true</static>
+      <pose>2.58 9.18 2.41 0 0 5.03</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.23</radius><length>4.82</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.23</radius><length>4.82</length></cylinder></geometry>
+          <material><ambient>0.40 0.29 0.16 1</ambient><diffuse>0.40 0.29 0.16 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_scatter_010">
+      <static>true</static>
+      <pose>0.37 -6.94 2.01 0 0 4.70</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.21</radius><length>4.02</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.21</radius><length>4.02</length></cylinder></geometry>
+          <material><ambient>0.37 0.30 0.15 1</ambient><diffuse>0.37 0.30 0.15 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_scatter_011">
+      <static>true</static>
+      <pose>1.32 -7.48 2.41 0 0 0.87</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.30</radius><length>4.82</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.30</radius><length>4.82</length></cylinder></geometry>
+          <material><ambient>0.36 0.21 0.10 1</ambient><diffuse>0.36 0.21 0.10 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_scatter_012">
+      <static>true</static>
+      <pose>-1.37 -10.03 2.03 0 0 4.88</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.35</radius><length>4.06</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.35</radius><length>4.06</length></cylinder></geometry>
+          <material><ambient>0.47 0.23 0.13 1</ambient><diffuse>0.47 0.23 0.13 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_scatter_013">
+      <static>true</static>
+      <pose>0.09 -7.26 2.04 0 0 5.73</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.34</radius><length>4.09</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.34</radius><length>4.09</length></cylinder></geometry>
+          <material><ambient>0.38 0.29 0.18 1</ambient><diffuse>0.38 0.29 0.18 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_scatter_014">
+      <static>true</static>
+      <pose>13.80 14.16 2.37 0 0 2.57</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.30</radius><length>4.74</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.30</radius><length>4.74</length></cylinder></geometry>
+          <material><ambient>0.42 0.24 0.14 1</ambient><diffuse>0.42 0.24 0.14 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_scatter_015">
+      <static>true</static>
+      <pose>12.03 14.70 2.25 0 0 4.42</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.33</radius><length>4.50</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.33</radius><length>4.50</length></cylinder></geometry>
+          <material><ambient>0.45 0.30 0.11 1</ambient><diffuse>0.45 0.30 0.11 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_scatter_016">
+      <static>true</static>
+      <pose>16.73 15.20 2.21 0 0 1.94</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.32</radius><length>4.43</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.32</radius><length>4.43</length></cylinder></geometry>
+          <material><ambient>0.43 0.28 0.20 1</ambient><diffuse>0.43 0.28 0.20 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_scatter_017">
+      <static>true</static>
+      <pose>12.66 14.26 2.46 0 0 5.15</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.22</radius><length>4.92</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.22</radius><length>4.92</length></cylinder></geometry>
+          <material><ambient>0.36 0.28 0.12 1</ambient><diffuse>0.36 0.28 0.12 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_scatter_018">
+      <static>true</static>
+      <pose>-13.16 16.91 2.32 0 0 2.71</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.34</radius><length>4.63</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.34</radius><length>4.63</length></cylinder></geometry>
+          <material><ambient>0.36 0.20 0.14 1</ambient><diffuse>0.36 0.20 0.14 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_scatter_019">
+      <static>true</static>
+      <pose>-13.05 15.26 2.03 0 0 5.51</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.30</radius><length>4.07</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.30</radius><length>4.07</length></cylinder></geometry>
+          <material><ambient>0.39 0.20 0.17 1</ambient><diffuse>0.39 0.20 0.17 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_scatter_020">
+      <static>true</static>
+      <pose>-14.70 17.94 2.36 0 0 1.75</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.26</radius><length>4.71</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.26</radius><length>4.71</length></cylinder></geometry>
+          <material><ambient>0.36 0.22 0.19 1</ambient><diffuse>0.36 0.22 0.19 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_scatter_021">
+      <static>true</static>
+      <pose>-16.93 14.89 2.38 0 0 5.66</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.28</radius><length>4.77</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.28</radius><length>4.77</length></cylinder></geometry>
+          <material><ambient>0.42 0.25 0.17 1</ambient><diffuse>0.42 0.25 0.17 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_scatter_022">
+      <static>true</static>
+      <pose>13.95 -16.62 2.22 0 0 2.15</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.27</radius><length>4.44</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.27</radius><length>4.44</length></cylinder></geometry>
+          <material><ambient>0.41 0.28 0.17 1</ambient><diffuse>0.41 0.28 0.17 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_scatter_023">
+      <static>true</static>
+      <pose>15.39 -13.57 2.39 0 0 5.58</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.33</radius><length>4.78</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.33</radius><length>4.78</length></cylinder></geometry>
+          <material><ambient>0.44 0.28 0.18 1</ambient><diffuse>0.44 0.28 0.18 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_scatter_024">
+      <static>true</static>
+      <pose>14.41 -17.42 2.33 0 0 1.49</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.32</radius><length>4.66</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.32</radius><length>4.66</length></cylinder></geometry>
+          <material><ambient>0.45 0.26 0.12 1</ambient><diffuse>0.45 0.26 0.12 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_scatter_025">
+      <static>true</static>
+      <pose>-16.16 -13.99 2.32 0 0 1.38</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.25</radius><length>4.64</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.25</radius><length>4.64</length></cylinder></geometry>
+          <material><ambient>0.41 0.29 0.10 1</ambient><diffuse>0.41 0.29 0.10 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_scatter_026">
+      <static>true</static>
+      <pose>-16.85 -15.00 2.11 0 0 6.05</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.32</radius><length>4.21</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.32</radius><length>4.21</length></cylinder></geometry>
+          <material><ambient>0.49 0.24 0.16 1</ambient><diffuse>0.49 0.24 0.16 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_scatter_027">
+      <static>true</static>
+      <pose>-15.87 -16.65 2.34 0 0 1.90</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.22</radius><length>4.67</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.22</radius><length>4.67</length></cylinder></geometry>
+          <material><ambient>0.36 0.20 0.17 1</ambient><diffuse>0.36 0.20 0.17 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_scatter_028">
+      <static>true</static>
+      <pose>-13.01 -14.84 2.15 0 0 1.44</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>0.27</radius><length>4.30</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>0.27</radius><length>4.30</length></cylinder></geometry>
+          <material><ambient>0.43 0.23 0.10 1</ambient><diffuse>0.43 0.23 0.10 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="rock_000">
+      <static>true</static>
+      <pose>-10.43 17.69 0.27 -0.04 -0.02 6.04</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><sphere><radius>0.54</radius></sphere></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><sphere><radius>0.54</radius></sphere></geometry>
+          <material><ambient>0.48 0.50 0.39 1</ambient><diffuse>0.48 0.50 0.39 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="rock_001">
+      <static>true</static>
+      <pose>7.27 -8.84 0.19 0.14 0.01 0.14</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><sphere><radius>0.39</radius></sphere></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><sphere><radius>0.39</radius></sphere></geometry>
+          <material><ambient>0.54 0.47 0.41 1</ambient><diffuse>0.54 0.47 0.41 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="rock_002">
+      <static>true</static>
+      <pose>-19.63 -8.17 0.25 -0.03 -0.20 5.48</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><sphere><radius>0.51</radius></sphere></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><sphere><radius>0.51</radius></sphere></geometry>
+          <material><ambient>0.41 0.41 0.43 1</ambient><diffuse>0.41 0.41 0.43 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="rock_003">
+      <static>true</static>
+      <pose>0.85 4.67 0.32 -0.08 -0.06 1.72</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><sphere><radius>0.65</radius></sphere></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><sphere><radius>0.65</radius></sphere></geometry>
+          <material><ambient>0.47 0.48 0.38 1</ambient><diffuse>0.47 0.48 0.38 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="rock_004">
+      <static>true</static>
+      <pose>15.06 12.08 0.32 -0.15 0.02 2.22</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><sphere><radius>0.64</radius></sphere></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><sphere><radius>0.64</radius></sphere></geometry>
+          <material><ambient>0.53 0.41 0.39 1</ambient><diffuse>0.53 0.41 0.39 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="rock_005">
+      <static>true</static>
+      <pose>12.19 1.67 0.27 -0.03 0.12 1.18</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><sphere><radius>0.54</radius></sphere></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><sphere><radius>0.54</radius></sphere></geometry>
+          <material><ambient>0.52 0.46 0.43 1</ambient><diffuse>0.52 0.46 0.43 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="rock_006">
+      <static>true</static>
+      <pose>16.61 15.74 0.25 0.12 0.00 4.53</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><sphere><radius>0.49</radius></sphere></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><sphere><radius>0.49</radius></sphere></geometry>
+          <material><ambient>0.42 0.48 0.37 1</ambient><diffuse>0.42 0.48 0.37 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="rock_007">
+      <static>true</static>
+      <pose>14.69 -2.82 0.34 0.02 -0.13 5.95</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><sphere><radius>0.68</radius></sphere></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><sphere><radius>0.68</radius></sphere></geometry>
+          <material><ambient>0.46 0.47 0.40 1</ambient><diffuse>0.46 0.47 0.40 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="rock_008">
+      <static>true</static>
+      <pose>-19.03 3.79 0.39 0.08 -0.12 4.85</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><sphere><radius>0.77</radius></sphere></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><sphere><radius>0.77</radius></sphere></geometry>
+          <material><ambient>0.46 0.46 0.44 1</ambient><diffuse>0.46 0.46 0.44 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="rock_009">
+      <static>true</static>
+      <pose>-2.45 14.83 0.32 0.06 0.10 3.07</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><sphere><radius>0.64</radius></sphere></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><sphere><radius>0.64</radius></sphere></geometry>
+          <material><ambient>0.47 0.49 0.40 1</ambient><diffuse>0.47 0.49 0.40 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="rock_010">
+      <static>true</static>
+      <pose>-19.18 -16.94 0.23 -0.18 -0.08 2.99</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><sphere><radius>0.47</radius></sphere></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><sphere><radius>0.47</radius></sphere></geometry>
+          <material><ambient>0.40 0.41 0.41 1</ambient><diffuse>0.40 0.41 0.41 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="rock_011">
+      <static>true</static>
+      <pose>18.86 6.28 0.30 -0.13 0.18 0.76</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><sphere><radius>0.60</radius></sphere></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><sphere><radius>0.60</radius></sphere></geometry>
+          <material><ambient>0.45 0.41 0.39 1</ambient><diffuse>0.45 0.41 0.39 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="rock_012">
+      <static>true</static>
+      <pose>14.40 -5.99 0.19 -0.20 0.04 0.87</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><sphere><radius>0.37</radius></sphere></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><sphere><radius>0.37</radius></sphere></geometry>
+          <material><ambient>0.42 0.44 0.36 1</ambient><diffuse>0.42 0.44 0.36 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="rock_013">
+      <static>true</static>
+      <pose>-2.17 16.32 0.19 -0.10 0.18 2.00</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><sphere><radius>0.38</radius></sphere></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><sphere><radius>0.38</radius></sphere></geometry>
+          <material><ambient>0.50 0.47 0.42 1</ambient><diffuse>0.50 0.47 0.42 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="rock_014">
+      <static>true</static>
+      <pose>-0.29 -8.24 0.24 -0.02 -0.02 4.08</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><sphere><radius>0.48</radius></sphere></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><sphere><radius>0.48</radius></sphere></geometry>
+          <material><ambient>0.42 0.40 0.36 1</ambient><diffuse>0.42 0.40 0.36 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="rock_015">
+      <static>true</static>
+      <pose>-16.30 16.29 0.21 -0.19 -0.01 0.57</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><sphere><radius>0.43</radius></sphere></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><sphere><radius>0.43</radius></sphere></geometry>
+          <material><ambient>0.47 0.46 0.37 1</ambient><diffuse>0.47 0.46 0.37 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="rock_016">
+      <static>true</static>
+      <pose>11.56 -13.08 0.26 0.07 0.00 1.99</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><sphere><radius>0.51</radius></sphere></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><sphere><radius>0.51</radius></sphere></geometry>
+          <material><ambient>0.48 0.40 0.40 1</ambient><diffuse>0.48 0.40 0.40 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="rock_017">
+      <static>true</static>
+      <pose>-19.02 3.54 0.28 -0.13 0.18 3.48</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><sphere><radius>0.55</radius></sphere></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><sphere><radius>0.55</radius></sphere></geometry>
+          <material><ambient>0.48 0.42 0.36 1</ambient><diffuse>0.48 0.42 0.36 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="rock_018">
+      <static>true</static>
+      <pose>-2.73 -11.98 0.31 -0.14 -0.06 1.10</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><sphere><radius>0.62</radius></sphere></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><sphere><radius>0.62</radius></sphere></geometry>
+          <material><ambient>0.53 0.43 0.39 1</ambient><diffuse>0.53 0.43 0.39 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="rock_019">
+      <static>true</static>
+      <pose>-18.58 17.34 0.27 -0.05 -0.05 1.12</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><sphere><radius>0.54</radius></sphere></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><sphere><radius>0.54</radius></sphere></geometry>
+          <material><ambient>0.50 0.48 0.41 1</ambient><diffuse>0.50 0.48 0.41 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+  </world>
+</sdf>

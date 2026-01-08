@@ -46,7 +46,6 @@ def generate_launch_description():
         output='screen'
     )
 
-    # Gazebo-ROS bridge for clock, IMU, lidar
     bridge = Node(
         package='ros_gz_bridge',
         executable='parameter_bridge',
@@ -54,8 +53,13 @@ def generate_launch_description():
             '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock',
             '/imu@sensor_msgs/msg/Imu[gz.msgs.IMU',
             '/lidar@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
+            '/lidar_3d/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked',
         ],
-        remappings=[('/imu', '/imu/data'), ('/lidar', '/scan')],
+        remappings=[
+            ('/imu', '/imu/data'),
+            ('/lidar', '/scan'),
+            ('/lidar_3d/points', '/points'),
+        ],
         output='screen'
     )
 

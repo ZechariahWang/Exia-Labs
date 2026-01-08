@@ -416,6 +416,44 @@
     <origin xyz="0.3 0 0.35" rpy="0 0 0"/>
   </joint>
 
+  <!-- ==================== 3D LIDAR SENSOR ==================== -->
+  <!-- 360-degree 3D lidar for visualization (VLP-16 style) -->
+  <!-- NOT used for navigation - visualization only -->
+  <!-- Mounted above 2D lidar for full 360-degree 3D coverage -->
+
+  <link name="lidar_3d_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.05" length="0.07"/>
+      </geometry>
+      <material name="dark_grey">
+        <color rgba="0.2 0.2 0.2 1"/>
+      </material>
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.05" length="0.07"/>
+      </geometry>
+    </collision>
+
+    <inertial>
+      <mass value="0.83"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <inertia ixx="0.0005" ixy="0" ixz="0"
+               iyy="0.0005" iyz="0"
+               izz="0.001"/>
+    </inertial>
+  </link>
+
+  <joint name="lidar_3d_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="lidar_3d_link"/>
+    <origin xyz="0.3 0 0.42" rpy="0 0 0"/>
+  </joint>
+
   <!-- ==================== GAZEBO FORTRESS PROPERTIES ==================== -->
 
   <!-- Wheel friction for traction -->
@@ -521,6 +559,43 @@
         </range>
       </lidar>
       <always_on>true</always_on>
+      <visualize>true</visualize>
+    </sensor>
+  </gazebo>
+
+  <!-- ==================== GAZEBO FORTRESS 3D LIDAR SENSOR ==================== -->
+  <!-- 360-degree 3D lidar for point cloud visualization (VLP-16 style) -->
+  <gazebo reference="lidar_3d_link">
+    <sensor name="lidar_3d" type="gpu_lidar">
+      <always_on>true</always_on>
+      <update_rate>10</update_rate>
+      <topic>lidar_3d</topic>
+      <gz_frame_id>lidar_3d_link</gz_frame_id>
+      <lidar>
+        <scan>
+          <horizontal>
+            <samples>360</samples>
+            <resolution>1</resolution>
+            <min_angle>-3.14159</min_angle>
+            <max_angle>3.14159</max_angle>
+          </horizontal>
+          <vertical>
+            <samples>16</samples>
+            <resolution>1</resolution>
+            <min_angle>-0.261799</min_angle>
+            <max_angle>0.261799</max_angle>
+          </vertical>
+        </scan>
+        <range>
+          <min>0.3</min>
+          <max>20.0</max>
+        </range>
+        <noise>
+          <type>gaussian</type>
+          <mean>0.0</mean>
+          <stddev>0.01</stddev>
+        </noise>
+      </lidar>
       <visualize>true</visualize>
     </sensor>
   </gazebo>

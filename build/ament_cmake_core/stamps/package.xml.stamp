@@ -52,6 +52,10 @@
   <!-- Visualization -->
   <exec_depend>visualization_msgs</exec_depend>
 
+  <!-- OctoMap 3D visualization -->
+  <exec_depend>octomap_server</exec_depend>
+  <exec_depend>octomap_msgs</exec_depend>
+
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 

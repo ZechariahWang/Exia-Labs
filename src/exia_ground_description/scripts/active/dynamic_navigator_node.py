@@ -44,7 +44,7 @@ from exia_control.navigation.planner_interface import (
 )
 
 
-TARGET_POINT = [24, 24]  # Goal coordinates in meters (map frame)
+TARGET_POINT = [22, 24]  # Goal coordinates in meters (map frame)
 
 
 class NavigatorState(Enum):

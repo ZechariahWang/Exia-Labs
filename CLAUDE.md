@@ -1,6 +1,6 @@
 # Exia Ground Robot Workspace
 # Author: Zechariah Wang (Dec 25, 2025)
-# Updated: December 2025 - ATV-Scale Vehicle (2.11m x 1.2m x 0.6m)
+# Updated: February 2026 - Multi-Package Architecture
 
 ROS 2 workspace for the Exia Ground robot platform.
 
@@ -33,9 +33,9 @@ easy transition between simulation and real ATV hardware:
               |              |              |
               v              v              v
         +----------------------------------------+
-        |    Hardware Abstraction Layer (HAL)    |
-        |  - SimulationHAL (Gazebo Fortress)     |
-        |  - HardwareHAL (PWM/CAN/Serial)        |
+        |         ros2_control / HAL             |
+        |  - gz_ros2_control (Gazebo Fortress)   |
+        |  - Serial/PWM (Arduino Hardware)       |
         +----------------------------------------+
 ```
 
@@ -43,42 +43,49 @@ easy transition between simulation and real ATV hardware:
 
 ```
 exia_ws/
+├── scripts/                        # System-level scripts
+│   ├── 99-exia-odrive.rules        # udev rules for ODrive
+│   ├── exia_startup.sh             # Robot startup script
+│   ├── exia_enable_autostart.sh    # Enable systemd autostart
+│   ├── exia_disable_autostart.sh   # Disable systemd autostart
+│   ├── exia_status.sh              # Check robot status
+│   └── exia-robot.service          # Systemd service unit file
 ├── arduino/
-│   └── exia_servo_controller/
-│       └── exia_servo_controller.ino  # Arduino Mega servo controller
+│   ├── exia_servo_controller/
+│   │   └── exia_servo_controller.ino
+│   └── rc_control_pwm/
+│       └── rc_control_pwm.ino
 ├── src/
-│   └── exia_ground_description/
-│       ├── urdf/
-│       │   └── exia_ground.urdf.xacro    # Robot model
-│       ├── launch/
-│       │   ├── exia_ground_sim.launch.py # Gazebo simulation
-│       │   ├── exia_ground_state.launch.py # RViz only
-│       │   ├── dynamic_nav.launch.py     # Dynamic navigation (RECOMMENDED)
-│       │   ├── mission_nav.launch.py     # Predefined path following
-│       │   └── slam.launch.py            # SLAM only
-│       ├── config/
-│       │   ├── ackermann_controllers.yaml
-│       │   ├── nav2_params.yaml
-│       │   ├── slam_toolbox_params.yaml
-│       │   └── hardware_config.yaml
-│       ├── rviz/
-│       │   ├── exia_ground.rviz
-│       │   └── exia_slam_nav.rviz
-│       ├── worlds/
-│       │   └── exia_world.sdf
-│       ├── scripts/active/              # ROS2 node entry points
-│       │   ├── ackermann_drive_node.py  # Drive controller
-│       │   ├── ackermann_odometry.py    # Fallback odometry
-│       │   ├── xbox_teleop_node.py      # Xbox controller teleop
-│       │   ├── ps4_teleop_node.py       # PS4 DualShock teleop
-│       │   ├── path_follower_node.py    # Pure Pursuit demo
-│       │   ├── mission_navigator_node.py # Predefined path nav
-│       │   └── dynamic_navigator_node.py # Dynamic goal nav
-│       └── src/exia_control/            # Modular Python package
-│           ├── hal/                     # Hardware Abstraction Layer
-│           ├── control/                 # Control algorithms
-│           ├── planning/                # Path planning
-│           └── navigation/              # Obstacle detection
+│   ├── exia_bringup/               # Launch files, config, URDF (ament_cmake)
+│   │   ├── launch/
+│   │   │   ├── sim.launch.py       # Gazebo simulation
+│   │   │   └── autonomous.launch.py # SLAM + Nav2 + Dynamic navigator
+│   │   ├── config/
+│   │   │   ├── ackermann_controllers.yaml
+│   │   │   ├── nav2_params.yaml
+│   │   │   └── slam_toolbox_params.yaml
+│   │   ├── urdf/
+│   │   │   └── exia_ground.urdf.xacro
+│   │   └── worlds/
+│   │       └── exia_world.sdf
+│   │
+│   ├── exia_control/               # Navigation/control logic (ament_python)
+│   │   └── exia_control/
+│   │       ├── ackermann_drive_node.py
+│   │       ├── dynamic_navigator_node.py
+│   │       ├── planning/
+│   │       │   └── pure_pursuit.py
+│   │       └── navigation/
+│   │           ├── path_validator.py
+│   │           └── planner_interface.py
+│   │
+│   ├── exia_driver/                # Hardware drivers (ament_python)
+│   │   └── exia_driver/
+│   │       └── rc_driver_node.py
+│   │
+│   └── exia_msgs/                  # Custom messages (ament_cmake)
+│       └── msg/
+│
 ├── build/
 ├── install/
 └── log/
@@ -101,24 +108,50 @@ exia_ws/
 
 ```bash
 # Terminal 1: Start simulation
-ros2 launch exia_ground_description exia_ground_sim.launch.py
+source ~/exia_ws/install/setup.bash
+ros2 launch exia_bringup sim.launch.py
 
-# Terminal 2: Start dynamic navigation (navigates to TARGET_POINT)
-ros2 launch exia_ground_description dynamic_nav.launch.py
-
-# Terminal 3 (optional): RViz visualization
-rviz2 -d ~/exia_ws/src/exia_ground_description/rviz/exia_slam_nav.rviz
+# Terminal 2: Start autonomous navigation (after Gazebo loads)
+source ~/exia_ws/install/setup.bash
+ros2 launch exia_bringup autonomous.launch.py
 ```
 
-## Navigation Modes
+## Packages
 
-### 1. Dynamic Navigation (RECOMMENDED)
+### exia_bringup (ament_cmake)
+Launch files, configuration, URDF, and world files.
 
-Goal-based navigation with continuous A* replanning. Robot navigates to a single
-target coordinate using SLAM for localization and 500ms replanning for dynamic
-obstacle avoidance.
+| Launch File | Purpose |
+|-------------|---------|
+| `sim.launch.py` | Gazebo Fortress simulation with controllers |
+| `autonomous.launch.py` | SLAM + Nav2 planner + Dynamic navigator |
 
-**Architecture:**
+### exia_control (ament_python)
+Navigation and control logic.
+
+| Executable | Purpose |
+|------------|---------|
+| `ackermann_drive_node` | cmd_vel -> controller commands, publishes odom + TF |
+| `dynamic_navigator_node` | Goal-based navigation with replanning |
+
+| Module | Purpose |
+|--------|---------|
+| `planning/pure_pursuit.py` | Pure Pursuit path following |
+| `navigation/path_validator.py` | Collision detection |
+| `navigation/planner_interface.py` | Nav2 planner interface |
+
+### exia_driver (ament_python)
+Hardware drivers for physical robot.
+
+| Executable | Purpose |
+|------------|---------|
+| `rc_driver_node` | RC radio receiver + Arduino serial control |
+
+### exia_msgs (ament_cmake)
+Custom message definitions (placeholder).
+
+## Navigation Architecture
+
 ```
          Goal Pose (x, y)
               |
@@ -142,11 +175,17 @@ obstacle avoidance.
 | Ackermann      |    | slam_toolbox   |<-- /scan
 | Drive Node     |    | (map->odom TF) |<-- /imu
 +----------------+    +----------------+
+         |
+         v
++----------------+
+| Controllers    |
+| (ros2_control) |
++----------------+
 ```
 
 **Configuration** (`dynamic_navigator_node.py`):
 ```python
-TARGET_POINT = [0, 20]  # [x, y] in meters (map frame)
+TARGET_POINT = [22, 24]  # [x, y] in meters (map frame)
 ```
 
 **Parameters:**
@@ -157,30 +196,6 @@ TARGET_POINT = [0, 20]  # [x, y] in meters (map frame)
 | `replan_period` | `0.5` | Replanning interval (s) |
 | `goal_tolerance` | `1.0` | Goal reached threshold (m) |
 | `obstacle_lookahead` | `8.0` | Obstacle detection range (m) |
-
-**Launch:**
-```bash
-ros2 launch exia_ground_description dynamic_nav.launch.py
-```
-
-### 2. Mission Navigation
-
-Follows predefined paths with obstacle avoidance. Uses A* for detour planning.
-
-**Launch:**
-```bash
-ros2 launch exia_ground_description mission_nav.launch.py
-ros2 launch exia_ground_description mission_nav.launch.py path_type:=square
-```
-
-### 3. Path Follower (Demo)
-
-Simple Pure Pursuit demo following geometric paths. No obstacle avoidance.
-
-```bash
-ros2 run exia_ground_description path_follower_node.py
-ros2 run exia_ground_description path_follower_node.py --ros-args -p path_type:=circle
-```
 
 ## Control Commands
 
@@ -193,160 +208,22 @@ ros2 topic pub /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 1.0}, angular: {z:
 
 # Stop
 ros2 topic pub /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.0}, angular: {z: 0.0}}" -1
-
-# Emergency stop
-ros2 service call /ackermann/emergency_stop std_srvs/srv/Trigger
 ```
-
-## Teleop Control
-
-Manual control using gamepad controllers. Two versions available:
-
-### Xbox 360/One Controller (`xbox_teleop_node.py`)
-
-| Input | Action |
-|-------|--------|
-| Left Stick X | Steering |
-| RT (Right Trigger) | Throttle |
-| LT (Left Trigger) | Brake |
-| A Button | Toggle enable/disable |
-| B Button | Emergency stop |
-| Start Button | Clear E-stop |
-| Back Button | Reset steering trim |
-
-```bash
-ros2 run joy joy_node &
-ros2 run exia_ground_description xbox_teleop_node.py
-```
-
-### PS4 DualShock 4 Controller (`ps4_teleop_node.py`)
-
-| Input | Action |
-|-------|--------|
-| Left Stick X | Steering |
-| R2 (Right Trigger) | Throttle |
-| L2 (Left Trigger) | Brake |
-| X (Cross) Button | Toggle enable/disable |
-| Circle Button | Emergency stop |
-| Options Button | Clear E-stop |
-| Share Button | Reset steering trim |
-
-```bash
-ros2 run joy joy_node &
-ros2 run exia_ground_description ps4_teleop_node.py
-```
-
-**Serial Communication:**
-- Port: `/dev/ttyACM0` (Arduino Mega)
-- Baud: 115200
-- Protocol: `S<steer>,T<throttle>,B<brake>\n`
-
-## Arduino Servo Controller
-
-The Arduino Mega runs `exia_servo_controller.ino` to control physical servos.
-
-**Pin Assignments:**
-| Pin | Function |
-|-----|----------|
-| 9 | Steering servo |
-| 10 | Throttle ESC |
-| 11 | Brake servo |
-| 13 | Status LED |
-
-**Serial Commands:**
-| Command | Description |
-|---------|-------------|
-| `ARM` | Enable servo control |
-| `DISARM` | Disable and safe servos |
-| `S90,T90,B0` | Set steering=90, throttle=90, brake=0 |
-
-**Safety Features:**
-- 2-second command timeout triggers emergency stop
-- Must send ARM before servo commands are accepted
-- LED indicates armed state
-
-## Motor Smoothing & Soft-Start
-
-Both Python and Arduino implement smoothing and rate limiting to prevent jittery movements and protect hardware.
-
-**Arduino (exponential filter + rate limiting):**
-```cpp
-// Smoothing
-const float SMOOTH_ALPHA = 0.25;  // 0.1=smooth, 0.5=responsive
-
-// Rate limiting (degrees per 10ms update cycle)
-const int MAX_STEERING_RATE = 5;   // Can increase after testing
-const int MAX_THROTTLE_RATE = 3;   // Slower for motor protection
-const int MAX_BRAKE_RATE = 10;     // Faster for safety
-```
-
-**Python (hysteresis + ramping + warmup):**
-- Servo values only change if difference > 1 degree (hysteresis)
-- Throttle/brake use configurable ramping
-- Trigger deadzone: 8%
-- Serial rate: 50Hz
-- **Soft-start**: Throttle limited to 30% for first 3 seconds
-
-**Configurable ROS Parameters:**
-```bash
-ros2 run exia_ground_description xbox_teleop_node.py --ros-args \
-  -p throttle_ramp_rate:=5.0 \
-  -p brake_ramp_rate:=8.0 \
-  -p max_initial_throttle:=0.3 \
-  -p warmup_duration:=3.0
-```
-
-**Tuning Parameters:**
-| Parameter | Location | Default | Effect |
-|-----------|----------|---------|--------|
-| `SMOOTH_ALPHA` | Arduino | 0.25 | Lower = smoother, slower response |
-| `MAX_THROTTLE_RATE` | Arduino | 3 | Max degrees per 10ms cycle |
-| `throttle_ramp_rate` | Python | 5.0 | Lower = gentler acceleration |
-| `max_initial_throttle` | Python | 0.3 | Throttle limit during warmup (30%) |
-| `warmup_duration` | Python | 3.0 | Seconds before full throttle allowed |
 
 ## Build Commands
 
 ```bash
-cd /home/zech/exia_ws
-colcon build --packages-select exia_ground_description
+cd ~/exia_ws
+
+# Build all packages
+colcon build
+
+# Build specific packages
+colcon build --packages-select exia_bringup exia_control exia_driver
+
+# Source after build
 source install/setup.bash
 ```
-
-## Key Files
-
-### Launch Files
-| File | Purpose |
-|------|---------|
-| `exia_ground_sim.launch.py` | Gazebo Fortress simulation |
-| `dynamic_nav.launch.py` | SLAM + A* + Dynamic navigator |
-| `mission_nav.launch.py` | Predefined path + obstacle avoidance |
-| `slam.launch.py` | SLAM only (mapping) |
-
-### Configuration
-| File | Purpose |
-|------|---------|
-| `nav2_params.yaml` | Planner + costmap config |
-| `slam_toolbox_params.yaml` | SLAM configuration |
-| `ackermann_controllers.yaml` | ros2_control config |
-
-### ROS2 Nodes (`scripts/active/`)
-| Node | Purpose |
-|------|---------|
-| `ackermann_drive_node.py` | cmd_vel -> motor commands, publishes odom |
-| `xbox_teleop_node.py` | Xbox controller -> servo commands via serial |
-| `ps4_teleop_node.py` | PS4 DualShock 4 -> servo commands via serial |
-| `dynamic_navigator_node.py` | Goal-based nav with 500ms replanning |
-| `mission_navigator_node.py` | Predefined path following |
-| `path_follower_node.py` | Pure Pursuit demo |
-
-### Python Package (`src/exia_control/`)
-| Module | Purpose |
-|--------|---------|
-| `hal/` | Hardware Abstraction Layer (simulation/hardware) |
-| `control/` | Ackermann kinematics |
-| `planning/` | Pure Pursuit, predefined paths |
-| `navigation/` | Path validation, planner interface |
 
 ## ROS Topics
 
@@ -356,9 +233,10 @@ source install/setup.bash
 | `/odom` | Odometry | Robot odometry |
 | `/scan` | LaserScan | Lidar data |
 | `/imu/data` | Imu | IMU data |
-| `/goal_pose` | PoseStamped | Navigation goal |
 | `/planned_path` | Path | Current path |
 | `/global_costmap/costmap` | OccupancyGrid | Obstacle map |
+| `/steering_controller/commands` | Float64MultiArray | Steering joint commands |
+| `/throttle_controller/commands` | Float64MultiArray | Wheel velocity commands |
 
 ## Sensors
 
@@ -396,6 +274,12 @@ ros2 node list
 # Check TF tree
 ros2 run tf2_ros tf2_echo map odom
 
+# Check if ackermann_drive is running
+ros2 node list | grep ackermann
+
+# Check odom is being published
+ros2 topic echo /odom --once
+
 # Check costmap
 ros2 topic hz /global_costmap/costmap
 
@@ -406,26 +290,64 @@ ros2 lifecycle get /planner_server
 ros2 topic echo /planned_path --once
 ```
 
+## Hardware Deployment
+
+### RC Driver Mode (Jetson + Arduino)
+
+The `rc_driver_node` handles hardware control via serial:
+- Connects to Arduino on `/dev/arduino_control`
+- Communicates with ODrive for motor control
+- Protocol: `S<steer>,T<throttle>,B<brake>\n`
+
+```bash
+# Manual test
+ros2 run exia_driver rc_driver_node
+```
+
+### Systemd Autostart
+
+```bash
+# Enable autostart on boot
+sudo ~/exia_ws/scripts/exia_enable_autostart.sh
+
+# Check status
+~/exia_ws/scripts/exia_status.sh
+
+# Manual start/stop
+sudo systemctl start exia-robot
+sudo systemctl stop exia-robot
+
+# View logs
+journalctl -u exia-robot -f
+
+# Disable autostart
+sudo ~/exia_ws/scripts/exia_disable_autostart.sh
+```
+
+## Arduino Servo Controller
+
+The Arduino Mega runs `exia_servo_controller.ino` to control physical servos.
+
+**Pin Assignments:**
+| Pin | Function |
+|-----|----------|
+| 9 | Steering servo |
+| 10 | Throttle ESC |
+| 11 | Brake servo |
+| 13 | Status LED |
+
+**Serial Commands:**
+| Command | Description |
+|---------|-------------|
+| `ARM` | Enable servo control |
+| `DISARM` | Disable and safe servos |
+| `S90,T90,B0` | Set steering=90, throttle=90, brake=0 |
+
 ## Development Notes
 
 - **Simulator**: Gazebo Fortress (not Classic)
 - **Ackermann steering**: Cannot rotate in place, must have forward velocity to turn
 - **RViz Fixed Frame**: Use `odom` or `map` depending on navigation mode
-- **Sensors require custom world**: Use `exia_world.sdf` (includes Sensors plugin)
-
-## Hardware Deployment
-
-The HAL architecture enables easy hardware transition:
-
-1. Change `hal_type: 'hardware'` in parameters
-2. Implement `HardwareHAL` class in `hal/hardware.py`
-3. Configure PWM/CAN/Serial for physical actuators
-
-Hardware checklist:
-- Steering: PWM servo
-- Throttle: ESC/Motor controller
-- Brake: Servo or linear actuator
-- Lidar: RPlidar S3 via rplidar_ros
-- IMU: Yahboom 10-axis driver
+- **Gazebo multicast warnings**: Set `export IGN_IP=127.0.0.1` to suppress
 
 Dont write any comments in the code.

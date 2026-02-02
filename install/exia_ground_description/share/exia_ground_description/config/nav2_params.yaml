@@ -1,1 +1,191 @@
-/home/zech/exia_ws/src/exia_ground_description/config/nav2_params.yaml
+###############################################################################
+# Exia Ground Robot - Simplified Navigation Configuration
+#
+# Robot: Ackermann steering (2.11m x 1.2m x 0.6m)
+# Wheelbase: 1.3m, Max steering: 0.6 rad
+# Minimum turning radius: 1.9m
+#
+# Architecture: Local costmap only (no SLAM, no global costmap)
+#   - Uses odom frame for all planning
+#   - Predefined paths with obstacle avoidance
+#   - A* planner for detours around obstacles
+#
+# Author: Zechariah Wang
+# Date: December 2025
+###############################################################################
+
+# =============================================================================
+# PLANNER SERVER (A* for detour planning)
+# =============================================================================
+planner_server:
+  ros__parameters:
+    use_sim_time: true
+    expected_planner_frequency: 2.0           # Support 500ms replanning cycle
+    planner_plugins: ["GridBased"]
+
+    GridBased:
+      plugin: "nav2_smac_planner/SmacPlannerHybrid"
+      tolerance: 1.0                          # Tighter for dynamic goal-based navigation
+      downsample_costmap: false
+      downsampling_factor: 1
+      allow_unknown: true                     # Allow planning through unknown space
+      max_iterations: 500000                  # Reduced for faster planning
+      max_on_approach_iterations: 2000
+      max_planning_time: 0.4                  # Max 400ms to fit 500ms replan cycle
+
+      # Ackermann-specific parameters
+      motion_model_for_search: "DUBIN"        # Forward-only (no reverse)
+      minimum_turning_radius: 1.9             # Actual minimum for this robot
+
+      # Analytic expansion
+      analytic_expansion_ratio: 3.5
+      analytic_expansion_max_length: 3.0
+
+      # Heuristics
+      lookup_table_size: 20.0
+      cache_obstacle_heuristic: true
+
+      # Penalties (favor smoother, forward paths)
+      reverse_penalty: 10.0                   # Heavy penalty if reverse allowed
+      change_penalty: 0.5                     # Penalty for direction changes
+      non_straight_penalty: 1.2
+      cost_penalty: 3.5                       # Increased: strongly avoid near-obstacle cells
+      retrospective_penalty: 0.01
+      rotation_penalty: 2.0
+
+      # Smoothing
+      smooth_path: true
+
+# =============================================================================
+# PLANNER SERVER'S INTERNAL COSTMAP (uses map frame for SLAM-based planning)
+# =============================================================================
+global_costmap:
+  global_costmap:
+    ros__parameters:
+      use_sim_time: true
+      update_frequency: 5.0                   # Fast updates for dynamic replanning
+      publish_frequency: 2.0
+      global_frame: map                       # SLAM-based (was: odom)
+      robot_base_frame: base_footprint
+      rolling_window: true                    # Rolling window in map frame
+      width: 100                              # Large enough for goal (24,24) ~34m away
+      height: 100
+      resolution: 0.1                         # Coarser for faster planning
+      track_unknown_space: false              # Unknown = free for planning
+      footprint: "[[1.05, 0.60], [1.05, -0.60], [-1.05, -0.60], [-1.05, 0.60]]"
+      plugins: ["obstacle_layer", "inflation_layer"]
+
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: true
+        observation_sources: scan
+        scan:
+          topic: /scan
+          max_obstacle_height: 2.0
+          min_obstacle_height: -1.0        # 2D lidar returns at height 0, must include!
+          clearing: true
+          marking: true
+          data_type: "LaserScan"
+          # FIX: Reduced from 16/15 to 12m - lidar noise increases at max range
+          raytrace_max_range: 12.0
+          raytrace_min_range: 0.5
+          obstacle_max_range: 12.0
+          obstacle_min_range: 0.5
+          inf_is_valid: false              # Reject infinite returns as invalid (noise)
+
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        # Lower cost_scaling = gentler gradient = robot stays further from obstacles
+        # Higher inflation_radius = larger buffer zone around obstacles
+        cost_scaling_factor: 2.5             # Reduced: gentler dropoff keeps robot further away
+        inflation_radius: 2.5                # Increased: accounts for turning radius + safety
+
+      always_send_full_costmap: true
+
+# =============================================================================
+# LOCAL COSTMAP (Rolling window around robot)
+# =============================================================================
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      use_sim_time: true
+      update_frequency: 5.0
+      publish_frequency: 2.0
+      global_frame: map                       # SLAM-based (was: odom)
+      robot_base_frame: base_footprint
+      rolling_window: true
+      width: 30
+      height: 30
+      resolution: 0.05
+      # Robot footprint (2.11m x 1.2m - actual size, no inflation here)
+      footprint: "[[1.05, 0.60], [1.05, -0.60], [-1.05, -0.60], [-1.05, 0.60]]"
+      plugins: ["obstacle_layer", "inflation_layer"]
+
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: true
+        observation_sources: scan
+        scan:
+          topic: /scan
+          max_obstacle_height: 2.0
+          min_obstacle_height: -1.0          # 2D lidar returns at height 0, must include!
+          clearing: true
+          marking: true
+          data_type: "LaserScan"
+          # FIX: Reduced from 16/15 to 12m - lidar noise increases at max range
+          raytrace_max_range: 12.0
+          raytrace_min_range: 0.5
+          obstacle_max_range: 12.0
+          obstacle_min_range: 0.5
+          inf_is_valid: false              # Reject infinite returns as invalid (noise)
+
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        # Lower cost_scaling = gentler gradient = robot stays further from obstacles
+        cost_scaling_factor: 2.5             # Reduced: gentler dropoff keeps robot further away
+        inflation_radius: 2.5                # Increased: accounts for turning radius + safety
+
+      always_send_full_costmap: true
+
+# =============================================================================
+# COSTMAP SERVER (Standalone local costmap for mission navigator)
+# =============================================================================
+costmap_server:
+  ros__parameters:
+    use_sim_time: true
+    update_frequency: 5.0
+    publish_frequency: 2.0
+    global_frame: map                       # SLAM-based (was: odom)
+    robot_base_frame: base_footprint
+    rolling_window: true
+    width: 30
+    height: 30
+    resolution: 0.05
+    footprint: "[[1.05, 0.60], [1.05, -0.60], [-1.05, -0.60], [-1.05, 0.60]]"
+    plugins: ["obstacle_layer", "inflation_layer"]
+
+    obstacle_layer:
+      plugin: "nav2_costmap_2d::ObstacleLayer"
+      enabled: true
+      observation_sources: scan
+      scan:
+        topic: /scan
+        max_obstacle_height: 2.0
+        min_obstacle_height: -1.0        # 2D lidar returns at height 0, must include!
+        clearing: true
+        marking: true
+        data_type: "LaserScan"
+        # FIX: Reduced from 16/15 to 12m - lidar noise increases at max range
+        raytrace_max_range: 12.0
+        raytrace_min_range: 0.5
+        obstacle_max_range: 12.0
+        obstacle_min_range: 0.5
+        inf_is_valid: false              # Reject infinite returns as invalid (noise)
+
+    inflation_layer:
+      plugin: "nav2_costmap_2d::InflationLayer"
+      # Lower cost_scaling = gentler gradient = robot stays further from obstacles
+      cost_scaling_factor: 2.5             # Reduced: gentler dropoff keeps robot further away
+      inflation_radius: 2.5                # Increased: accounts for turning radius + safety
+
+    always_send_full_costmap: true

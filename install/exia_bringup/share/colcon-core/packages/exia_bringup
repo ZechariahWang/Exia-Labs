@@ -1,0 +1,1 @@
+controller_manager:exia_control:exia_driver:gz_ros2_control:joint_state_publisher:nav2_costmap_2d:nav2_lifecycle_manager:nav2_planner:robot_state_publisher:ros_gz_bridge:ros_gz_sim:rviz2:slam_toolbox:xacro

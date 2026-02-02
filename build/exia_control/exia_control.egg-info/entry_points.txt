@@ -1,0 +1,4 @@
+[console_scripts]
+ackermann_drive_node = exia_control.ackermann_drive_node:main
+dynamic_navigator_node = exia_control.dynamic_navigator_node:main
+

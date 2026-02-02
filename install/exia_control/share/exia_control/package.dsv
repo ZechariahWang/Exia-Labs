@@ -1,0 +1,9 @@
+source;share/exia_control/hook/pythonpath.ps1
+source;share/exia_control/hook/pythonpath.dsv
+source;share/exia_control/hook/pythonpath.sh
+source;share/exia_control/hook/ament_prefix_path.ps1
+source;share/exia_control/hook/ament_prefix_path.dsv
+source;share/exia_control/hook/ament_prefix_path.sh
+source;../../build/exia_control/share/exia_control/hook/pythonpath_develop.ps1
+source;../../build/exia_control/share/exia_control/hook/pythonpath_develop.dsv
+source;../../build/exia_control/share/exia_control/hook/pythonpath_develop.sh

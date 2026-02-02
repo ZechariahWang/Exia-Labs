@@ -1,1 +1,26 @@
-/home/zech/exia_ws/src/exia_ground_description/config/octomap_params.yaml
+octomap_server:
+  ros__parameters:
+    use_sim_time: true
+    frame_id: "map"
+    base_frame_id: "base_footprint"
+    resolution: 0.1
+    sensor_model:
+      max_range: 10.0
+      hit: 0.7
+      miss: 0.4
+      min: 0.12
+      max: 0.97
+    latch: false
+    filter_ground: true
+    ground_filter:
+      distance: 0.04
+      angle: 0.15
+      plane_distance: 0.07
+    pointcloud_min_x: -10.0
+    pointcloud_max_x: 10.0
+    pointcloud_min_y: -10.0
+    pointcloud_max_y: 10.0
+    pointcloud_min_z: 0.1
+    pointcloud_max_z: 3.0
+    occupancy_min_z: 0.1
+    occupancy_max_z: 2.0

@@ -1,1 +1,6 @@
-/home/zech/exia_ws/src/exia_ground_description/config/hardware_config.yaml
+# Minimal config for gz_ros2_control - just controller_manager settings
+# Controllers are loaded separately by spawners
+
+controller_manager:
+  ros__parameters:
+    update_rate: 100  # Hz

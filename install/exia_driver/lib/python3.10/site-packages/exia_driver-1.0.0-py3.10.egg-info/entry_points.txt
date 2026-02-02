@@ -1,0 +1,3 @@
+[console_scripts]
+rc_driver_node = exia_driver.rc_driver_node:main
+

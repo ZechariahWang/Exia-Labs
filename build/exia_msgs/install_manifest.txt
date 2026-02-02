@@ -1,0 +1,15 @@
+/home/zech/exia_ws/install/exia_msgs/share/ament_index/resource_index/package_run_dependencies/exia_msgs
+/home/zech/exia_ws/install/exia_msgs/share/ament_index/resource_index/parent_prefix_path/exia_msgs
+/home/zech/exia_ws/install/exia_msgs/share/exia_msgs/environment/ament_prefix_path.sh
+/home/zech/exia_ws/install/exia_msgs/share/exia_msgs/environment/ament_prefix_path.dsv
+/home/zech/exia_ws/install/exia_msgs/share/exia_msgs/environment/path.sh
+/home/zech/exia_ws/install/exia_msgs/share/exia_msgs/environment/path.dsv
+/home/zech/exia_ws/install/exia_msgs/share/exia_msgs/local_setup.bash
+/home/zech/exia_ws/install/exia_msgs/share/exia_msgs/local_setup.sh
+/home/zech/exia_ws/install/exia_msgs/share/exia_msgs/local_setup.zsh
+/home/zech/exia_ws/install/exia_msgs/share/exia_msgs/local_setup.dsv
+/home/zech/exia_ws/install/exia_msgs/share/exia_msgs/package.dsv
+/home/zech/exia_ws/install/exia_msgs/share/ament_index/resource_index/packages/exia_msgs
+/home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/exia_msgsConfig.cmake
+/home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/exia_msgsConfig-version.cmake
+/home/zech/exia_ws/install/exia_msgs/share/exia_msgs/package.xml

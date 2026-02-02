@@ -4,7 +4,7 @@ LOGFILE="/home/exialabsargus/exia_startup.log"
 ARDUINO_PORT="/dev/arduino_control"
 ARDUINO_CLI="/home/exialabsargus/bin/arduino-cli"
 ARDUINO_SKETCH_DIR="/home/exialabsargus/rc_control_pwm"
-WORKSPACE="/home/exialabsargus/Exia-Labs"
+WORKSPACE="/home/exialabsargus/exia_ws"
 MAX_WAIT=120
 
 exec > >(tee -a "$LOGFILE") 2>&1
@@ -90,7 +90,7 @@ source "$WORKSPACE/install/setup.bash"
 
 export ROS_DOMAIN_ID=0
 
-echo "Starting rc_driver_control_node..."
-ros2 run exia_ground_description rc_driver_control_node.py
+echo "Starting rc_driver_node..."
+ros2 run exia_driver rc_driver_node
 
 echo "Node exited at $(date)"

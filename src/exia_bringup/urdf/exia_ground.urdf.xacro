@@ -3,6 +3,14 @@
 
   <xacro:arg name="config_path" default=""/>
 
+  <xacro:arg name="lidar_horizontal_samples" default="360"/>
+  <xacro:arg name="lidar_vertical_samples" default="16"/>
+  <xacro:arg name="lidar_vertical_fov_min" default="-0.261799"/>
+  <xacro:arg name="lidar_vertical_fov_max" default="0.261799"/>
+  <xacro:arg name="lidar_range_min" default="1.5"/>
+  <xacro:arg name="lidar_range_max" default="20.0"/>
+  <xacro:arg name="lidar_update_rate" default="10"/>
+
   <link name="base_footprint"/>
 
   <link name="base_link">
@@ -323,39 +331,6 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <cylinder radius="0.038" length="0.041"/>
-      </geometry>
-      <material name="dark_grey">
-        <color rgba="0.2 0.2 0.2 1"/>
-      </material>
-    </visual>
-
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
-        <cylinder radius="0.038" length="0.041"/>
-      </geometry>
-    </collision>
-
-    <inertial>
-      <mass value="0.190"/>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <inertia ixx="0.00005" ixy="0" ixz="0"
-               iyy="0.00005" iyz="0"
-               izz="0.00007"/>
-    </inertial>
-  </link>
-
-  <joint name="lidar_joint" type="fixed">
-    <parent link="base_link"/>
-    <child link="lidar_link"/>
-    <origin xyz="0.3 0 0.35" rpy="0 0 0"/>
-  </joint>
-
-  <link name="lidar_3d_link">
-    <visual>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
         <cylinder radius="0.05" length="0.07"/>
       </geometry>
       <material name="dark_grey">
@@ -379,9 +354,9 @@
     </inertial>
   </link>
 
-  <joint name="lidar_3d_joint" type="fixed">
+  <joint name="lidar_joint" type="fixed">
     <parent link="base_link"/>
-    <child link="lidar_3d_link"/>
+    <child link="lidar_link"/>
     <origin xyz="0.3 0 0.42" rpy="0 0 0"/>
   </joint>
 
@@ -458,59 +433,29 @@
   </gazebo>
 
   <gazebo reference="lidar_link">
-    <sensor name="gpu_lidar" type="gpu_lidar">
-      <update_rate>10</update_rate>
-      <topic>lidar</topic>
+    <sensor name="lidar_3d" type="gpu_lidar">
+      <always_on>true</always_on>
+      <update_rate>$(arg lidar_update_rate)</update_rate>
+      <topic>lidar_3d</topic>
       <gz_frame_id>lidar_link</gz_frame_id>
       <lidar>
         <scan>
           <horizontal>
-            <samples>360</samples>
+            <samples>$(arg lidar_horizontal_samples)</samples>
             <resolution>1</resolution>
             <min_angle>-3.14159</min_angle>
             <max_angle>3.14159</max_angle>
           </horizontal>
           <vertical>
-            <samples>1</samples>
+            <samples>$(arg lidar_vertical_samples)</samples>
             <resolution>1</resolution>
-            <min_angle>0</min_angle>
-            <max_angle>0</max_angle>
+            <min_angle>$(arg lidar_vertical_fov_min)</min_angle>
+            <max_angle>$(arg lidar_vertical_fov_max)</max_angle>
           </vertical>
         </scan>
         <range>
-          <min>0.2</min>
-          <max>20.0</max>
-        </range>
-      </lidar>
-      <always_on>true</always_on>
-      <visualize>true</visualize>
-    </sensor>
-  </gazebo>
-
-  <gazebo reference="lidar_3d_link">
-    <sensor name="lidar_3d" type="gpu_lidar">
-      <always_on>true</always_on>
-      <update_rate>10</update_rate>
-      <topic>lidar_3d</topic>
-      <gz_frame_id>lidar_3d_link</gz_frame_id>
-      <lidar>
-        <scan>
-          <horizontal>
-            <samples>360</samples>
-            <resolution>1</resolution>
-            <min_angle>-3.14159</min_angle>
-            <max_angle>3.14159</max_angle>
-          </horizontal>
-          <vertical>
-            <samples>16</samples>
-            <resolution>1</resolution>
-            <min_angle>-0.261799</min_angle>
-            <max_angle>0.261799</max_angle>
-          </vertical>
-        </scan>
-        <range>
-          <min>0.3</min>
-          <max>20.0</max>
+          <min>$(arg lidar_range_min)</min>
+          <max>$(arg lidar_range_max)</max>
         </range>
         <noise>
           <type>gaussian</type>

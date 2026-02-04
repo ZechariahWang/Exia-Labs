@@ -310,8 +310,8 @@ message(STATUS "Execute custom install script")
 
 # begin of custom install code
 
-# install(DIRECTORY "launch" "config" "urdf" "worlds" "DESTINATION" "share/exia_bringup")
-ament_cmake_symlink_install_directory("/home/zech/exia_ws/src/exia_bringup" DIRECTORY "launch" "config" "urdf" "worlds" "DESTINATION" "share/exia_bringup")
+# install(DIRECTORY "launch" "config" "urdf" "worlds" "rviz" "DESTINATION" "share/exia_bringup")
+ament_cmake_symlink_install_directory("/home/zech/exia_ws/src/exia_bringup" DIRECTORY "launch" "config" "urdf" "worlds" "rviz" "DESTINATION" "share/exia_bringup")
 
 # install(FILES "/home/zech/exia_ws/build/exia_bringup/ament_cmake_index/share/ament_index/resource_index/package_run_dependencies/exia_bringup" "DESTINATION" "share/ament_index/resource_index/package_run_dependencies")
 ament_cmake_symlink_install_files("/home/zech/exia_ws/src/exia_bringup" FILES "/home/zech/exia_ws/build/exia_bringup/ament_cmake_index/share/ament_index/resource_index/package_run_dependencies/exia_bringup" "DESTINATION" "share/ament_index/resource_index/package_run_dependencies")

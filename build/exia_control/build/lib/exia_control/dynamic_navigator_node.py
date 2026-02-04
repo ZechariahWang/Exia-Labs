@@ -13,6 +13,9 @@ from nav_msgs.msg import Odometry, OccupancyGrid, Path
 from std_srvs.srv import Trigger
 from visualization_msgs.msg import Marker, MarkerArray
 
+import tf2_ros
+from tf2_ros import TransformException
+
 from exia_control.planning.pure_pursuit import (
     PurePursuitController, PurePursuitConfig, Path as PurePursuitPath
 )
@@ -21,6 +24,7 @@ from exia_control.navigation.planner_interface import (
     PlannerInterface, PlanningStatus
 )
 
+# rviz2 -d ~/exia_ws/install/exia_bringup/share/exia_bringup/rviz/exia_3d.rviz 
 
 TARGET_POINT = [22, 24]
 
@@ -40,7 +44,7 @@ class DynamicNavigator(Node):
         self.declare_parameter('replan_period', 0.5)
         self.declare_parameter('min_replan_interval', 0.2)
         self.declare_parameter('goal_tolerance', 1.0)
-        self.declare_parameter('lookahead_distance', 2.5)
+        self.declare_parameter('lookahead_distance', 1.2)
         self.declare_parameter('target_speed', 2.0)
         self.declare_parameter('path_switch_threshold', 2.0)
         self.declare_parameter('obstacle_lookahead', 8.0)
@@ -83,6 +87,9 @@ class DynamicNavigator(Node):
         self.callback_group = ReentrantCallbackGroup()
         self.planner = PlannerInterface(self)
 
+        self.tf_buffer = tf2_ros.Buffer()
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
+
         self._recovery_start_x = 0.0
         self._recovery_start_y = 0.0
         self._recovery_target_dist = 2.0
@@ -116,14 +123,32 @@ class DynamicNavigator(Node):
 
         auto_start = self.get_parameter('auto_start').value
         self._auto_start_done = False
+        self._costmap_update_count = 0
+        self._min_costmap_updates = 10
         if auto_start:
-            self.create_timer(3.0, self._delayed_auto_start, callback_group=self.callback_group)
+            self.create_timer(2.0, self._delayed_auto_start, callback_group=self.callback_group)
 
         self.get_logger().info(f'Dynamic Navigator initialized - Target: ({TARGET_POINT[0]}, {TARGET_POINT[1]})')
 
     def _delayed_auto_start(self):
         if self._auto_start_done or self.state != NavigatorState.IDLE:
             return
+
+        if self._costmap_update_count < self._min_costmap_updates:
+            self.get_logger().info(f'Waiting for costmap to stabilize ({self._costmap_update_count}/{self._min_costmap_updates} updates)...')
+            return
+
+        if self.costmap is not None:
+            obstacle_count = sum(1 for c in self.costmap.data if c > 50)
+            if obstacle_count < 100:
+                self.get_logger().warn(f'Costmap has few obstacles ({obstacle_count}), waiting for more sensor data...')
+                return
+            self.get_logger().info(f'Costmap has {obstacle_count} obstacle cells')
+
+        if not self.planner.wait_for_server(timeout_sec=10.0):
+            self.get_logger().warn('Waiting for planner server...')
+            return
+
         self._auto_start_done = True
 
         goal = PoseStamped()
@@ -133,14 +158,23 @@ class DynamicNavigator(Node):
         goal.pose.position.y = float(TARGET_POINT[1])
         goal.pose.orientation.w = 1.0
 
-        self.get_logger().info(f'Auto-starting to TARGET_POINT: ({TARGET_POINT[0]}, {TARGET_POINT[1]})')
+        self.get_logger().info(f'Auto-starting navigation after {self._costmap_update_count} costmap updates')
         self._goal_callback(goal)
 
     def _odom_callback(self, msg: Odometry):
-        self.robot_x = msg.pose.pose.position.x
-        self.robot_y = msg.pose.pose.position.y
-        self.robot_yaw = self._quaternion_to_yaw(msg.pose.pose.orientation)
         self.robot_speed = msg.twist.twist.linear.x
+
+        try:
+            transform = self.tf_buffer.lookup_transform(
+                'map', 'base_footprint', rclpy.time.Time())
+            self.robot_x = transform.transform.translation.x
+            self.robot_y = transform.transform.translation.y
+            q = transform.transform.rotation
+            self.robot_yaw = self._quaternion_to_yaw(q)
+        except TransformException:
+            self.robot_x = msg.pose.pose.position.x
+            self.robot_y = msg.pose.pose.position.y
+            self.robot_yaw = self._quaternion_to_yaw(msg.pose.pose.orientation)
 
     def _goal_callback(self, msg: PoseStamped):
         self.current_goal = msg
@@ -155,9 +189,9 @@ class DynamicNavigator(Node):
     def _costmap_callback(self, msg: OccupancyGrid):
         self.costmap = msg
         self.path_validator.update_costmap(msg)
+        self._costmap_update_count += 1
 
-        if not hasattr(self, '_costmap_received'):
-            self._costmap_received = True
+        if self._costmap_update_count == 1:
             self.get_logger().info(f'Costmap received: {msg.info.width}x{msg.info.height}')
 
         if self.state == NavigatorState.EXECUTING:
@@ -266,7 +300,7 @@ class DynamicNavigator(Node):
             return
 
         start = PoseStamped()
-        start.header.frame_id = 'odom'
+        start.header.frame_id = 'map'
         start.header.stamp = self.get_clock().now().to_msg()
         start.pose.position.x = self.robot_x
         start.pose.position.y = self.robot_y
@@ -283,15 +317,19 @@ class DynamicNavigator(Node):
         if self.current_goal is None:
             return
 
+        now = self.get_clock().now().nanoseconds / 1e9
+        if now - self.last_replan_time < 0.5:
+            return
+
         start = PoseStamped()
-        start.header.frame_id = 'odom'
+        start.header.frame_id = 'map'
         start.header.stamp = self.get_clock().now().to_msg()
         start.pose.position.x = self.robot_x
         start.pose.position.y = self.robot_y
         start.pose.orientation = self._yaw_to_quaternion(self.robot_yaw)
 
         self.replan_pending = True
-        self.last_replan_time = self.get_clock().now().nanoseconds / 1e9
+        self.last_replan_time = now
         self.planner.plan_path_async(start, self.current_goal, self._on_replan_received)
 
     def _on_initial_path(self, result):
@@ -322,57 +360,77 @@ class DynamicNavigator(Node):
         else:
             self.get_logger().error(f'Initial planning failed: {result.error_message}')
             self._consecutive_replan_failures += 1
-            if self._consecutive_replan_failures >= 3:
+            if self._consecutive_replan_failures >= 10:
                 self.get_logger().error('Multiple failures, cancelling navigation')
                 self.state = NavigatorState.IDLE
                 self.current_goal = None
             else:
-                self.create_timer(1.0, self._request_initial_plan, callback_group=self.callback_group)
+                self.get_logger().info(f'Retrying planning ({self._consecutive_replan_failures}/10)...')
+                self.create_timer(2.0, self._request_initial_plan, callback_group=self.callback_group)
 
     def _on_replan_received(self, result):
         self.replan_pending = False
 
         if result.status != PlanningStatus.SUCCEEDED or not result.path:
+            self._consecutive_replan_failures += 1
+            self.get_logger().warn(f'Replan failed ({self._consecutive_replan_failures}): {result.error_message}')
+            if self._consecutive_replan_failures >= 5:
+                if self.current_nav_path is not None:
+                    current_validation = self.path_validator.validate_path(
+                        self.current_nav_path, check_footprint=False, max_poses=20)
+                    if not current_validation.is_valid:
+                        self.get_logger().error('Current path blocked and replanning failed, stopping')
+                        self._publish_stop()
+                        self.state = NavigatorState.RECOVERING
+                        self._consecutive_replan_failures = 0
             return
 
+        self._consecutive_replan_failures = 0
         new_nav_path = result.path
+        self.get_logger().info(f'Replan succeeded: {len(new_nav_path.poses)} poses')
+
         validation = self.path_validator.validate_path(new_nav_path, check_footprint=True)
         if not validation.is_valid:
+            self.get_logger().warn(f'New path has collision at index {validation.blocked_index}')
             return
 
-        new_length = self._compute_path_length(new_nav_path)
-        current_remaining = self._compute_remaining_path_length()
-
-        should_switch = False
-        if new_length < current_remaining - self.path_switch_threshold:
-            self.get_logger().info(f'Switching to shorter path: {new_length:.1f}m vs {current_remaining:.1f}m')
-            should_switch = True
-        elif self.current_nav_path is not None:
-            current_validation = self.path_validator.validate_path(self.current_nav_path, check_footprint=True)
-            if not current_validation.is_valid:
-                self.get_logger().warn('Current path blocked, switching to new path')
-                should_switch = True
-
-        if should_switch:
-            self.current_nav_path = new_nav_path
-            self.current_path = self._nav_path_to_pp_path(new_nav_path)
-            self.pure_pursuit.set_path(self.current_path)
-            self.pure_pursuit.start()
-            self.path_pub.publish(new_nav_path)
+        self.get_logger().info('Switching to updated path from replanning')
+        self.current_nav_path = new_nav_path
+        self.current_path = self._nav_path_to_pp_path(new_nav_path)
+        self.pure_pursuit.set_path(self.current_path)
+        self.pure_pursuit.start()
+        self.path_pub.publish(new_nav_path)
 
     def _check_path_for_obstacles(self):
         if self.current_nav_path is None:
             return
 
+        if self.replan_pending:
+            return
+
+        now = self.get_clock().now().nanoseconds / 1e9
+        if now - self.last_replan_time < 0.3:
+            return
+
         lookahead_path = self._create_lookahead_segment()
-        if lookahead_path is None or len(lookahead_path.poses) == 0:
+        if lookahead_path is None or len(lookahead_path.poses) < 3:
             return
 
         result = self.path_validator.validate_path(lookahead_path, check_footprint=True)
-        if not result.is_valid and not self.replan_pending:
-            self.get_logger().warn(
-                f'Obstacle at ({result.blocked_position[0]:.1f}, {result.blocked_position[1]:.1f}), replanning')
-            self._request_replan()
+        if not result.is_valid:
+            obstacle_dist = math.sqrt(
+                (result.blocked_position[0] - self.robot_x)**2 +
+                (result.blocked_position[1] - self.robot_y)**2
+            )
+            if obstacle_dist < 6.0:
+                self.get_logger().warn(
+                    f'Obstacle at ({result.blocked_position[0]:.1f}, {result.blocked_position[1]:.1f}) '
+                    f'dist={obstacle_dist:.1f}m, replanning')
+                self._request_replan()
+                if obstacle_dist < 3.0 and self.robot_speed > 0.5:
+                    cmd = Twist()
+                    cmd.linear.x = max(0.3, self.robot_speed * 0.5)
+                    self.cmd_vel_pub.publish(cmd)
 
     def _create_lookahead_segment(self) -> Optional[Path]:
         if self.current_nav_path is None:

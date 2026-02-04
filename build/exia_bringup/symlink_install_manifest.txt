@@ -3,6 +3,7 @@
 /home/zech/exia_ws/install/exia_bringup/share/exia_bringup/launch/sim.launch.py
 /home/zech/exia_ws/install/exia_bringup/share/exia_bringup/config/ackermann_controllers.yaml
 /home/zech/exia_ws/install/exia_bringup/share/exia_bringup/config/nav2_params.yaml
+/home/zech/exia_ws/install/exia_bringup/share/exia_bringup/config/pointcloud_to_laserscan.yaml
 /home/zech/exia_ws/install/exia_bringup/share/exia_bringup/config/slam_toolbox_params.yaml
 /home/zech/exia_ws/install/exia_bringup/share/exia_bringup/urdf/exia_ground.urdf.xacro
 /home/zech/exia_ws/install/exia_bringup/share/exia_bringup/worlds/exia_world.sdf
@@ -11,6 +12,7 @@
 /home/zech/exia_ws/install/exia_bringup/share/exia_bringup/worlds/heightmaps/terrain_heightmap.png
 /home/zech/exia_ws/install/exia_bringup/share/exia_bringup/worlds/hills_world.sdf
 /home/zech/exia_ws/install/exia_bringup/share/exia_bringup/worlds/terrain_world.sdf
+/home/zech/exia_ws/install/exia_bringup/share/exia_bringup/rviz/exia_3d.rviz
 /home/zech/exia_ws/install/exia_bringup/share/ament_index/resource_index/package_run_dependencies/exia_bringup
 /home/zech/exia_ws/install/exia_bringup/share/ament_index/resource_index/parent_prefix_path/exia_bringup
 /home/zech/exia_ws/install/exia_bringup/share/exia_bringup/environment/ament_prefix_path.sh

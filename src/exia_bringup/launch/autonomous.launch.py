@@ -67,7 +67,13 @@ def generate_launch_description():
             'use_sim_time': use_sim_time,
             'autostart': autostart,
             'node_names': ['planner_server'],
+            'bond_timeout': 20.0,
         }],
+    )
+
+    delayed_lifecycle_manager = TimerAction(
+        period=5.0,
+        actions=[lifecycle_manager_node],
     )
 
     dynamic_navigator_node = Node(
@@ -82,7 +88,7 @@ def generate_launch_description():
     )
 
     delayed_navigator = TimerAction(
-        period=10.0,
+        period=20.0,
         actions=[dynamic_navigator_node],
     )
 
@@ -91,6 +97,6 @@ def generate_launch_description():
         autostart_arg,
         slam_toolbox_node,
         planner_server_node,
-        lifecycle_manager_node,
+        delayed_lifecycle_manager,
         delayed_navigator,
     ])

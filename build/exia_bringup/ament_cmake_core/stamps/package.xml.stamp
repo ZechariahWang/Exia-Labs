@@ -21,6 +21,7 @@
   <exec_depend>nav2_planner</exec_depend>
   <exec_depend>nav2_costmap_2d</exec_depend>
   <exec_depend>nav2_lifecycle_manager</exec_depend>
+  <exec_depend>pointcloud_to_laserscan</exec_depend>
 
   <exec_depend>exia_driver</exec_depend>
   <exec_depend>exia_control</exec_depend>

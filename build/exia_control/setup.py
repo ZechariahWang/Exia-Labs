@@ -1,1 +1,0 @@
-/home/zech/exia_ws/src/exia_control/setup.py

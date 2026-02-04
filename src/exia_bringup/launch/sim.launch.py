@@ -126,16 +126,31 @@ def generate_launch_description():
         package='ros_gz_bridge',
         executable='parameter_bridge',
         arguments=[
-            '/lidar@sensor_msgs/msg/LaserScan@gz.msgs.LaserScan',
-            '/lidar/points@sensor_msgs/msg/PointCloud2@gz.msgs.PointCloudPacked',
+            '/lidar_3d/points@sensor_msgs/msg/PointCloud2@gz.msgs.PointCloudPacked',
             '/imu@sensor_msgs/msg/Imu@gz.msgs.IMU',
             '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock',
         ],
         remappings=[
-            ('/lidar', '/scan'),
+            ('/lidar_3d/points', '/points'),
             ('/imu', '/imu/data'),
         ],
         output='screen',
+    )
+
+    pointcloud_to_laserscan_config = os.path.join(
+        bringup_dir, 'config', 'pointcloud_to_laserscan.yaml'
+    )
+
+    pointcloud_to_laserscan = Node(
+        package='pointcloud_to_laserscan',
+        executable='pointcloud_to_laserscan_node',
+        name='pointcloud_to_laserscan',
+        output='screen',
+        parameters=[pointcloud_to_laserscan_config, {'use_sim_time': use_sim_time}],
+        remappings=[
+            ('cloud_in', '/points'),
+            ('scan', '/scan'),
+        ],
     )
 
     ackermann_drive = Node(
@@ -160,5 +175,6 @@ def generate_launch_description():
         delay_throttle_after_steering,
         delay_brake_after_throttle,
         gz_ros_bridge,
+        pointcloud_to_laserscan,
         ackermann_drive,
     ])

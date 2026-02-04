@@ -18,23 +18,46 @@ class ValidationResult:
 
 class PathValidator:
 
-    LETHAL_THRESHOLD = 100
-    HIGH_COST_THRESHOLD = 50
+    LETHAL_THRESHOLD = 252
+    HIGH_COST_THRESHOLD = 180
     UNKNOWN_VALUE = 255
 
     def __init__(self, robot_footprint: Optional[List[Tuple[float, float]]] = None):
         if robot_footprint is None:
-            self._footprint = [
-                (1.15, 0.65),
-                (1.15, -0.65),
-                (-1.15, -0.65),
-                (-1.15, 0.65),
-            ]
+            self._footprint = self._generate_dense_footprint(
+                length=2.1, width=1.2, edge_spacing=0.3
+            )
         else:
             self._footprint = robot_footprint
 
         self._costmap: Optional[OccupancyGrid] = None
         self._costmap_data: Optional[np.ndarray] = None
+
+    def _generate_dense_footprint(
+        self, length: float, width: float, edge_spacing: float
+    ) -> List[Tuple[float, float]]:
+        points = []
+        half_length = length / 2.0
+        half_width = width / 2.0
+
+        x = -half_length
+        while x <= half_length:
+            points.append((x, half_width))
+            points.append((x, -half_width))
+            x += edge_spacing
+
+        y = -half_width + edge_spacing
+        while y < half_width:
+            points.append((half_length, y))
+            points.append((-half_length, y))
+            y += edge_spacing
+
+        points.append((half_length, half_width))
+        points.append((half_length, -half_width))
+        points.append((-half_length, half_width))
+        points.append((-half_length, -half_width))
+
+        return list(set(points))
 
     def update_costmap(self, costmap: OccupancyGrid) -> None:
         self._costmap = costmap

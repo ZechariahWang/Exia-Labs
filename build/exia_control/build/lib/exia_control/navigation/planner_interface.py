@@ -146,7 +146,8 @@ class PlannerInterface:
 
     def plan_path_async(self, start: PoseStamped, goal: PoseStamped,
                         callback: Callable[[PlanningResult], None]) -> None:
-        if not self._action_client.server_is_ready():
+        if not self._action_client.wait_for_server(timeout_sec=5.0):
+            self._logger.warn("Planner action server not available, waiting...")
             callback(PlanningResult(
                 status=PlanningStatus.FAILED,
                 error_message="Planner action server not available"

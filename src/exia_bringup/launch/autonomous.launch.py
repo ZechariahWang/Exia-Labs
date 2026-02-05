@@ -4,6 +4,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, TimerAction
+from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from nav2_common.launch import RewrittenYaml
@@ -24,11 +25,20 @@ def generate_launch_description():
         description='Automatically start nav2 stack'
     )
 
+    use_ekf_arg = DeclareLaunchArgument(
+        'use_ekf',
+        default_value='false',
+        description='Use EKF sensor fusion with GPS'
+    )
+
     use_sim_time = LaunchConfiguration('use_sim_time')
     autostart = LaunchConfiguration('autostart')
+    use_ekf = LaunchConfiguration('use_ekf')
 
     nav2_params_file = os.path.join(bringup_dir, 'config', 'nav2_params.yaml')
     slam_params_file = os.path.join(bringup_dir, 'config', 'slam_toolbox_params.yaml')
+    gps_params_file = os.path.join(bringup_dir, 'config', 'gps_params.yaml')
+    ekf_params_file = os.path.join(bringup_dir, 'config', 'ekf_params.yaml')
 
     configured_nav2_params = RewrittenYaml(
         source_file=nav2_params_file,
@@ -92,11 +102,32 @@ def generate_launch_description():
         actions=[dynamic_navigator_node],
     )
 
+    gps_transform_node = Node(
+        package='exia_driver',
+        executable='gps_transform_node',
+        name='gps_transform_node',
+        output='screen',
+        parameters=[gps_params_file, {'use_sim_time': use_sim_time}],
+        condition=IfCondition(use_ekf),
+    )
+
+    ekf_localization_node = Node(
+        package='robot_localization',
+        executable='ekf_node',
+        name='ekf_filter_node',
+        output='screen',
+        parameters=[ekf_params_file, {'use_sim_time': use_sim_time}],
+        condition=IfCondition(use_ekf),
+    )
+
     return LaunchDescription([
         use_sim_time_arg,
         autostart_arg,
+        use_ekf_arg,
         slam_toolbox_node,
         planner_server_node,
         delayed_lifecycle_manager,
+        gps_transform_node,
+        ekf_localization_node,
         delayed_navigator,
     ])

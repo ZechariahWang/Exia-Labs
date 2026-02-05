@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 import math
+import re
 from enum import Enum
-from typing import Optional
+from typing import Optional, Tuple
 
 import rclpy
 from rclpy.node import Node
@@ -24,9 +25,69 @@ from exia_control.navigation.planner_interface import (
     PlannerInterface, PlanningStatus
 )
 
-# rviz2 -d ~/exia_ws/install/exia_bringup/share/exia_bringup/rviz/exia_3d.rviz 
+# rviz2 -d ~/exia_ws/install/exia_bringup/share/exia_bringup/rviz/exia_3d.rviz
 
 TARGET_POINT = [22, 24]
+
+# for hardware, just need to change these vals
+# for sims update exia_world.sdf as well
+
+USE_GPS_MODE = True
+TARGET_GPS = [49.666667, 11.841389]  # 49°40'00"N 11°50'29"E
+ORIGIN_GPS = [49.666400, 11.841100]
+
+
+def gps_to_local(lat: float, lon: float, origin_lat: float, origin_lon: float) -> tuple:
+    lat0_rad = math.radians(origin_lat)
+    x = (lon - origin_lon) * math.cos(lat0_rad) * 111320.0
+    y = (lat - origin_lat) * 111320.0
+    return x, y
+
+
+def dms_to_decimal(dms_str: str) -> float:
+    dms_str = dms_str.strip().upper()
+    pattern = r"(\d+)[°D]\s*(\d+)['\u2032M]\s*(\d+(?:\.\d+)?)[\"″\u2033S]?\s*([NSEW])"
+    match = re.match(pattern, dms_str)
+    if match:
+        degrees = float(match.group(1))
+        minutes = float(match.group(2))
+        seconds = float(match.group(3))
+        direction = match.group(4)
+        decimal = degrees + (minutes / 60.0) + (seconds / 3600.0)
+        if direction in ['S', 'W']:
+            decimal = -decimal
+        return decimal
+    pattern_simple = r"(\d+)[°D]\s*(\d+(?:\.\d+)?)['\u2032M]\s*([NSEW])"
+    match = re.match(pattern_simple, dms_str)
+    if match:
+        degrees = float(match.group(1))
+        minutes = float(match.group(2))
+        direction = match.group(3)
+        decimal = degrees + (minutes / 60.0)
+        if direction in ['S', 'W']:
+            decimal = -decimal
+        return decimal
+    try:
+        return float(dms_str)
+    except ValueError:
+        raise ValueError(f"Cannot parse DMS string: {dms_str}")
+
+
+def parse_dms_coordinates(coord_str: str) -> Tuple[float, float]:
+    coord_str = coord_str.strip()
+    parts = re.split(r'[,\s]+(?=\d)', coord_str, maxsplit=1)
+    if len(parts) == 2:
+        lat_str, lon_str = parts
+    else:
+        match = re.match(r"(.+[NS])\s*(.+[EW])", coord_str, re.IGNORECASE)
+        if match:
+            lat_str = match.group(1)
+            lon_str = match.group(2)
+        else:
+            raise ValueError(f"Cannot parse coordinate pair: {coord_str}")
+    lat = dms_to_decimal(lat_str)
+    lon = dms_to_decimal(lon_str)
+    return lat, lon
 
 
 class NavigatorState(Enum):
@@ -50,6 +111,14 @@ class DynamicNavigator(Node):
         self.declare_parameter('obstacle_lookahead', 8.0)
         self.declare_parameter('control_rate', 50.0)
         self.declare_parameter('auto_start', True)
+
+        self.declare_parameter('use_gps_waypoint', USE_GPS_MODE)
+        self.declare_parameter('target_lat', TARGET_GPS[0])
+        self.declare_parameter('target_lon', TARGET_GPS[1])
+        self.declare_parameter('origin_lat', ORIGIN_GPS[0])
+        self.declare_parameter('origin_lon', ORIGIN_GPS[1])
+        self.declare_parameter('target_x', float(TARGET_POINT[0]))
+        self.declare_parameter('target_y', float(TARGET_POINT[1]))
 
         self.replan_period = self.get_parameter('replan_period').value
         self.min_replan_interval = self.get_parameter('min_replan_interval').value
@@ -125,10 +194,36 @@ class DynamicNavigator(Node):
         self._auto_start_done = False
         self._costmap_update_count = 0
         self._min_costmap_updates = 10
+
+        self.use_gps_waypoint = self.get_parameter('use_gps_waypoint').value
+        self.target_lat = self.get_parameter('target_lat').value
+        self.target_lon = self.get_parameter('target_lon').value
+        self.origin_lat = self.get_parameter('origin_lat').value
+        self.origin_lon = self.get_parameter('origin_lon').value
+        self.target_x = self.get_parameter('target_x').value
+        self.target_y = self.get_parameter('target_y').value
+
+        if self.use_gps_waypoint:
+            self.target_x, self.target_y = gps_to_local(
+                self.target_lat, self.target_lon,
+                self.origin_lat, self.origin_lon
+            )
+            self.get_logger().info(
+                f'GPS waypoint mode: ({self.target_lat:.6f}, {self.target_lon:.6f}) -> '
+                f'local ({self.target_x:.2f}, {self.target_y:.2f})'
+            )
+
         if auto_start:
             self.create_timer(2.0, self._delayed_auto_start, callback_group=self.callback_group)
 
-        self.get_logger().info(f'Dynamic Navigator initialized - Target: ({TARGET_POINT[0]}, {TARGET_POINT[1]})')
+        if self.use_gps_waypoint:
+            self.get_logger().info(
+                f'Dynamic Navigator initialized - GPS Target: ({self.target_lat:.6f}, {self.target_lon:.6f})'
+            )
+        else:
+            self.get_logger().info(
+                f'Dynamic Navigator initialized - Target: ({self.target_x:.2f}, {self.target_y:.2f})'
+            )
 
     def _delayed_auto_start(self):
         if self._auto_start_done or self.state != NavigatorState.IDLE:
@@ -154,11 +249,11 @@ class DynamicNavigator(Node):
         goal = PoseStamped()
         goal.header.frame_id = 'map'
         goal.header.stamp = self.get_clock().now().to_msg()
-        goal.pose.position.x = float(TARGET_POINT[0])
-        goal.pose.position.y = float(TARGET_POINT[1])
+        goal.pose.position.x = self.target_x
+        goal.pose.position.y = self.target_y
         goal.pose.orientation.w = 1.0
 
-        self.get_logger().info(f'Auto-starting navigation after {self._costmap_update_count} costmap updates')
+        self.get_logger().info(f'Auto-starting navigation to ({self.target_x:.2f}, {self.target_y:.2f})')
         self._goal_callback(goal)
 
     def _odom_callback(self, msg: Odometry):
@@ -571,7 +666,8 @@ def main(args=None):
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':

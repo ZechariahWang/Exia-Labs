@@ -1,0 +1,34 @@
+septentrio_gnss_driver:
+  ros__parameters:
+    device: /dev/ttyACM0
+    serial_baud_rate: 921600
+    frame_id: gps_link
+
+    publish_navsatfix: true
+    publish_gpsfix: true
+    publish_gpgga: false
+    publish_gpgsa: false
+    publish_gpgsv: false
+    publish_gprmc: false
+    publish_pvtcartesian: false
+    publish_pvtgeodetic: false
+    publish_poscovcartesian: false
+    publish_poscovgeodetic: false
+    publish_velcovcartesian: false
+    publish_velcovgeodetic: false
+    publish_atteuler: false
+    publish_attcoveuler: false
+    publish_insnavcart: false
+    publish_insnavgeod: false
+    publish_imusetup: false
+    publish_velsensorsetup: false
+    publish_exteventinsnavcart: false
+    publish_exteventinsnavgeod: false
+    publish_extsensormeas: false
+    publish_diagnostics: true
+    publish_tf: false
+    publish_localization: false
+
+    use_gnss_time: false
+    rtk_settings: none
+    polling_period: main: 100

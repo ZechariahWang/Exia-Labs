@@ -9,5 +9,6 @@ setup.py
 ../../build/exia_driver/exia_driver.egg-info/top_level.txt
 ../../build/exia_driver/exia_driver.egg-info/zip-safe
 exia_driver/__init__.py
+exia_driver/gps_transform_node.py
 exia_driver/rc_driver_node.py
 resource/exia_driver

@@ -1,0 +1,8 @@
+gps_transform_node:
+  ros__parameters:
+    origin_lat: 49.666400
+    origin_lon: 11.841100
+    auto_set_origin: true
+    publish_tf: false
+    gps_frame_id: gps_link
+    odom_frame_id: odom

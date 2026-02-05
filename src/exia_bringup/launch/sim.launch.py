@@ -129,10 +129,12 @@ def generate_launch_description():
             '/lidar_3d/points@sensor_msgs/msg/PointCloud2@gz.msgs.PointCloudPacked',
             '/imu@sensor_msgs/msg/Imu@gz.msgs.IMU',
             '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock',
+            '/navsat@sensor_msgs/msg/NavSatFix@gz.msgs.NavSat',
         ],
         remappings=[
             ('/lidar_3d/points', '/points'),
             ('/imu', '/imu/data'),
+            ('/navsat', '/gps/fix'),
         ],
         output='screen',
     )

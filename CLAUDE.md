@@ -1,6 +1,6 @@
 # Exia Ground Robot Workspace
 # Author: Zechariah Wang (Dec 25, 2025)
-# Updated: February 2026 - Multi-Package Architecture
+# Updated: February 2026 - Multi-Package Architecture + GPS Integration
 
 ROS 2 workspace for the Exia Ground robot platform.
 
@@ -59,11 +59,17 @@ exia_ws/
 │   ├── exia_bringup/               # Launch files, config, URDF (ament_cmake)
 │   │   ├── launch/
 │   │   │   ├── sim.launch.py       # Gazebo simulation
-│   │   │   └── autonomous.launch.py # SLAM + Nav2 + Dynamic navigator
+│   │   │   ├── autonomous.launch.py # SLAM + Nav2 + Dynamic navigator
+│   │   │   ├── rc_control.launch.py # Hardware RC driver mode
+│   │   │   └── gps_navigation.launch.py # GPS + EKF sensor fusion
 │   │   ├── config/
 │   │   │   ├── ackermann_controllers.yaml
 │   │   │   ├── nav2_params.yaml
-│   │   │   └── slam_toolbox_params.yaml
+│   │   │   ├── slam_toolbox_params.yaml
+│   │   │   ├── pointcloud_to_laserscan.yaml
+│   │   │   ├── gps_params.yaml
+│   │   │   ├── ekf_params.yaml
+│   │   │   └── septentrio_rover.yaml
 │   │   ├── urdf/
 │   │   │   └── exia_ground.urdf.xacro
 │   │   └── worlds/
@@ -81,7 +87,8 @@ exia_ws/
 │   │
 │   ├── exia_driver/                # Hardware drivers (ament_python)
 │   │   └── exia_driver/
-│   │       └── rc_driver_node.py
+│   │       ├── rc_driver_node.py
+│   │       └── gps_transform_node.py
 │   │
 │   └── exia_msgs/                  # Custom messages (ament_cmake)
 │       └── msg/
@@ -114,7 +121,66 @@ ros2 launch exia_bringup sim.launch.py
 # Terminal 2: Start autonomous navigation (after Gazebo loads)
 source ~/exia_ws/install/setup.bash
 ros2 launch exia_bringup autonomous.launch.py
+
+# With EKF sensor fusion (GPS + wheel odom + IMU)
+ros2 launch exia_bringup autonomous.launch.py use_ekf:=true
 ```
+
+## GPS Waypoint Navigation
+
+The robot supports GPS waypoint navigation for outdoor operation. GPS coordinates are converted to local XY using equirectangular projection.
+
+### GPS Configuration
+
+Edit `src/exia_control/exia_control/dynamic_navigator_node.py`:
+```python
+USE_GPS_MODE = True
+TARGET_GPS = [49.666667, 11.841389]  # [lat, lon] destination
+ORIGIN_GPS = [49.666400, 11.841100]  # [lat, lon] reference origin
+```
+
+### When Moving to a New Location
+
+**For hardware deployment**, update these values in `dynamic_navigator_node.py`:
+- `TARGET_GPS` - Your destination coordinates
+- `ORIGIN_GPS` - A reference point near your operating area
+
+**For simulation**, also update:
+- `src/exia_bringup/worlds/exia_world.sdf` - spherical_coordinates
+- `src/exia_bringup/config/gps_params.yaml` - origin_lat/origin_lon
+
+### DMS Coordinate Format
+
+The navigator supports DMS (degrees-minutes-seconds) input:
+```
+49°40'00"N 11°50'29"E  →  [49.666667, 11.841389]
+```
+
+### GPS Architecture
+
+```
+┌─────────────────┐     ┌─────────────────────┐     ┌──────────────────┐
+│  ARK MOSAIC-X5  │     │ septentrio_gnss_    │     │ gps_transform_   │
+│  RTK GPS        │────▶│     driver          │────▶│     node         │
+│  /dev/ttyACM0   │     │  /gnss/fix (NavSat) │     │  GPS → Local XY  │
+└─────────────────┘     └─────────────────────┘     │  /gps/odom       │
+                                                     └────────┬─────────┘
+        OR (Simulation)                                       │
+                                                              ▼
+┌─────────────────┐     ┌─────────────────────┐     ┌──────────────────┐
+│ Gazebo NavSat   │────▶│   ros_gz_bridge     │────▶│ dynamic_navigator│
+│ Sensor Plugin   │     │  /gps/fix           │     │  GPS waypoints   │
+└─────────────────┘     └─────────────────────┘     └──────────────────┘
+```
+
+### EKF Sensor Fusion
+
+When `use_ekf:=true`, robot_localization fuses:
+- `/gps/odom` - GPS position (X, Y)
+- `/odom` - Wheel odometry (velocity)
+- `/imu/data` - IMU (orientation, angular velocity)
+
+Output: `/odometry/filtered` (fused pose estimate)
 
 ## Packages
 
@@ -125,6 +191,8 @@ Launch files, configuration, URDF, and world files.
 |-------------|---------|
 | `sim.launch.py` | Gazebo Fortress simulation with controllers |
 | `autonomous.launch.py` | SLAM + Nav2 planner + Dynamic navigator |
+| `rc_control.launch.py` | Hardware RC driver for physical robot |
+| `gps_navigation.launch.py` | GPS driver + EKF sensor fusion |
 
 ### exia_control (ament_python)
 Navigation and control logic.
@@ -146,6 +214,7 @@ Hardware drivers for physical robot.
 | Executable | Purpose |
 |------------|---------|
 | `rc_driver_node` | RC radio receiver + Arduino serial control |
+| `gps_transform_node` | GPS lat/lon to local XY conversion |
 
 ### exia_msgs (ament_cmake)
 Custom message definitions (placeholder).
@@ -237,6 +306,9 @@ source install/setup.bash
 | `/global_costmap/costmap` | OccupancyGrid | Obstacle map |
 | `/steering_controller/commands` | Float64MultiArray | Steering joint commands |
 | `/throttle_controller/commands` | Float64MultiArray | Wheel velocity commands |
+| `/gps/fix` | NavSatFix | GPS coordinates (lat/lon) |
+| `/gps/odom` | Odometry | GPS as local XY odometry |
+| `/odometry/filtered` | Odometry | EKF fused odometry |
 
 ## Sensors
 
@@ -250,6 +322,13 @@ source install/setup.bash
 - Topic: `/imu/data`
 - Rate: 200Hz
 
+### GPS (ARK MOSAIC-X5 RTK)
+- Hardware: Septentrio mosaic-X5 chip
+- Topic: `/gnss/fix` (hardware), `/gps/fix` (simulation)
+- Driver: `septentrio_gnss_driver`
+- Rate: 10Hz
+- Accuracy: RTK cm-level (with base station)
+
 ## TF Tree
 
 ```
@@ -262,7 +341,8 @@ map (from SLAM)
                     ├── rear_left_wheel
                     ├── rear_right_wheel
                     ├── lidar_link
-                    └── imu_link
+                    ├── imu_link
+                    └── gps_link
 ```
 
 ## Debugging
@@ -288,6 +368,11 @@ ros2 lifecycle get /planner_server
 
 # View path
 ros2 topic echo /planned_path --once
+
+# GPS debugging
+ros2 topic echo /gps/fix --once
+ros2 topic echo /gps/odom --once
+ros2 topic echo /odometry/filtered --once
 ```
 
 ## Hardware Deployment
@@ -343,11 +428,21 @@ The Arduino Mega runs `exia_servo_controller.ino` to control physical servos.
 | `DISARM` | Disable and safe servos |
 | `S90,T90,B0` | Set steering=90, throttle=90, brake=0 |
 
+## Dependencies
+
+```bash
+# GPS and sensor fusion packages
+sudo apt install ros-humble-robot-localization
+sudo apt install ros-humble-septentrio-gnss-driver
+sudo apt install ros-humble-nmea-msgs ros-humble-gps-msgs
+```
+
 ## Development Notes
 
 - **Simulator**: Gazebo Fortress (not Classic)
 - **Ackermann steering**: Cannot rotate in place, must have forward velocity to turn
 - **RViz Fixed Frame**: Use `odom` or `map` depending on navigation mode
 - **Gazebo multicast warnings**: Set `export IGN_IP=127.0.0.1` to suppress
+- **GPS Mode**: Set `USE_GPS_MODE = True` in dynamic_navigator_node.py for GPS waypoints
 
 Dont write any comments in the code.

@@ -10,7 +10,10 @@ setup.py
 ../../build/exia_control/exia_control.egg-info/zip-safe
 exia_control/__init__.py
 exia_control/ackermann_drive_node.py
+exia_control/drive_forward_test_node.py
 exia_control/dynamic_navigator_node.py
+exia_control/nav_to_cmd.py
+exia_control/turn_to_heading_test_node.py
 exia_control/navigation/__init__.py
 exia_control/navigation/path_validator.py
 exia_control/navigation/planner_interface.py

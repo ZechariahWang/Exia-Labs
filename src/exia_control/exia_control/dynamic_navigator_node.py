@@ -13,9 +13,12 @@ from geometry_msgs.msg import Twist, PoseStamped, Quaternion
 from nav_msgs.msg import Odometry, OccupancyGrid, Path
 from std_srvs.srv import Trigger
 from visualization_msgs.msg import Marker, MarkerArray
+from rcl_interfaces.msg import ParameterDescriptor
 
 import tf2_ros
 from tf2_ros import TransformException
+
+from exia_msgs.msg import NavigationGoal
 
 from exia_control.planning.pure_pursuit import (
     PurePursuitController, PurePursuitConfig, Path as PurePursuitPath
@@ -38,13 +41,29 @@ TARGET_GPS = [49.666667, 11.841389]  # 49°40'00"N 11°50'29"E germany hill loc 
 ORIGIN_GPS = [49.666400, 11.841100]
 
 
+#   # Go to local coordinates                                                                                                                                                           
+#   ros2 run exia_control nav_to xy 30.0 15.0                                                                                                                                           
+                                                                                                                                                                                      
+#   # Go to GPS coordinates                                                                                                                                                             
+#   ros2 run exia_control nav_to latlon 49.666667 11.841389                                                                                                                             
+
+#   # GPS with custom origin
+#   ros2 run exia_control nav_to latlon 49.666667 11.841389 --origin 49.6664 11.8411
+
+#   # DMS format
+#   ros2 run exia_control nav_to dms "49D40'00\"N" "11D50'29\"E"
+
+#   # Cancel current navigation
+#   ros2 run exia_control nav_to cancel
+
+# convert lat long to x,y
 def gps_to_local(lat: float, lon: float, origin_lat: float, origin_lon: float) -> tuple:
     lat0_rad = math.radians(origin_lat)
     x = (lon - origin_lon) * math.cos(lat0_rad) * 111320.0
     y = (lat - origin_lat) * 111320.0
     return x, y
 
-
+# helper func
 def dms_to_decimal(dms_str: str) -> float:
     dms_str = dms_str.strip().upper()
     pattern = r"(\d+)[°D]\s*(\d+)['\u2032M]\s*(\d+(?:\.\d+)?)[\"″\u2033S]?\s*([NSEW])"
@@ -73,7 +92,7 @@ def dms_to_decimal(dms_str: str) -> float:
     except ValueError:
         raise ValueError(f"Cannot parse DMS string: {dms_str}")
 
-
+# turn dms to lat long
 def parse_dms_coordinates(coord_str: str) -> Tuple[float, float]:
     coord_str = coord_str.strip()
     parts = re.split(r'[,\s]+(?=\d)', coord_str, maxsplit=1)
@@ -97,6 +116,8 @@ class NavigatorState(Enum):
     EXECUTING = 2
     RECOVERING = 3
 
+    # kovid wux ere 2k26
+    # uwu xoxo nyahh ~~~~~ >;) - Eric
 
 class DynamicNavigator(Node):
 
@@ -113,13 +134,14 @@ class DynamicNavigator(Node):
         self.declare_parameter('control_rate', 50.0)
         self.declare_parameter('auto_start', True)
 
-        self.declare_parameter('use_gps_waypoint', USE_GPS_MODE)
-        self.declare_parameter('target_lat', TARGET_GPS[0])
-        self.declare_parameter('target_lon', TARGET_GPS[1])
-        self.declare_parameter('origin_lat', ORIGIN_GPS[0])
-        self.declare_parameter('origin_lon', ORIGIN_GPS[1])
-        self.declare_parameter('target_x', float(TARGET_POINT[0]))
-        self.declare_parameter('target_y', float(TARGET_POINT[1]))
+        _dyn = ParameterDescriptor(dynamic_typing=True)
+        self.declare_parameter('use_gps_waypoint', USE_GPS_MODE, _dyn)
+        self.declare_parameter('target_lat', TARGET_GPS[0], _dyn)
+        self.declare_parameter('target_lon', TARGET_GPS[1], _dyn)
+        self.declare_parameter('origin_lat', ORIGIN_GPS[0], _dyn)
+        self.declare_parameter('origin_lon', ORIGIN_GPS[1], _dyn)
+        self.declare_parameter('target_x', float(TARGET_POINT[0]), _dyn)
+        self.declare_parameter('target_y', float(TARGET_POINT[1]), _dyn)
 
         self.replan_period = self.get_parameter('replan_period').value
         self.min_replan_interval = self.get_parameter('min_replan_interval').value
@@ -143,6 +165,7 @@ class DynamicNavigator(Node):
         self.last_replan_time = 0.0
         self.replan_pending = False
 
+        # configure pp controller
         pp_config = PurePursuitConfig(
             lookahead_distance=lookahead,
             goal_tolerance=self.goal_tolerance,
@@ -150,6 +173,7 @@ class DynamicNavigator(Node):
             min_linear_speed=0.2,
             wheelbase=1.3,
         )
+
         self.pure_pursuit = PurePursuitController(pp_config)
 
         self.path_validator = PathValidator()
@@ -171,6 +195,7 @@ class DynamicNavigator(Node):
             depth=1
         )
 
+        # create subscribers
         self.odom_sub = self.create_subscription(
             Odometry, '/odom', self._odom_callback, 10)
         self.goal_sub = self.create_subscription(
@@ -178,7 +203,10 @@ class DynamicNavigator(Node):
         self.costmap_sub = self.create_subscription(
             OccupancyGrid, '/global_costmap/costmap',
             self._costmap_callback, costmap_qos)
+        self.nav_goal_sub = self.create_subscription(
+            NavigationGoal, '/navigation/goal', self._nav_goal_callback, 10)
 
+        # create publishers
         self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
         self.path_pub = self.create_publisher(Path, '/planned_path', 10)
         self.markers_pub = self.create_publisher(MarkerArray, '/nav_markers', 10)
@@ -196,14 +224,15 @@ class DynamicNavigator(Node):
         self._costmap_update_count = 0
         self._min_costmap_updates = 10
 
-        self.use_gps_waypoint = self.get_parameter('use_gps_waypoint').value
-        self.target_lat = self.get_parameter('target_lat').value
-        self.target_lon = self.get_parameter('target_lon').value
-        self.origin_lat = self.get_parameter('origin_lat').value
-        self.origin_lon = self.get_parameter('origin_lon').value
-        self.target_x = self.get_parameter('target_x').value
-        self.target_y = self.get_parameter('target_y').value
+        self.use_gps_waypoint = bool(self.get_parameter('use_gps_waypoint').value)
+        self.target_lat = float(self.get_parameter('target_lat').value)
+        self.target_lon = float(self.get_parameter('target_lon').value)
+        self.origin_lat = float(self.get_parameter('origin_lat').value)
+        self.origin_lon = float(self.get_parameter('origin_lon').value)
+        self.target_x = float(self.get_parameter('target_x').value)
+        self.target_y = float(self.get_parameter('target_y').value)
 
+        # decide whether to use global lat long points or local xy
         if self.use_gps_waypoint:
             self.target_x, self.target_y = gps_to_local(
                 self.target_lat, self.target_lon,
@@ -214,6 +243,7 @@ class DynamicNavigator(Node):
                 f'local ({self.target_x:.2f}, {self.target_y:.2f})'
             )
 
+        # init prereqs
         if auto_start:
             self.create_timer(2.0, self._delayed_auto_start, callback_group=self.callback_group)
 
@@ -225,6 +255,15 @@ class DynamicNavigator(Node):
             self.get_logger().info(
                 f'Dynamic Navigator initialized - Target: ({self.target_x:.2f}, {self.target_y:.2f})'
             )
+
+    # added this bc there is a race con at the beginning of initm, so we need a delay for costmap to stabilize
+    def _one_shot_timer(self, period, callback):
+        def wrapper():
+            timer.cancel()
+            timer.destroy()
+            callback()
+        timer = self.create_timer(period, wrapper, callback_group=self.callback_group)
+        return timer
 
     def _delayed_auto_start(self):
         if self._auto_start_done or self.state != NavigatorState.IDLE:
@@ -268,7 +307,7 @@ class DynamicNavigator(Node):
             q = transform.transform.rotation
             self.robot_yaw = self._quaternion_to_yaw(q)
         except TransformException:
-            self.robot_x = msg.pose.pose.position.x
+            self.robot_x = msg.pose.pose.position.x 
             self.robot_y = msg.pose.pose.position.y
             self.robot_yaw = self._quaternion_to_yaw(msg.pose.pose.orientation)
 
@@ -281,6 +320,41 @@ class DynamicNavigator(Node):
         self._consecutive_replan_failures = 0
         self.state = NavigatorState.PLANNING
         self._request_initial_plan()
+
+    def _nav_goal_callback(self, msg: NavigationGoal):
+        coord_type = msg.coord_type.strip().lower()
+
+        if coord_type == 'xy':
+            target_x, target_y = msg.x, msg.y
+            self.get_logger().info(f'Navigation goal (xy): ({target_x:.2f}, {target_y:.2f})')
+
+        elif coord_type == 'latlon':
+            o_lat = msg.origin_lat if msg.origin_lat != 0.0 else self.origin_lat
+            o_lon = msg.origin_lon if msg.origin_lon != 0.0 else self.origin_lon
+            target_x, target_y = gps_to_local(msg.lat, msg.lon, o_lat, o_lon)
+            self.get_logger().info(
+                f'Navigation goal (latlon): ({msg.lat:.6f}, {msg.lon:.6f}) -> ({target_x:.2f}, {target_y:.2f})')
+
+        elif coord_type == 'dms':
+            lat = dms_to_decimal(msg.lat_dms)
+            lon = dms_to_decimal(msg.lon_dms)
+            o_lat = msg.origin_lat if msg.origin_lat != 0.0 else self.origin_lat
+            o_lon = msg.origin_lon if msg.origin_lon != 0.0 else self.origin_lon
+            target_x, target_y = gps_to_local(lat, lon, o_lat, o_lon)
+            self.get_logger().info(
+                f'Navigation goal (dms): ({lat:.6f}, {lon:.6f}) -> ({target_x:.2f}, {target_y:.2f})')
+
+        else:
+            self.get_logger().error(f'Unknown coord_type: "{coord_type}". Use "xy", "latlon", or "dms".')
+            return
+
+        goal = PoseStamped()
+        goal.header.frame_id = 'map'
+        goal.header.stamp = self.get_clock().now().to_msg()
+        goal.pose.position.x = target_x
+        goal.pose.position.y = target_y
+        goal.pose.orientation.w = 1.0
+        self._goal_callback(goal)
 
     def _costmap_callback(self, msg: OccupancyGrid):
         self.costmap = msg
@@ -302,6 +376,7 @@ class DynamicNavigator(Node):
         response.message = 'Navigation cancelled'
         return response
 
+    # decided data publish and stop depending on nav curr state
     def _control_loop(self):
         if self.state == NavigatorState.IDLE:
             self._publish_stop()
@@ -312,6 +387,7 @@ class DynamicNavigator(Node):
         elif self.state == NavigatorState.RECOVERING:
             self._execute_recovery()
 
+    # checks if we have reached the goal or not, and moves the robot
     def _execute_path(self):
         if self.current_path is None or self.current_goal is None:
             self.state = NavigatorState.IDLE
@@ -329,6 +405,7 @@ class DynamicNavigator(Node):
             self._publish_stop()
             return
 
+        # compute pp
         cmd, goal_reached = self.pure_pursuit.compute_velocity(
             self.robot_x, self.robot_y, self.robot_yaw, self.robot_speed)
 
@@ -345,6 +422,7 @@ class DynamicNavigator(Node):
 
         self.cmd_vel_pub.publish(cmd)
 
+    # this is a little scuffed, ideally we never should reach this point if the A* recalculates properly.
     def _execute_recovery(self):
         if not hasattr(self, '_recovery_in_progress') or not self._recovery_in_progress:
             self._recovery_in_progress = True
@@ -379,6 +457,7 @@ class DynamicNavigator(Node):
         cmd.linear.x = -0.5
         self.cmd_vel_pub.publish(cmd)
 
+    # replan the a* every 500ms, with an interval of replanning of 200ms 
     def _periodic_replan(self):
         if self.state != NavigatorState.EXECUTING or self.current_goal is None:
             return
@@ -390,6 +469,7 @@ class DynamicNavigator(Node):
         if not self.replan_pending:
             self._request_replan()
 
+    # this is the path planned initially before any obstacles are detected via lidar. once this happens, it will request a replan
     def _request_initial_plan(self):
         if self.current_goal is None:
             self.state = NavigatorState.IDLE
@@ -409,6 +489,7 @@ class DynamicNavigator(Node):
         self.replan_pending = True
         self.planner.plan_path_async(start, self.current_goal, self._on_initial_path)
 
+    # equest replan every 500ms
     def _request_replan(self):
         if self.current_goal is None:
             return
@@ -428,6 +509,7 @@ class DynamicNavigator(Node):
         self.last_replan_time = now
         self.planner.plan_path_async(start, self.current_goal, self._on_replan_received)
 
+
     def _on_initial_path(self, result):
         self.replan_pending = False
 
@@ -443,7 +525,7 @@ class DynamicNavigator(Node):
                     self.get_logger().error('Multiple failures, entering recovery')
                     self.state = NavigatorState.RECOVERING
                 else:
-                    self.create_timer(0.5, self._request_initial_plan, callback_group=self.callback_group)
+                    self._one_shot_timer(0.5, self._request_initial_plan)
                 return
 
             self.current_nav_path = nav_path
@@ -462,7 +544,7 @@ class DynamicNavigator(Node):
                 self.current_goal = None
             else:
                 self.get_logger().info(f'Retrying planning ({self._consecutive_replan_failures}/10)...')
-                self.create_timer(2.0, self._request_initial_plan, callback_group=self.callback_group)
+                self._one_shot_timer(2.0, self._request_initial_plan)
 
     def _on_replan_received(self, result):
         self.replan_pending = False
@@ -578,6 +660,7 @@ class DynamicNavigator(Node):
             total += math.sqrt((p2.x - p1.x)**2 + (p2.y - p1.y)**2)
         return total
 
+    # compute dist
     def _compute_remaining_path_length(self) -> float:
         if self.current_path is None or len(self.current_path) < 2:
             return 0.0
@@ -599,6 +682,7 @@ class DynamicNavigator(Node):
             total += math.sqrt((p2.x - p1.x)**2 + (p2.y - p1.y)**2)
         return total
 
+    # this lowkey doesnt work at all
     def _publish_visualization(self):
         markers = MarkerArray()
 

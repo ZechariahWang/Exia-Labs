@@ -20,6 +20,9 @@ setup(
         'console_scripts': [
             'dynamic_navigator_node = exia_control.dynamic_navigator_node:main',
             'ackermann_drive_node = exia_control.ackermann_drive_node:main',
+            'drive_forward_test_node = exia_control.drive_forward_test_node:main',
+            'turn_to_heading_test_node = exia_control.turn_to_heading_test_node:main',
+            'nav_to = exia_control.nav_to_cmd:main',
         ],
     },
 )

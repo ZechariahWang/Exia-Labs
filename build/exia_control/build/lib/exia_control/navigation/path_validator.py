@@ -61,7 +61,7 @@ class PathValidator:
 
     def update_costmap(self, costmap: OccupancyGrid) -> None:
         self._costmap = costmap
-        self._costmap_data = np.array(costmap.data, dtype=np.int8).reshape(
+        self._costmap_data = np.array(costmap.data, dtype=np.uint8).reshape(
             (costmap.info.height, costmap.info.width)
         )
 

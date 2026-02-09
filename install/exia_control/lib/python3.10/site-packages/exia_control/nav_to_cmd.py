@@ -1,0 +1,148 @@
+#!/usr/bin/env python3
+import sys
+import rclpy
+from rclpy.node import Node
+from exia_msgs.msg import NavigationGoal
+from std_srvs.srv import Trigger
+
+
+class NavToCmd(Node):
+    def __init__(self):
+        super().__init__('nav_to_cmd')
+        self.pub = self.create_publisher(NavigationGoal, '/navigation/goal', 10)
+        self.cancel_client = self.create_client(Trigger, '/navigation/cancel')
+
+    def send_goal(self, msg):
+        for _ in range(5):
+            rclpy.spin_once(self, timeout_sec=0.05)
+        self.pub.publish(msg)
+        rclpy.spin_once(self, timeout_sec=0.1)
+
+    def send_cancel(self):
+        if not self.cancel_client.wait_for_service(timeout_sec=3.0):
+            self.get_logger().error('Cancel service not available')
+            return False
+        future = self.cancel_client.call_async(Trigger.Request())
+        rclpy.spin_until_future_complete(self, future, timeout_sec=5.0)
+        if future.result() is not None:
+            self.get_logger().info(f'Navigation cancelled: {future.result().message}')
+            return True
+        self.get_logger().error('Cancel request failed')
+        return False
+
+
+def print_usage():
+    print('Usage:')
+    print('  ros2 run exia_control nav_to xy <x> <y>')
+    print('  ros2 run exia_control nav_to latlon <lat> <lon>')
+    print('  ros2 run exia_control nav_to latlon <lat> <lon> --origin <origin_lat> <origin_lon>')
+    print('  ros2 run exia_control nav_to dms "<lat_dms>" "<lon_dms>"')
+    print('  ros2 run exia_control nav_to cancel')
+    print()
+    print('Examples:')
+    print('  ros2 run exia_control nav_to xy 30.0 15.0')
+    print('  ros2 run exia_control nav_to latlon 49.666667 11.841389')
+    print("  ros2 run exia_control nav_to dms \"49D40'00\\\"N\" \"11D50'29\\\"E\"")
+    print('  ros2 run exia_control nav_to cancel')
+
+
+def main(args=None):
+    argv = sys.argv[1:]
+
+    ros_args = []
+    user_args = []
+    skip_next = False
+    for i, a in enumerate(argv):
+        if skip_next:
+            skip_next = False
+            continue
+        if a.startswith('--ros-args') or a.startswith('-r') or a.startswith('__'):
+            ros_args.append(a)
+            if a == '--ros-args':
+                for j in range(i + 1, len(argv)):
+                    ros_args.append(argv[j])
+                break
+        else:
+            user_args.append(a)
+
+    if not user_args:
+        print_usage()
+        return
+
+    cmd = user_args[0].lower()
+
+    rclpy.init(args=['--ros-args'] + ros_args if ros_args else None)
+    node = NavToCmd()
+
+    try:
+        if cmd == 'cancel':
+            node.send_cancel()
+            return
+
+        msg = NavigationGoal()
+
+        if cmd == 'xy':
+            if len(user_args) < 3:
+                print('Error: xy requires <x> <y>')
+                print_usage()
+                return
+            msg.coord_type = 'xy'
+            msg.x = float(user_args[1])
+            msg.y = float(user_args[2])
+            node.get_logger().info(f'Sending goal: xy ({msg.x:.2f}, {msg.y:.2f})')
+
+        elif cmd == 'latlon':
+            if len(user_args) < 3:
+                print('Error: latlon requires <lat> <lon>')
+                print_usage()
+                return
+            msg.coord_type = 'latlon'
+            msg.lat = float(user_args[1])
+            msg.lon = float(user_args[2])
+            origin_idx = None
+            for i, a in enumerate(user_args):
+                if a == '--origin':
+                    origin_idx = i
+                    break
+            if origin_idx is not None and len(user_args) > origin_idx + 2:
+                msg.origin_lat = float(user_args[origin_idx + 1])
+                msg.origin_lon = float(user_args[origin_idx + 2])
+                node.get_logger().info(
+                    f'Sending goal: latlon ({msg.lat:.6f}, {msg.lon:.6f}) '
+                    f'origin ({msg.origin_lat:.6f}, {msg.origin_lon:.6f})')
+            else:
+                node.get_logger().info(f'Sending goal: latlon ({msg.lat:.6f}, {msg.lon:.6f})')
+
+        elif cmd == 'dms':
+            if len(user_args) < 3:
+                print('Error: dms requires "<lat_dms>" "<lon_dms>"')
+                print_usage()
+                return
+            msg.coord_type = 'dms'
+            msg.lat_dms = user_args[1]
+            msg.lon_dms = user_args[2]
+            origin_idx = None
+            for i, a in enumerate(user_args):
+                if a == '--origin':
+                    origin_idx = i
+                    break
+            if origin_idx is not None and len(user_args) > origin_idx + 2:
+                msg.origin_lat = float(user_args[origin_idx + 1])
+                msg.origin_lon = float(user_args[origin_idx + 2])
+            node.get_logger().info(f'Sending goal: dms ({msg.lat_dms}, {msg.lon_dms})')
+
+        else:
+            print(f'Unknown command: {cmd}')
+            print_usage()
+            return
+
+        node.send_goal(msg)
+
+    finally:
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()

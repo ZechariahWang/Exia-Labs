@@ -1,0 +1,6 @@
+{
+  "package_name": "exia_msgs",
+  "non_idl_tuples": [
+    "/home/zech/exia_ws/src/exia_msgs:msg/NavigationGoal.msg"
+  ]
+}

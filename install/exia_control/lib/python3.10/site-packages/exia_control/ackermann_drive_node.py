@@ -28,6 +28,8 @@ class AckermannDriveNode(Node):
         self.theta = 0.0
         self.linear_vel = 0.0
         self.angular_vel = 0.0
+        self.last_cmd_time = None
+        self.cmd_timeout = 0.2
 
         self.last_time = self.get_clock().now()
 
@@ -72,6 +74,7 @@ class AckermannDriveNode(Node):
     def cmd_vel_callback(self, msg: Twist):
         self.linear_vel = max(-self.MAX_SPEED, min(self.MAX_SPEED, msg.linear.x))
         self.angular_vel = msg.angular.z
+        self.last_cmd_time = self.get_clock().now()
 
     def control_loop(self):
         current_time = self.get_clock().now()
@@ -80,6 +83,12 @@ class AckermannDriveNode(Node):
 
         if dt <= 0 or dt > 1.0:
             return
+
+        if self.last_cmd_time is not None:
+            cmd_age = (current_time - self.last_cmd_time).nanoseconds / 1e9
+            if cmd_age > self.cmd_timeout:
+                self.linear_vel = 0.0
+                self.angular_vel = 0.0
 
         if abs(self.linear_vel) < 0.01:
             steering_angle = 0.0
@@ -177,7 +186,8 @@ def main(args=None):
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':

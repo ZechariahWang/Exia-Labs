@@ -31,14 +31,66 @@ def generate_launch_description():
         description='Use EKF sensor fusion with GPS'
     )
 
+    use_gps_arg = DeclareLaunchArgument(
+        'use_gps',
+        default_value='true',
+        description='Use GPS lat/lon target (true) or local x/y target (false)'
+    )
+
+    target_x_arg = DeclareLaunchArgument(
+        'target_x',
+        default_value='22.0',
+        description='Target X coordinate in meters (local frame)'
+    )
+
+    target_y_arg = DeclareLaunchArgument(
+        'target_y',
+        default_value='24.0',
+        description='Target Y coordinate in meters (local frame)'
+    )
+
+    target_lat_arg = DeclareLaunchArgument(
+        'target_lat',
+        default_value='49.666667',
+        description='Target latitude (decimal degrees)'
+    )
+
+    target_lon_arg = DeclareLaunchArgument(
+        'target_lon',
+        default_value='11.841389',
+        description='Target longitude (decimal degrees)'
+    )
+
+    origin_lat_arg = DeclareLaunchArgument(
+        'origin_lat',
+        default_value='49.666400',
+        description='GPS origin latitude (decimal degrees)'
+    )
+
+    origin_lon_arg = DeclareLaunchArgument(
+        'origin_lon',
+        default_value='11.841100',
+        description='GPS origin longitude (decimal degrees)'
+    )
+
     use_sim_time = LaunchConfiguration('use_sim_time')
     autostart = LaunchConfiguration('autostart')
     use_ekf = LaunchConfiguration('use_ekf')
+    use_gps = LaunchConfiguration('use_gps')
+    target_x = LaunchConfiguration('target_x')
+    target_y = LaunchConfiguration('target_y')
+    target_lat = LaunchConfiguration('target_lat')
+    target_lon = LaunchConfiguration('target_lon')
+    origin_lat = LaunchConfiguration('origin_lat')
+    origin_lon = LaunchConfiguration('origin_lon')
 
     nav2_params_file = os.path.join(bringup_dir, 'config', 'nav2_params.yaml')
     slam_params_file = os.path.join(bringup_dir, 'config', 'slam_toolbox_params.yaml')
     gps_params_file = os.path.join(bringup_dir, 'config', 'gps_params.yaml')
     ekf_params_file = os.path.join(bringup_dir, 'config', 'ekf_params.yaml')
+    pointcloud_to_laserscan_config = os.path.join(
+        bringup_dir, 'config', 'pointcloud_to_laserscan.yaml'
+    )
 
     configured_nav2_params = RewrittenYaml(
         source_file=nav2_params_file,
@@ -50,6 +102,18 @@ def generate_launch_description():
         source_file=slam_params_file,
         param_rewrites={'use_sim_time': use_sim_time},
         convert_types=True
+    )
+
+    pointcloud_to_laserscan = Node(
+        package='pointcloud_to_laserscan',
+        executable='pointcloud_to_laserscan_node',
+        name='pointcloud_to_laserscan',
+        output='screen',
+        parameters=[pointcloud_to_laserscan_config, {'use_sim_time': use_sim_time}],
+        remappings=[
+            ('cloud_in', '/points'),
+            ('scan', '/scan'),
+        ],
     )
 
     slam_toolbox_node = Node(
@@ -94,6 +158,13 @@ def generate_launch_description():
         parameters=[{
             'use_sim_time': use_sim_time,
             'auto_start': True,
+            'use_gps_waypoint': use_gps,
+            'target_x': target_x,
+            'target_y': target_y,
+            'target_lat': target_lat,
+            'target_lon': target_lon,
+            'origin_lat': origin_lat,
+            'origin_lon': origin_lon,
         }],
     )
 
@@ -124,6 +195,14 @@ def generate_launch_description():
         use_sim_time_arg,
         autostart_arg,
         use_ekf_arg,
+        use_gps_arg,
+        target_x_arg,
+        target_y_arg,
+        target_lat_arg,
+        target_lon_arg,
+        origin_lat_arg,
+        origin_lon_arg,
+        pointcloud_to_laserscan,
         slam_toolbox_node,
         planner_server_node,
         delayed_lifecycle_manager,

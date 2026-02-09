@@ -1,0 +1,28 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from exia_msgs/msg/NavigationGoal.msg
+// generated code does not contain a copyright notice
+
+
+module exia_msgs {
+  module msg {
+    struct NavigationGoal {
+      string coord_type;
+
+      double x;
+
+      double y;
+
+      double lat;
+
+      double lon;
+
+      string lat_dms;
+
+      string lon_dms;
+
+      double origin_lat;
+
+      double origin_lon;
+    };
+  };
+};

@@ -1,0 +1,14 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : [],
+		"files" : [],
+		"nodes" : []
+	},
+	"installers" : [],
+	"paths" : 
+	{
+		"build" : "exia_msgs__py",
+		"source" : "/home/zech/exia_ws/build/exia_msgs/exia_msgs__py"
+	}
+}

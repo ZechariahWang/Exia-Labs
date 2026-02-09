@@ -434,13 +434,12 @@ void loop() {
 
     processSerialInput();
 
-    // unsure abt this 
-    // if (jetsonConnected && (now - lastSerialRxTime > JETSON_TIMEOUT_MS)) {
-    //     jetsonConnected = false;
-    //     sendEmergencyStop();
-    //     safeState();
-    //     return;
-    // }
+    if (jetsonConnected && (now - lastSerialRxTime > JETSON_TIMEOUT_MS)) {
+        jetsonConnected = false;
+        sendEmergencyStop();
+        safeState();
+        return;
+    }
 
     int ch1Raw = readRCChannel(CH1_PIN);
     int ch2Raw = readRCChannel(CH2_PIN);

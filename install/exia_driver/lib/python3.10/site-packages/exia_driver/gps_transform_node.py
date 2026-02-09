@@ -63,11 +63,17 @@ class GpsTransformNode(Node):
 
         if not self.origin_set:
             if self.auto_set_origin:
+                if msg.status.status < NavSatStatus.STATUS_GBAS_FIX:
+                    if not hasattr(self, '_origin_wait_logged'):
+                        self.get_logger().info(
+                            f'Waiting for RTK fix before setting origin (current status: {msg.status.status})')
+                        self._origin_wait_logged = True
+                    return
                 self.origin_lat = msg.latitude
                 self.origin_lon = msg.longitude
                 self.origin_set = True
                 self.get_logger().info(
-                    f'GPS origin auto-set: lat={self.origin_lat:.6f}, lon={self.origin_lon:.6f}')
+                    f'GPS origin auto-set (RTK fix): lat={self.origin_lat:.6f}, lon={self.origin_lon:.6f}')
             else:
                 return
 

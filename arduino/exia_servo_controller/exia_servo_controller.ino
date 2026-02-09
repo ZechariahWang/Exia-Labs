@@ -108,7 +108,7 @@ void processCommand(char* cmd) {
 
   // seet the target value
   if (steer != -1) steeringServo.write(constrain(steer, 0, 180));
-  if (throttle != -1) throttleServo.write(constrain(throttle, 0, 180));
+  if (throttle != -1) throttleServo.write(constrain(throttle, 0, 120));
   if (brake != -1) brakeServo.write(constrain(brake, 0, 180));
 
   lastCommandTime = millis();
@@ -117,6 +117,7 @@ void processCommand(char* cmd) {
 // emergency stop
 void emergencyStop() {
   armed = false;
+  steeringServo.write(STEER_CENTER);
   throttleServo.write(ESC_NEUTRAL);
   brakeServo.write(BRAKE_FULL);
   digitalWrite(LED_PIN, LOW);

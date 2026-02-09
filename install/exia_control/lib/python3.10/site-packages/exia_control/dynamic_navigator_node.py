@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import math
 import re
+import threading
+import time
 from enum import Enum
 from typing import Optional, Tuple
 
@@ -11,6 +13,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 
 from geometry_msgs.msg import Twist, PoseStamped, Quaternion
 from nav_msgs.msg import Odometry, OccupancyGrid, Path
+from sensor_msgs.msg import LaserScan
 from std_srvs.srv import Trigger
 from visualization_msgs.msg import Marker, MarkerArray
 from rcl_interfaces.msg import ParameterDescriptor
@@ -41,17 +44,20 @@ TARGET_GPS = [49.666667, 11.841389]  # 49°40'00"N 11°50'29"E germany hill loc 
 ORIGIN_GPS = [49.666400, 11.841100]
 
 
-#   Navigate to local X,Y coordinates:                                                     
-#   ros2 launch exia_bringup autonomous.launch.py use_gps:=false target_x:=30.0 target_y:=15.0                                                                         
-                                                                                         
-#   Navigate to GPS lat/lon:                                                               
-#   ros2 launch exia_bringup autonomous.launch.py use_gps:=true target_lat:=49.666667      
-#   target_lon:=11.841389                                                                  
-                                                                                         
-#   GPS with custom origin:
-#   ros2 launch exia_bringup autonomous.launch.py use_gps:=true target_lat:=49.666667
-#   target_lon:=11.841389 origin_lat:=49.666400 origin_lon:=11.841100
+#   # Go to local coordinates                                                                                                                                                           
+#   ros2 run exia_control nav_to xy 30.0 15.0                                                                                                                                           
+                                                                                                                                                                                      
+#   # Go to GPS coordinates                                                                                                                                                             
+#   ros2 run exia_control nav_to latlon 49.666667 11.841389                                                                                                                             
 
+#   # GPS with custom origin
+#   ros2 run exia_control nav_to latlon 49.666667 11.841389 --origin 49.6664 11.8411
+
+#   # DMS format
+#   ros2 run exia_control nav_to dms "49D40'00\"N" "11D50'29\"E"
+
+#   # Cancel current navigation
+#   ros2 run exia_control nav_to cancel
 
 # convert lat long to x,y
 def gps_to_local(lat: float, lon: float, origin_lat: float, origin_lon: float) -> tuple:
@@ -149,6 +155,8 @@ class DynamicNavigator(Node):
         self.obstacle_lookahead = self.get_parameter('obstacle_lookahead').value
         control_rate = self.get_parameter('control_rate').value
 
+        self._nav_lock = threading.Lock()
+
         self.state = NavigatorState.IDLE
         self.robot_x = 0.0
         self.robot_y = 0.0
@@ -161,6 +169,11 @@ class DynamicNavigator(Node):
         self.path_index = 0
         self.last_replan_time = 0.0
         self.replan_pending = False
+
+        self._last_scan_time = time.time()
+        self._last_odom_time = time.time()
+        self._sensor_timeout = 2.0
+        self._sensor_warned = False
 
         # configure pp controller
         pp_config = PurePursuitConfig(
@@ -202,6 +215,14 @@ class DynamicNavigator(Node):
             self._costmap_callback, costmap_qos)
         self.nav_goal_sub = self.create_subscription(
             NavigationGoal, '/navigation/goal', self._nav_goal_callback, 10)
+
+        scan_qos = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            durability=DurabilityPolicy.VOLATILE,
+            depth=1
+        )
+        self.scan_sub = self.create_subscription(
+            LaserScan, '/scan', self._scan_callback, scan_qos)
 
         # create publishers
         self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
@@ -293,7 +314,11 @@ class DynamicNavigator(Node):
         self.get_logger().info(f'Auto-starting navigation to ({self.target_x:.2f}, {self.target_y:.2f})')
         self._goal_callback(goal)
 
+    def _scan_callback(self, msg: LaserScan):
+        self._last_scan_time = time.time()
+
     def _odom_callback(self, msg: Odometry):
+        self._last_odom_time = time.time()
         self.robot_speed = msg.twist.twist.linear.x
 
         try:
@@ -309,13 +334,14 @@ class DynamicNavigator(Node):
             self.robot_yaw = self._quaternion_to_yaw(msg.pose.pose.orientation)
 
     def _goal_callback(self, msg: PoseStamped):
-        self.current_goal = msg
-        self.get_logger().info(f'New goal: ({msg.pose.position.x:.2f}, {msg.pose.position.y:.2f})')
+        with self._nav_lock:
+            self.current_goal = msg
+            self.get_logger().info(f'New goal: ({msg.pose.position.x:.2f}, {msg.pose.position.y:.2f})')
 
-        self.current_path = None
-        self.current_nav_path = None
-        self._consecutive_replan_failures = 0
-        self.state = NavigatorState.PLANNING
+            self.current_path = None
+            self.current_nav_path = None
+            self._consecutive_replan_failures = 0
+            self.state = NavigatorState.PLANNING
         self._request_initial_plan()
 
     def _nav_goal_callback(self, msg: NavigationGoal):
@@ -374,15 +400,41 @@ class DynamicNavigator(Node):
         return response
 
     # decided data publish and stop depending on nav curr state
+    def _check_sensor_health(self) -> bool:
+        now = time.time()
+        scan_age = now - self._last_scan_time
+        odom_age = now - self._last_odom_time
+
+        if scan_age > self._sensor_timeout or odom_age > self._sensor_timeout:
+            if not self._sensor_warned:
+                stale = []
+                if scan_age > self._sensor_timeout:
+                    stale.append(f'scan ({scan_age:.1f}s)')
+                if odom_age > self._sensor_timeout:
+                    stale.append(f'odom ({odom_age:.1f}s)')
+                self.get_logger().error(f'Sensor timeout: {", ".join(stale)} - stopping')
+                self._sensor_warned = True
+            return False
+
+        if self._sensor_warned:
+            self.get_logger().info('Sensors recovered')
+            self._sensor_warned = False
+        return True
+
     def _control_loop(self):
-        if self.state == NavigatorState.IDLE:
-            self._publish_stop()
-        elif self.state == NavigatorState.PLANNING:
-            self._publish_stop()
-        elif self.state == NavigatorState.EXECUTING:
-            self._execute_path()
-        elif self.state == NavigatorState.RECOVERING:
-            self._execute_recovery()
+        with self._nav_lock:
+            if not self._check_sensor_health():
+                self._publish_stop()
+                return
+
+            if self.state == NavigatorState.IDLE:
+                self._publish_stop()
+            elif self.state == NavigatorState.PLANNING:
+                self._publish_stop()
+            elif self.state == NavigatorState.EXECUTING:
+                self._execute_path()
+            elif self.state == NavigatorState.RECOVERING:
+                self._execute_recovery()
 
     # checks if we have reached the goal or not, and moves the robot
     def _execute_path(self):
@@ -508,73 +560,75 @@ class DynamicNavigator(Node):
 
 
     def _on_initial_path(self, result):
-        self.replan_pending = False
+        with self._nav_lock:
+            self.replan_pending = False
 
-        if result.status == PlanningStatus.SUCCEEDED and result.path:
-            nav_path = result.path
-            self.get_logger().info(f'Initial path: {len(nav_path.poses)} poses')
+            if result.status == PlanningStatus.SUCCEEDED and result.path:
+                nav_path = result.path
+                self.get_logger().info(f'Initial path: {len(nav_path.poses)} poses')
 
-            validation = self.path_validator.validate_path(nav_path, check_footprint=True)
-            if not validation.is_valid:
-                self.get_logger().warn(f'Initial path collision at index {validation.blocked_index}')
-                self._consecutive_replan_failures += 1
-                if self._consecutive_replan_failures >= 3:
-                    self.get_logger().error('Multiple failures, entering recovery')
-                    self.state = NavigatorState.RECOVERING
-                else:
-                    self._one_shot_timer(0.5, self._request_initial_plan)
-                return
+                validation = self.path_validator.validate_path(nav_path, check_footprint=True)
+                if not validation.is_valid:
+                    self.get_logger().warn(f'Initial path collision at index {validation.blocked_index}')
+                    self._consecutive_replan_failures += 1
+                    if self._consecutive_replan_failures >= 3:
+                        self.get_logger().error('Multiple failures, entering recovery')
+                        self.state = NavigatorState.RECOVERING
+                    else:
+                        self._one_shot_timer(0.5, self._request_initial_plan)
+                    return
 
-            self.current_nav_path = nav_path
-            self.current_path = self._nav_path_to_pp_path(nav_path)
-            self.pure_pursuit.set_path(self.current_path)
-            self.pure_pursuit.start()
-            self._consecutive_replan_failures = 0
-            self.state = NavigatorState.EXECUTING
-            self.path_pub.publish(nav_path)
-        else:
-            self.get_logger().error(f'Initial planning failed: {result.error_message}')
-            self._consecutive_replan_failures += 1
-            if self._consecutive_replan_failures >= 10:
-                self.get_logger().error('Multiple failures, cancelling navigation')
-                self.state = NavigatorState.IDLE
-                self.current_goal = None
+                self.current_nav_path = nav_path
+                self.current_path = self._nav_path_to_pp_path(nav_path)
+                self.pure_pursuit.set_path(self.current_path)
+                self.pure_pursuit.start()
+                self._consecutive_replan_failures = 0
+                self.state = NavigatorState.EXECUTING
+                self.path_pub.publish(nav_path)
             else:
-                self.get_logger().info(f'Retrying planning ({self._consecutive_replan_failures}/10)...')
-                self._one_shot_timer(2.0, self._request_initial_plan)
+                self.get_logger().error(f'Initial planning failed: {result.error_message}')
+                self._consecutive_replan_failures += 1
+                if self._consecutive_replan_failures >= 10:
+                    self.get_logger().error('Multiple failures, cancelling navigation')
+                    self.state = NavigatorState.IDLE
+                    self.current_goal = None
+                else:
+                    self.get_logger().info(f'Retrying planning ({self._consecutive_replan_failures}/10)...')
+                    self._one_shot_timer(2.0, self._request_initial_plan)
 
     def _on_replan_received(self, result):
-        self.replan_pending = False
+        with self._nav_lock:
+            self.replan_pending = False
 
-        if result.status != PlanningStatus.SUCCEEDED or not result.path:
-            self._consecutive_replan_failures += 1
-            self.get_logger().warn(f'Replan failed ({self._consecutive_replan_failures}): {result.error_message}')
-            if self._consecutive_replan_failures >= 5:
-                if self.current_nav_path is not None:
-                    current_validation = self.path_validator.validate_path(
-                        self.current_nav_path, check_footprint=False, max_poses=20)
-                    if not current_validation.is_valid:
-                        self.get_logger().error('Current path blocked and replanning failed, stopping')
-                        self._publish_stop()
-                        self.state = NavigatorState.RECOVERING
-                        self._consecutive_replan_failures = 0
-            return
+            if result.status != PlanningStatus.SUCCEEDED or not result.path:
+                self._consecutive_replan_failures += 1
+                self.get_logger().warn(f'Replan failed ({self._consecutive_replan_failures}): {result.error_message}')
+                if self._consecutive_replan_failures >= 5:
+                    if self.current_nav_path is not None:
+                        current_validation = self.path_validator.validate_path(
+                            self.current_nav_path, check_footprint=False, max_poses=20)
+                        if not current_validation.is_valid:
+                            self.get_logger().error('Current path blocked and replanning failed, stopping')
+                            self._publish_stop()
+                            self.state = NavigatorState.RECOVERING
+                            self._consecutive_replan_failures = 0
+                return
 
-        self._consecutive_replan_failures = 0
-        new_nav_path = result.path
-        self.get_logger().info(f'Replan succeeded: {len(new_nav_path.poses)} poses')
+            self._consecutive_replan_failures = 0
+            new_nav_path = result.path
+            self.get_logger().info(f'Replan succeeded: {len(new_nav_path.poses)} poses')
 
-        validation = self.path_validator.validate_path(new_nav_path, check_footprint=True)
-        if not validation.is_valid:
-            self.get_logger().warn(f'New path has collision at index {validation.blocked_index}')
-            return
+            validation = self.path_validator.validate_path(new_nav_path, check_footprint=True)
+            if not validation.is_valid:
+                self.get_logger().warn(f'New path has collision at index {validation.blocked_index}')
+                return
 
-        self.get_logger().info('Switching to updated path from replanning')
-        self.current_nav_path = new_nav_path
-        self.current_path = self._nav_path_to_pp_path(new_nav_path)
-        self.pure_pursuit.set_path(self.current_path)
-        self.pure_pursuit.start()
-        self.path_pub.publish(new_nav_path)
+            self.get_logger().info('Switching to updated path from replanning')
+            self.current_nav_path = new_nav_path
+            self.current_path = self._nav_path_to_pp_path(new_nav_path)
+            self.pure_pursuit.set_path(self.current_path)
+            self.pure_pursuit.start()
+            self.path_pub.publish(new_nav_path)
 
     def _check_path_for_obstacles(self):
         if self.current_nav_path is None:
@@ -602,10 +656,6 @@ class DynamicNavigator(Node):
                     f'Obstacle at ({result.blocked_position[0]:.1f}, {result.blocked_position[1]:.1f}) '
                     f'dist={obstacle_dist:.1f}m, replanning')
                 self._request_replan()
-                if obstacle_dist < 3.0 and self.robot_speed > 0.5:
-                    cmd = Twist()
-                    cmd.linear.x = max(0.3, self.robot_speed * 0.5)
-                    self.cmd_vel_pub.publish(cmd)
 
     def _create_lookahead_segment(self) -> Optional[Path]:
         if self.current_nav_path is None:

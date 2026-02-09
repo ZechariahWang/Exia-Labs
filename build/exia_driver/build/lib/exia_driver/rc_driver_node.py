@@ -59,7 +59,7 @@ class RCDriverControlNode(Node):
         self.last_command_time = time.monotonic()
         self.last_feedback_time = time.monotonic()
         self.armed_time = 0.0
-        self.startup_grace_period = 180.0
+        self.startup_grace_period = 15.0
         self.anchor_position = 0.0
         self.anchor_initialized = False
         self.current_target = 0.0

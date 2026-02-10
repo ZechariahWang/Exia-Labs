@@ -11,3 +11,5 @@ string lon_dms
 
 float64 origin_lat
 float64 origin_lon
+
+bool direct

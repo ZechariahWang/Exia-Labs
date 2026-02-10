@@ -157,7 +157,7 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'use_sim_time': use_sim_time,
-            'auto_start': True,
+            'auto_start': False,
             'use_gps_waypoint': use_gps,
             'target_x': target_x,
             'target_y': target_y,

@@ -48,6 +48,7 @@ struct NavigationGoal_
       this->lon_dms = "";
       this->origin_lat = 0.0;
       this->origin_lon = 0.0;
+      this->direct = false;
     }
   }
 
@@ -68,6 +69,7 @@ struct NavigationGoal_
       this->lon_dms = "";
       this->origin_lat = 0.0;
       this->origin_lon = 0.0;
+      this->direct = false;
     }
   }
 
@@ -99,6 +101,9 @@ struct NavigationGoal_
   using _origin_lon_type =
     double;
   _origin_lon_type origin_lon;
+  using _direct_type =
+    bool;
+  _direct_type direct;
 
   // setters for named parameter idiom
   Type & set__coord_type(
@@ -153,6 +158,12 @@ struct NavigationGoal_
     const double & _arg)
   {
     this->origin_lon = _arg;
+    return *this;
+  }
+  Type & set__direct(
+    const bool & _arg)
+  {
+    this->direct = _arg;
     return *this;
   }
 
@@ -223,6 +234,9 @@ struct NavigationGoal_
       return false;
     }
     if (this->origin_lon != other.origin_lon) {
+      return false;
+    }
+    if (this->direct != other.direct) {
       return false;
     }
     return true;

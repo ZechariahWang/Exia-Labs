@@ -21,16 +21,32 @@ namespace msg
 namespace builder
 {
 
+class Init_NavigationGoal_direct
+{
+public:
+  explicit Init_NavigationGoal_direct(::exia_msgs::msg::NavigationGoal & msg)
+  : msg_(msg)
+  {}
+  ::exia_msgs::msg::NavigationGoal direct(::exia_msgs::msg::NavigationGoal::_direct_type arg)
+  {
+    msg_.direct = std::move(arg);
+    return std::move(msg_);
+  }
+
+private:
+  ::exia_msgs::msg::NavigationGoal msg_;
+};
+
 class Init_NavigationGoal_origin_lon
 {
 public:
   explicit Init_NavigationGoal_origin_lon(::exia_msgs::msg::NavigationGoal & msg)
   : msg_(msg)
   {}
-  ::exia_msgs::msg::NavigationGoal origin_lon(::exia_msgs::msg::NavigationGoal::_origin_lon_type arg)
+  Init_NavigationGoal_direct origin_lon(::exia_msgs::msg::NavigationGoal::_origin_lon_type arg)
   {
     msg_.origin_lon = std::move(arg);
-    return std::move(msg_);
+    return Init_NavigationGoal_direct(msg_);
   }
 
 private:

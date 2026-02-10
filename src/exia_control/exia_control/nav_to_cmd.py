@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 import sys
+import threading
 import rclpy
 from rclpy.node import Node
 from exia_msgs.msg import NavigationGoal
+from std_msgs.msg import String
 from std_srvs.srv import Trigger
+
+
+TERMINAL_STATUSES = {'GOAL_REACHED', 'OBSTACLE_STOPPED', 'PATH_ENDED', 'PATH_BLOCKED'}
 
 
 class NavToCmd(Node):
@@ -11,12 +16,52 @@ class NavToCmd(Node):
         super().__init__('nav_to_cmd')
         self.pub = self.create_publisher(NavigationGoal, '/navigation/goal', 10)
         self.cancel_client = self.create_client(Trigger, '/navigation/cancel')
+        self._status_event = threading.Event()
+        self._final_status = None
 
     def send_goal(self, msg):
         for _ in range(5):
             rclpy.spin_once(self, timeout_sec=0.05)
         self.pub.publish(msg)
         rclpy.spin_once(self, timeout_sec=0.1)
+
+    def send_goal_and_wait(self, msg):
+        self.create_subscription(String, '/navigation/status', self._status_callback, 10)
+
+        for _ in range(20):
+            rclpy.spin_once(self, timeout_sec=0.05)
+        self.pub.publish(msg)
+        self.get_logger().info('Waiting for navigation to complete (Ctrl+C to cancel)...')
+
+        try:
+            while rclpy.ok() and not self._status_event.is_set():
+                rclpy.spin_once(self, timeout_sec=0.1)
+        except KeyboardInterrupt:
+            self.get_logger().info('Interrupted, cancelling navigation...')
+            self.send_cancel()
+            return
+
+        if self._final_status:
+            parts = self._final_status.split()
+            status = parts[0]
+            if len(parts) >= 4:
+                x, y, heading = parts[1], parts[2], parts[3]
+                if status == 'GOAL_REACHED':
+                    self.get_logger().info(f'Goal reached! Position: ({x}, {y}), heading: {heading} deg')
+                elif status == 'OBSTACLE_STOPPED':
+                    self.get_logger().warn(f'Stopped: obstacle detected. Position: ({x}, {y}), heading: {heading} deg')
+                elif status == 'PATH_ENDED':
+                    self.get_logger().warn(f'Path ended, goal not reached. Position: ({x}, {y}), heading: {heading} deg')
+                elif status == 'PATH_BLOCKED':
+                    self.get_logger().warn(f'Path blocked by obstacle. Position: ({x}, {y}), heading: {heading} deg')
+                else:
+                    self.get_logger().info(f'Status: {self._final_status}')
+
+    def _status_callback(self, msg):
+        status_type = msg.data.split()[0] if msg.data else ''
+        if status_type in TERMINAL_STATUSES:
+            self._final_status = msg.data
+            self._status_event.set()
 
     def send_cancel(self):
         if not self.cancel_client.wait_for_service(timeout_sec=3.0):
@@ -39,8 +84,13 @@ def print_usage():
     print('  ros2 run exia_control nav_to dms "<lat_dms>" "<lon_dms>"')
     print('  ros2 run exia_control nav_to cancel')
     print()
+    print('Options:')
+    print('  --direct    Navigate straight to target, stop on obstacle (no replanning)')
+    print('              CLI stays running until goal reached or obstacle detected')
+    print()
     print('Examples:')
     print('  ros2 run exia_control nav_to xy 30.0 15.0')
+    print('  ros2 run exia_control nav_to xy 30.0 15.0 --direct')
     print('  ros2 run exia_control nav_to latlon 49.666667 11.841389')
     print("  ros2 run exia_control nav_to dms \"49D40'00\\\"N\" \"11D50'29\\\"E\"")
     print('  ros2 run exia_control nav_to cancel')
@@ -64,6 +114,10 @@ def main(args=None):
                 break
         else:
             user_args.append(a)
+
+    direct_mode = '--direct' in user_args
+    if direct_mode:
+        user_args = [a for a in user_args if a != '--direct']
 
     if not user_args:
         print_usage()
@@ -136,7 +190,12 @@ def main(args=None):
             print_usage()
             return
 
-        node.send_goal(msg)
+        msg.direct = direct_mode
+        if direct_mode:
+            node.get_logger().info('Direct navigation mode (no replanning, stop on obstacle)')
+            node.send_goal_and_wait(msg)
+        else:
+            node.send_goal(msg)
 
     finally:
         node.destroy_node()

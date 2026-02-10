@@ -66,6 +66,7 @@ class NavigationGoal(metaclass=Metaclass_NavigationGoal):
         '_lon_dms',
         '_origin_lat',
         '_origin_lon',
+        '_direct',
     ]
 
     _fields_and_field_types = {
@@ -78,6 +79,7 @@ class NavigationGoal(metaclass=Metaclass_NavigationGoal):
         'lon_dms': 'string',
         'origin_lat': 'double',
         'origin_lon': 'double',
+        'direct': 'boolean',
     }
 
     SLOT_TYPES = (
@@ -90,6 +92,7 @@ class NavigationGoal(metaclass=Metaclass_NavigationGoal):
         rosidl_parser.definition.UnboundedString(),  # noqa: E501
         rosidl_parser.definition.BasicType('double'),  # noqa: E501
         rosidl_parser.definition.BasicType('double'),  # noqa: E501
+        rosidl_parser.definition.BasicType('boolean'),  # noqa: E501
     )
 
     def __init__(self, **kwargs):
@@ -105,6 +108,7 @@ class NavigationGoal(metaclass=Metaclass_NavigationGoal):
         self.lon_dms = kwargs.get('lon_dms', str())
         self.origin_lat = kwargs.get('origin_lat', float())
         self.origin_lon = kwargs.get('origin_lon', float())
+        self.direct = kwargs.get('direct', bool())
 
     def __repr__(self):
         typename = self.__class__.__module__.split('.')
@@ -152,6 +156,8 @@ class NavigationGoal(metaclass=Metaclass_NavigationGoal):
         if self.origin_lat != other.origin_lat:
             return False
         if self.origin_lon != other.origin_lon:
+            return False
+        if self.direct != other.direct:
             return False
         return True
 
@@ -288,3 +294,16 @@ class NavigationGoal(metaclass=Metaclass_NavigationGoal):
             assert not (value < -1.7976931348623157e+308 or value > 1.7976931348623157e+308) or math.isinf(value), \
                 "The 'origin_lon' field must be a double in [-1.7976931348623157e+308, 1.7976931348623157e+308]"
         self._origin_lon = value
+
+    @builtins.property
+    def direct(self):
+        """Message field 'direct'."""
+        return self._direct
+
+    @direct.setter
+    def direct(self, value):
+        if __debug__:
+            assert \
+                isinstance(value, bool), \
+                "The 'direct' field must be of type 'bool'"
+        self._direct = value

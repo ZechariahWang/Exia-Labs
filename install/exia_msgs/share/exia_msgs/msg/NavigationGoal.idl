@@ -23,6 +23,8 @@ module exia_msgs {
       double origin_lat;
 
       double origin_lon;
+
+      boolean direct;
     };
   };
 };

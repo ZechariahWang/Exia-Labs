@@ -44,6 +44,7 @@ exia_msgs__msg__NavigationGoal__init(exia_msgs__msg__NavigationGoal * msg)
   }
   // origin_lat
   // origin_lon
+  // direct
   return true;
 }
 
@@ -65,6 +66,7 @@ exia_msgs__msg__NavigationGoal__fini(exia_msgs__msg__NavigationGoal * msg)
   rosidl_runtime_c__String__fini(&msg->lon_dms);
   // origin_lat
   // origin_lon
+  // direct
 }
 
 bool
@@ -115,6 +117,10 @@ exia_msgs__msg__NavigationGoal__are_equal(const exia_msgs__msg__NavigationGoal *
   if (lhs->origin_lon != rhs->origin_lon) {
     return false;
   }
+  // direct
+  if (lhs->direct != rhs->direct) {
+    return false;
+  }
   return true;
 }
 
@@ -156,6 +162,8 @@ exia_msgs__msg__NavigationGoal__copy(
   output->origin_lat = input->origin_lat;
   // origin_lon
   output->origin_lon = input->origin_lon;
+  // direct
+  output->direct = input->direct;
   return true;
 }
 

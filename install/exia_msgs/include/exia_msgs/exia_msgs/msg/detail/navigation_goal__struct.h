@@ -35,6 +35,7 @@ typedef struct exia_msgs__msg__NavigationGoal
   rosidl_runtime_c__String lon_dms;
   double origin_lat;
   double origin_lon;
+  bool direct;
 } exia_msgs__msg__NavigationGoal;
 
 // Struct for a sequence of exia_msgs__msg__NavigationGoal.

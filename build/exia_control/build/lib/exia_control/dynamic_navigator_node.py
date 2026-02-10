@@ -14,6 +14,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from geometry_msgs.msg import Twist, PoseStamped, Quaternion
 from nav_msgs.msg import Odometry, OccupancyGrid, Path
 from sensor_msgs.msg import LaserScan
+from std_msgs.msg import String
 from std_srvs.srv import Trigger
 from visualization_msgs.msg import Marker, MarkerArray
 from rcl_interfaces.msg import ParameterDescriptor
@@ -28,7 +29,7 @@ from exia_control.planning.pure_pursuit import (
 )
 from exia_control.navigation.path_validator import PathValidator
 from exia_control.navigation.planner_interface import (
-    PlannerInterface, PlanningStatus
+    PlannerInterface, PlanningResult, PlanningStatus
 )
 
 # for scan vis:
@@ -44,19 +45,19 @@ TARGET_GPS = [49.666667, 11.841389]  # 49°40'00"N 11°50'29"E germany hill loc 
 ORIGIN_GPS = [49.666400, 11.841100]
 
 
-#   # Go to local coordinates                                                                                                                                                           
-#   ros2 run exia_control nav_to xy 30.0 15.0                                                                                                                                           
+#   Go to local coordinates                                                                                                                                                           
+#   ros2 run exia_control nav_to xy 30.0 15.0
                                                                                                                                                                                       
-#   # Go to GPS coordinates                                                                                                                                                             
+#   Go to GPS coordinates                                                                                                                                                             
 #   ros2 run exia_control nav_to latlon 49.666667 11.841389                                                                                                                             
 
-#   # GPS with custom origin
+#   GPS with custom origin
 #   ros2 run exia_control nav_to latlon 49.666667 11.841389 --origin 49.6664 11.8411
 
-#   # DMS format
+#   DMS format
 #   ros2 run exia_control nav_to dms "49D40'00\"N" "11D50'29\"E"
 
-#   # Cancel current navigation
+#   Cancel current navigation
 #   ros2 run exia_control nav_to cancel
 
 # convert lat long to x,y
@@ -118,6 +119,7 @@ class NavigatorState(Enum):
     PLANNING = 1
     EXECUTING = 2
     RECOVERING = 3
+    DIRECT_REVERSING = 4
 
     # kovid wux ere 2k26
     # uwu xoxo nyahh ~~~~~ >;) - Eric
@@ -135,7 +137,7 @@ class DynamicNavigator(Node):
         self.declare_parameter('path_switch_threshold', 2.0)
         self.declare_parameter('obstacle_lookahead', 8.0)
         self.declare_parameter('control_rate', 50.0)
-        self.declare_parameter('auto_start', True)
+        self.declare_parameter('auto_start', False)
 
         _dyn = ParameterDescriptor(dynamic_typing=True)
         self.declare_parameter('use_gps_waypoint', USE_GPS_MODE, _dyn)
@@ -169,11 +171,13 @@ class DynamicNavigator(Node):
         self.path_index = 0
         self.last_replan_time = 0.0
         self.replan_pending = False
+        self._direct_mode = False
 
         self._last_scan_time = time.time()
         self._last_odom_time = time.time()
         self._sensor_timeout = 2.0
         self._sensor_warned = False
+        self._latest_scan: Optional[LaserScan] = None
 
         # configure pp controller
         pp_config = PurePursuitConfig(
@@ -209,7 +213,7 @@ class DynamicNavigator(Node):
         self.odom_sub = self.create_subscription(
             Odometry, '/odom', self._odom_callback, 10)
         self.goal_sub = self.create_subscription(
-            PoseStamped, '/goal_pose', self._goal_callback, 10)
+            PoseStamped, '/goal_pose', self._goal_pose_callback, 10)
         self.costmap_sub = self.create_subscription(
             OccupancyGrid, '/global_costmap/costmap',
             self._costmap_callback, costmap_qos)
@@ -228,6 +232,7 @@ class DynamicNavigator(Node):
         self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
         self.path_pub = self.create_publisher(Path, '/planned_path', 10)
         self.markers_pub = self.create_publisher(MarkerArray, '/nav_markers', 10)
+        self.status_pub = self.create_publisher(String, '/navigation/status', 10)
 
         self.cancel_srv = self.create_service(
             Trigger, '/navigation/cancel', self._cancel_callback)
@@ -316,6 +321,7 @@ class DynamicNavigator(Node):
 
     def _scan_callback(self, msg: LaserScan):
         self._last_scan_time = time.time()
+        self._latest_scan = msg
 
     def _odom_callback(self, msg: Odometry):
         self._last_odom_time = time.time()
@@ -344,6 +350,10 @@ class DynamicNavigator(Node):
             self.state = NavigatorState.PLANNING
         self._request_initial_plan()
 
+    def _goal_pose_callback(self, msg: PoseStamped):
+        self._direct_mode = False
+        self._goal_callback(msg)
+
     def _nav_goal_callback(self, msg: NavigationGoal):
         coord_type = msg.coord_type.strip().lower()
 
@@ -371,6 +381,11 @@ class DynamicNavigator(Node):
             self.get_logger().error(f'Unknown coord_type: "{coord_type}". Use "xy", "latlon", or "dms".')
             return
 
+        self._direct_mode = msg.direct
+        if self._direct_mode:
+            self.get_logger().info('Direct navigation mode: no replanning, stop on obstacle')
+            self._publish_status('NAVIGATING')
+
         goal = PoseStamped()
         goal.header.frame_id = 'map'
         goal.header.stamp = self.get_clock().now().to_msg()
@@ -394,6 +409,7 @@ class DynamicNavigator(Node):
         self.state = NavigatorState.IDLE
         self.current_goal = None
         self.current_path = None
+        self._direct_mode = False
         self._publish_stop()
         response.success = True
         response.message = 'Navigation cancelled'
@@ -435,11 +451,80 @@ class DynamicNavigator(Node):
                 self._execute_path()
             elif self.state == NavigatorState.RECOVERING:
                 self._execute_recovery()
+            elif self.state == NavigatorState.DIRECT_REVERSING:
+                self._execute_direct_reverse()
 
-    # checks if we have reached the goal or not, and moves the robot
+    def _check_ahead_for_obstacle(self) -> bool:
+        scan = self._latest_scan
+        if scan is None:
+            return False
+
+        stop_distance = 3.0
+        cone_half_angle = math.radians(30.0)
+
+        min_range = float('inf')
+        for i, r in enumerate(scan.ranges):
+            if r < scan.range_min or r > scan.range_max or math.isinf(r) or math.isnan(r):
+                continue
+            beam_angle = scan.angle_min + i * scan.angle_increment
+            if abs(beam_angle) <= cone_half_angle and r < min_range:
+                min_range = r
+
+        if min_range <= stop_distance:
+            self._publish_stop()
+            self.get_logger().warn(
+                f'DIRECT NAV STOPPED: Obstacle detected at {min_range:.2f}m ahead')
+            self.get_logger().info(
+                f'Robot position: ({self.robot_x:.2f}, {self.robot_y:.2f}), '
+                f'heading: {math.degrees(self.robot_yaw):.1f} deg')
+            self.current_goal = None
+            self.current_path = None
+            self.current_nav_path = None
+            self._direct_reverse_start_x = self.robot_x
+            self._direct_reverse_start_y = self.robot_y
+            self._direct_reverse_phase = 'straighten'
+            self._direct_reverse_timer = time.time()
+            self.state = NavigatorState.DIRECT_REVERSING
+            return True
+        return False
+
+    def _execute_direct_reverse(self):
+        if self._direct_reverse_phase == 'straighten':
+            cmd = Twist()
+            cmd.linear.x = 0.0
+            cmd.angular.z = 0.0
+            self.cmd_vel_pub.publish(cmd)
+            if time.time() - self._direct_reverse_timer > 0.5:
+                self._direct_reverse_phase = 'reverse'
+                self._direct_reverse_start_x = self.robot_x
+                self._direct_reverse_start_y = self.robot_y
+            return
+
+        if self._direct_reverse_phase == 'reverse':
+            dx = self.robot_x - self._direct_reverse_start_x
+            dy = self.robot_y - self._direct_reverse_start_y
+            dist_reversed = math.sqrt(dx * dx + dy * dy)
+            if dist_reversed >= 1.5:
+                self._publish_stop()
+                self.get_logger().info(
+                    f'Reversed {dist_reversed:.2f}m. '
+                    f'Robot position: ({self.robot_x:.2f}, {self.robot_y:.2f}), '
+                    f'heading: {math.degrees(self.robot_yaw):.1f} deg')
+                self._publish_status('OBSTACLE_STOPPED')
+                self.state = NavigatorState.IDLE
+                self._direct_mode = False
+                return
+            cmd = Twist()
+            cmd.linear.x = -0.5
+            cmd.angular.z = 0.0
+            self.cmd_vel_pub.publish(cmd)
+
     def _execute_path(self):
         if self.current_path is None or self.current_goal is None:
             self.state = NavigatorState.IDLE
+            return
+
+        if self._direct_mode and self._check_ahead_for_obstacle():
             return
 
         goal_x = self.current_goal.pose.position.x
@@ -448,6 +533,12 @@ class DynamicNavigator(Node):
 
         if dist_to_goal < self.goal_tolerance:
             self.get_logger().info(f'Goal reached! Distance: {dist_to_goal:.2f}m')
+            if self._direct_mode:
+                self.get_logger().info(
+                    f'Final position: ({self.robot_x:.2f}, {self.robot_y:.2f}), '
+                    f'heading: {math.degrees(self.robot_yaw):.1f} deg')
+                self._publish_status('GOAL_REACHED')
+                self._direct_mode = False
             self.state = NavigatorState.IDLE
             self.current_goal = None
             self.current_path = None
@@ -466,6 +557,18 @@ class DynamicNavigator(Node):
                 self._publish_stop()
                 return
             else:
+                if self._direct_mode:
+                    self.get_logger().info(
+                        f'Direct path ended, goal not reached. '
+                        f'Robot position: ({self.robot_x:.2f}, {self.robot_y:.2f}), '
+                        f'heading: {math.degrees(self.robot_yaw):.1f} deg')
+                    self._publish_status('PATH_ENDED')
+                    self.state = NavigatorState.IDLE
+                    self.current_goal = None
+                    self.current_path = None
+                    self._direct_mode = False
+                    self._publish_stop()
+                    return
                 self.get_logger().info('Path ended but goal not reached, replanning...')
                 self._request_replan()
 
@@ -508,6 +611,8 @@ class DynamicNavigator(Node):
 
     # replan the a* every 500ms, with an interval of replanning of 200ms 
     def _periodic_replan(self):
+        if self._direct_mode:
+            return
         if self.state != NavigatorState.EXECUTING or self.current_goal is None:
             return
 
@@ -524,6 +629,10 @@ class DynamicNavigator(Node):
             self.state = NavigatorState.IDLE
             return
 
+        if self._direct_mode:
+            self._plan_straight_line()
+            return
+
         start = PoseStamped()
         start.header.frame_id = 'map'
         start.header.stamp = self.get_clock().now().to_msg()
@@ -537,6 +646,35 @@ class DynamicNavigator(Node):
 
         self.replan_pending = True
         self.planner.plan_path_async(start, self.current_goal, self._on_initial_path)
+
+    def _plan_straight_line(self):
+        goal_x = self.current_goal.pose.position.x
+        goal_y = self.current_goal.pose.position.y
+        dx = goal_x - self.robot_x
+        dy = goal_y - self.robot_y
+        dist = math.sqrt(dx * dx + dy * dy)
+        yaw = math.atan2(dy, dx)
+
+        nav_path = Path()
+        nav_path.header.frame_id = 'map'
+        nav_path.header.stamp = self.get_clock().now().to_msg()
+
+        num_points = max(int(dist / 0.5), 2)
+        for i in range(num_points + 1):
+            t = i / num_points
+            pose = PoseStamped()
+            pose.header = nav_path.header
+            pose.pose.position.x = self.robot_x + t * dx
+            pose.pose.position.y = self.robot_y + t * dy
+            pose.pose.orientation = self._yaw_to_quaternion(yaw)
+            nav_path.poses.append(pose)
+
+        self.get_logger().info(
+            f'Direct path: ({self.robot_x:.2f}, {self.robot_y:.2f}) -> '
+            f'({goal_x:.2f}, {goal_y:.2f}), {len(nav_path.poses)} pts, {dist:.1f}m')
+
+        result = PlanningResult(status=PlanningStatus.SUCCEEDED, path=nav_path)
+        self._on_initial_path(result)
 
     # equest replan every 500ms
     def _request_replan(self):
@@ -570,6 +708,19 @@ class DynamicNavigator(Node):
                 validation = self.path_validator.validate_path(nav_path, check_footprint=True)
                 if not validation.is_valid:
                     self.get_logger().warn(f'Initial path collision at index {validation.blocked_index}')
+                    if self._direct_mode:
+                        self._publish_stop()
+                        self.get_logger().warn(
+                            f'DIRECT NAV STOPPED: Path blocked at '
+                            f'({validation.blocked_position[0]:.2f}, {validation.blocked_position[1]:.2f})')
+                        self.get_logger().info(
+                            f'Robot position: ({self.robot_x:.2f}, {self.robot_y:.2f}), '
+                            f'heading: {math.degrees(self.robot_yaw):.1f} deg')
+                        self._publish_status('OBSTACLE_STOPPED')
+                        self.state = NavigatorState.IDLE
+                        self.current_goal = None
+                        self._direct_mode = False
+                        return
                     self._consecutive_replan_failures += 1
                     if self._consecutive_replan_failures >= 3:
                         self.get_logger().error('Multiple failures, entering recovery')
@@ -599,6 +750,8 @@ class DynamicNavigator(Node):
     def _on_replan_received(self, result):
         with self._nav_lock:
             self.replan_pending = False
+            if self._direct_mode:
+                return
 
             if result.status != PlanningStatus.SUCCEEDED or not result.path:
                 self._consecutive_replan_failures += 1
@@ -652,6 +805,24 @@ class DynamicNavigator(Node):
                 (result.blocked_position[1] - self.robot_y)**2
             )
             if obstacle_dist < 6.0:
+                if self._direct_mode:
+                    self._publish_stop()
+                    self.get_logger().warn(
+                        f'DIRECT NAV STOPPED: Obstacle at '
+                        f'({result.blocked_position[0]:.2f}, {result.blocked_position[1]:.2f}) '
+                        f'dist={obstacle_dist:.1f}m')
+                    self.get_logger().info(
+                        f'Robot position: ({self.robot_x:.2f}, {self.robot_y:.2f}), '
+                        f'heading: {math.degrees(self.robot_yaw):.1f} deg')
+                    self.current_goal = None
+                    self.current_path = None
+                    self.current_nav_path = None
+                    self._direct_reverse_start_x = self.robot_x
+                    self._direct_reverse_start_y = self.robot_y
+                    self._direct_reverse_phase = 'straighten'
+                    self._direct_reverse_timer = time.time()
+                    self.state = NavigatorState.DIRECT_REVERSING
+                    return
                 self.get_logger().warn(
                     f'Obstacle at ({result.blocked_position[0]:.1f}, {result.blocked_position[1]:.1f}) '
                     f'dist={obstacle_dist:.1f}m, replanning')
@@ -773,6 +944,11 @@ class DynamicNavigator(Node):
 
     def _publish_stop(self):
         self.cmd_vel_pub.publish(Twist())
+
+    def _publish_status(self, status_type: str):
+        msg = String()
+        msg.data = f'{status_type} {self.robot_x:.2f} {self.robot_y:.2f} {math.degrees(self.robot_yaw):.1f}'
+        self.status_pub.publish(msg)
 
     @staticmethod
     def _quaternion_to_yaw(q: Quaternion) -> float:

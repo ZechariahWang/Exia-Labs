@@ -50,6 +50,8 @@ cdr_serialize(
   cdr << ros_message.origin_lat;
   // Member: origin_lon
   cdr << ros_message.origin_lon;
+  // Member: direct
+  cdr << (ros_message.direct ? true : false);
   return true;
 }
 
@@ -85,6 +87,13 @@ cdr_deserialize(
 
   // Member: origin_lon
   cdr >> ros_message.origin_lon;
+
+  // Member: direct
+  {
+    uint8_t tmp;
+    cdr >> tmp;
+    ros_message.direct = tmp ? true : false;
+  }
 
   return true;
 }  // NOLINT(readability/fn_size)
@@ -147,6 +156,12 @@ get_serialized_size(
   // Member: origin_lon
   {
     size_t item_size = sizeof(ros_message.origin_lon);
+    current_alignment += item_size +
+      eprosima::fastcdr::Cdr::alignment(current_alignment, item_size);
+  }
+  // Member: direct
+  {
+    size_t item_size = sizeof(ros_message.direct);
     current_alignment += item_size +
       eprosima::fastcdr::Cdr::alignment(current_alignment, item_size);
   }
@@ -267,6 +282,14 @@ max_serialized_size_NavigationGoal(
       eprosima::fastcdr::Cdr::alignment(current_alignment, sizeof(uint64_t));
   }
 
+  // Member: direct
+  {
+    size_t array_size = 1;
+
+    last_member_size = array_size * sizeof(uint8_t);
+    current_alignment += array_size * sizeof(uint8_t);
+  }
+
   size_t ret_val = current_alignment - initial_alignment;
   if (is_plain) {
     // All members are plain, and type is not empty.
@@ -275,7 +298,7 @@ max_serialized_size_NavigationGoal(
     using DataType = exia_msgs::msg::NavigationGoal;
     is_plain =
       (
-      offsetof(DataType, origin_lon) +
+      offsetof(DataType, direct) +
       last_member_size
       ) == ret_val;
   }

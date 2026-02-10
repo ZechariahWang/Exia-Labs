@@ -123,6 +123,11 @@ static bool _NavigationGoal__cdr_serialize(
     cdr << ros_message->origin_lon;
   }
 
+  // Field name: direct
+  {
+    cdr << (ros_message->direct ? true : false);
+  }
+
   return true;
 }
 
@@ -213,6 +218,13 @@ static bool _NavigationGoal__cdr_deserialize(
     cdr >> ros_message->origin_lon;
   }
 
+  // Field name: direct
+  {
+    uint8_t tmp;
+    cdr >> tmp;
+    ros_message->direct = tmp ? true : false;
+  }
+
   return true;
 }  // NOLINT(readability/fn_size)
 
@@ -275,6 +287,12 @@ size_t get_serialized_size_exia_msgs__msg__NavigationGoal(
   // field.name origin_lon
   {
     size_t item_size = sizeof(ros_message->origin_lon);
+    current_alignment += item_size +
+      eprosima::fastcdr::Cdr::alignment(current_alignment, item_size);
+  }
+  // field.name direct
+  {
+    size_t item_size = sizeof(ros_message->direct);
     current_alignment += item_size +
       eprosima::fastcdr::Cdr::alignment(current_alignment, item_size);
   }
@@ -391,6 +409,13 @@ size_t max_serialized_size_exia_msgs__msg__NavigationGoal(
     current_alignment += array_size * sizeof(uint64_t) +
       eprosima::fastcdr::Cdr::alignment(current_alignment, sizeof(uint64_t));
   }
+  // member: direct
+  {
+    size_t array_size = 1;
+
+    last_member_size = array_size * sizeof(uint8_t);
+    current_alignment += array_size * sizeof(uint8_t);
+  }
 
   size_t ret_val = current_alignment - initial_alignment;
   if (is_plain) {
@@ -400,7 +425,7 @@ size_t max_serialized_size_exia_msgs__msg__NavigationGoal(
     using DataType = exia_msgs__msg__NavigationGoal;
     is_plain =
       (
-      offsetof(DataType, origin_lon) +
+      offsetof(DataType, direct) +
       last_member_size
       ) == ret_val;
   }

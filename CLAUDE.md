@@ -129,13 +129,16 @@ exia_ws/
 source ~/exia_ws/install/setup.bash
 ros2 launch exia_bringup sim.launch.py
 
-# Terminal 2: Start autonomous navigation (after Gazebo loads)
+# Terminal 2: Start autonomous stack (after Gazebo loads, waits for nav_to command)
 source ~/exia_ws/install/setup.bash
 ros2 launch exia_bringup autonomous.launch.py
 
 # Terminal 3: Send navigation goals at runtime (no restart needed)
 source ~/exia_ws/install/setup.bash
 ros2 run exia_control nav_to xy 22.0 24.0
+
+# Direct mode: straight-line navigation, stops on obstacle, CLI stays open
+ros2 run exia_control nav_to xy 30.0 15.0 --direct
 
 # With EKF sensor fusion (GPS + wheel odom + IMU)
 ros2 launch exia_bringup autonomous.launch.py use_ekf:=true
@@ -162,6 +165,29 @@ ros2 run exia_control nav_to dms "49 40 0 N" "11 50 29 E"
 ros2 run exia_control nav_to cancel
 ```
 
+### Direct Navigation Mode (`--direct`)
+
+Append `--direct` to any goal command for straight-line navigation without path replanning. The robot drives directly toward the target. If an obstacle is detected within 3m (via raw lidar scan in a +/-30 degree forward cone), the robot stops, straightens its wheels, reverses 1.5m to create clearance, and then the CLI exits with the robot's current position so the user can manually issue the next waypoint.
+
+```bash
+# Direct mode with XY
+ros2 run exia_control nav_to xy 30.0 15.0 --direct
+
+# Direct mode with lat/lon
+ros2 run exia_control nav_to latlon 49.666667 11.841389 --direct
+
+# Direct mode with DMS
+ros2 run exia_control nav_to dms "49D40'00\"N" "11D50'29\"E" --direct
+```
+
+In direct mode the CLI blocks until one of:
+- **Goal reached**: robot arrives within goal tolerance, prints final position
+- **Obstacle detected**: robot stops, reverses, prints position for manual waypoint update
+- **Path ended**: path exhausted before reaching goal, prints position
+- **Ctrl+C**: cancels navigation via `/navigation/cancel` service
+
+Without `--direct`, behavior is 100% unchanged (full A* planning + replanning + recovery).
+
 ### NavigationGoal Message (exia_msgs/msg/NavigationGoal)
 
 ```
@@ -174,6 +200,7 @@ string lat_dms           # Latitude DMS string (dms mode)
 string lon_dms           # Longitude DMS string (dms mode)
 float64 origin_lat       # Optional origin override
 float64 origin_lon       # Optional origin override
+bool direct              # Direct mode (no replanning, stop on obstacle)
 ```
 
 ## GPS Waypoint Navigation
@@ -294,6 +321,8 @@ Custom message definitions.
 | Sensor health watchdog | Stops robot if /scan or /odom stale >2s |
 | Thread-safe callbacks | threading.Lock protects concurrent callback access |
 | One-shot timers | Prevents timer storms from repeated create_timer calls |
+| Direct mode lidar scan | Raw LaserScan obstacle check at 50Hz in +/-30deg forward cone |
+| Direct mode reverse | Straightens wheels + reverses 1.5m after obstacle stop for clearance |
 
 ### Arduino Safety (exia_servo_controller.ino)
 
@@ -338,6 +367,7 @@ Custom message definitions.
 |  State: IDLE -> PLANNING -> EXECUTING    |
 |                    ^           |         |
 |                    +-- RECOVERING        |
+|                    +-- DIRECT_REVERSING  |
 |                                          |
 |  - /navigation/goal subscriber           |
 |    (accepts xy, latlon, dms coords)      |
@@ -346,6 +376,9 @@ Custom message definitions.
 |  - Pure Pursuit path execution           |
 |  - Sensor health watchdog                |
 |  - Thread-safe with nav_lock             |
+|  - Direct mode: straight-line path,      |
+|    lidar obstacle stop, reverse maneuver |
+|  - /navigation/status feedback to CLI    |
 +------------------------------------------+
          |                    ^
          v                    |
@@ -377,6 +410,7 @@ Custom message definitions.
 | `replan_period` | `0.5` | Replanning interval (s) |
 | `goal_tolerance` | `1.0` | Goal reached threshold (m) |
 | `obstacle_lookahead` | `8.0` | Obstacle detection range (m) |
+| `auto_start` | `false` | Auto-navigate to default target on launch |
 
 **Parameters (ackermann_drive_node):**
 | Parameter | Default | Description |
@@ -391,6 +425,9 @@ Custom message definitions.
 ```bash
 # Send navigation goal (preferred method)
 ros2 run exia_control nav_to xy 22.0 24.0
+
+# Direct mode (straight-line, stop on obstacle, CLI blocks)
+ros2 run exia_control nav_to xy 30.0 15.0 --direct
 
 # Drive forward at 1.0 m/s
 ros2 topic pub /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 1.0}, angular: {z: 0.0}}" -1
@@ -433,6 +470,8 @@ source install/setup.bash
 | `/gps/odom` | Odometry | GPS as local XY odometry |
 | `/odometry/filtered` | Odometry | EKF fused odometry |
 | `/navigation/goal` | NavigationGoal | Runtime navigation goal input |
+| `/navigation/status` | String | Navigation status feedback (direct mode) |
+| `/navigation/cancel` | Trigger (service) | Cancel current navigation |
 
 ## Sensors
 
@@ -501,6 +540,7 @@ ros2 topic echo /odometry/filtered --once
 
 # Navigation goal debugging
 ros2 topic echo /navigation/goal --once
+ros2 topic echo /navigation/status --once
 
 # Sensor health (check if scan/odom are publishing)
 ros2 topic hz /scan

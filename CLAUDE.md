@@ -1,6 +1,6 @@
 # Exia Ground Robot Workspace
 # Author: Zechariah Wang (Dec 25, 2025)
-# Updated: February 2026 - Safety Hardening + Runtime Navigation Commands
+# Updated: February 2026 - Safety Hardening + Runtime Navigation Commands + Radio Bridge
 
 ROS 2 workspace for the Exia Ground robot platform.
 
@@ -52,7 +52,8 @@ exia_ws/
 │   ├── exia_enable_autostart.sh    # Enable systemd autostart
 │   ├── exia_disable_autostart.sh   # Disable systemd autostart
 │   ├── exia_status.sh              # Check robot status
-│   └── exia-robot.service          # Systemd service unit file
+│   ├── exia-robot.service          # Systemd service unit file
+│   └── generate_radio_keys.sh     # Generate RSA keys for radio encryption
 ├── arduino/
 │   ├── exia_servo_controller/
 │   │   └── exia_servo_controller.ino  # Jetson-controlled servo bridge
@@ -65,6 +66,7 @@ exia_ws/
 │   │   │   ├── autonomous.launch.py # SLAM + Nav2 + Dynamic navigator
 │   │   │   ├── rc_control.launch.py # Hardware RC driver mode
 │   │   │   ├── gps_navigation.launch.py # GPS + EKF sensor fusion
+│   │   │   ├── radio.launch.py      # Radio bridge (RFD900x)
 │   │   │   ├── drive_test.launch.py # Straight-line drive test
 │   │   │   └── turn_test.launch.py  # Heading turn test
 │   │   ├── config/
@@ -74,7 +76,8 @@ exia_ws/
 │   │   │   ├── pointcloud_to_laserscan.yaml
 │   │   │   ├── gps_params.yaml
 │   │   │   ├── ekf_params.yaml
-│   │   │   └── septentrio_rover.yaml
+│   │   │   ├── septentrio_rover.yaml
+│   │   │   └── radio_params.yaml
 │   │   ├── urdf/
 │   │   │   └── exia_ground.urdf.xacro
 │   │   └── worlds/
@@ -96,7 +99,8 @@ exia_ws/
 │   ├── exia_driver/                # Hardware drivers (ament_python)
 │   │   └── exia_driver/
 │   │       ├── rc_driver_node.py
-│   │       └── gps_transform_node.py
+│   │       ├── gps_transform_node.py
+│   │       └── radio_bridge_node.py
 │   │
 │   └── exia_msgs/                  # Custom messages (ament_cmake)
 │       └── msg/
@@ -267,6 +271,7 @@ Launch files, configuration, URDF, and world files.
 | `autonomous.launch.py` | SLAM + Nav2 planner + Dynamic navigator |
 | `rc_control.launch.py` | Hardware RC driver for physical robot |
 | `gps_navigation.launch.py` | GPS driver + EKF sensor fusion |
+| `radio.launch.py` | RFD900x radio bridge (base or robot role) |
 | `drive_test.launch.py` | Straight-line drive validation test |
 | `turn_test.launch.py` | Heading turn validation test |
 
@@ -294,6 +299,7 @@ Hardware drivers for physical robot.
 |------------|---------|
 | `rc_driver_node` | RC radio receiver + Arduino serial control |
 | `gps_transform_node` | GPS lat/lon to local XY conversion (RTK-gated origin) |
+| `radio_bridge_node` | RFD900x encrypted radio bridge (base/robot roles) |
 
 ### exia_msgs (ament_cmake)
 Custom message definitions.
@@ -348,6 +354,19 @@ Custom message definitions.
 |---------|-------------|
 | RTK fix gate | Waits for STATUS_GBAS_FIX before auto-setting origin |
 | Covariance propagation | GPS covariance passed through to odom output |
+
+### Radio Bridge Safety
+
+| Feature | Description |
+|---------|-------------|
+| RSA + AES-256-GCM encryption | All frames encrypted after handshake |
+| Heartbeat watchdog | 10Hz heartbeat, 0.5s timeout triggers e-stop |
+| Continuous e-stop Twist | 20Hz zero cmd_vel while e-stop active |
+| Nonce replay protection | Sequential counters prevent frame replay attacks |
+| Serial reconnect | Auto-reconnects every 1s on USB disconnect |
+| Buffer overflow protection | Serial buffer capped at 4096 bytes |
+| Startup grace | Watchdog only activates after first heartbeat received |
+| Goal dedup | Prevents feedback loops on single-machine testing |
 
 ### RC Driver Node Safety
 
@@ -472,6 +491,8 @@ source install/setup.bash
 | `/navigation/goal` | NavigationGoal | Runtime navigation goal input |
 | `/navigation/status` | String | Navigation status feedback (direct mode) |
 | `/navigation/cancel` | Trigger (service) | Cancel current navigation |
+| `/radio/cancel` | Trigger (service) | Cancel navigation over radio (laptop) |
+| `/radio/estop` | Trigger (service) | Remote emergency stop over radio (laptop) |
 
 ## Sensors
 
@@ -545,6 +566,10 @@ ros2 topic echo /navigation/status --once
 # Sensor health (check if scan/odom are publishing)
 ros2 topic hz /scan
 ros2 topic hz /odom
+
+# Radio bridge debugging
+ros2 node list | grep radio_bridge
+ros2 service list | grep radio
 ```
 
 ## Hardware Deployment
@@ -575,13 +600,64 @@ The `rc_driver_node` handles hardware control via serial:
 ros2 run exia_driver rc_driver_node
 ```
 
+### Radio Bridge (RFD900x)
+
+Encrypted radio link between home base laptop and Jetson using RFD900x modems. Single node with two roles selected by parameter.
+
+**Setup (one-time):**
+```bash
+bash ~/exia_ws/scripts/generate_radio_keys.sh
+# Copy ~/.exia/radio_private.pem and ~/.exia/radio_public.pem to both machines
+```
+
+**Robot (Jetson):**
+```bash
+ros2 launch exia_bringup radio.launch.py role:=robot serial_port:=/dev/ttyUSB0
+```
+
+**Base (Laptop):**
+```bash
+ros2 launch exia_bringup radio.launch.py role:=base serial_port:=/dev/ttyUSB0
+```
+
+**Send commands from laptop (existing CLI, unchanged):**
+```bash
+ros2 run exia_control nav_to xy 30.0 15.0
+ros2 service call /radio/cancel std_srvs/srv/Trigger
+ros2 service call /radio/estop std_srvs/srv/Trigger
+```
+
+**Protocol:** RSA-2048 key exchange + AES-256-GCM frame encryption. 10Hz heartbeat, 0.5s e-stop timeout. 5Hz telemetry. DMS payloads use pipe `|` separator.
+
+**E-stop behavior:** Radio loss or remote e-stop stops movement (zero cmd_vel at 20Hz). Nodes stay alive. Sending a new goal clears e-stop. Navigation does NOT auto-resume after reconnection.
+
+**Local testing with socat:**
+```bash
+socat -d -d pty,raw,echo=0,link=/tmp/radio0 pty,raw,echo=0,link=/tmp/radio1
+ros2 launch exia_bringup radio.launch.py role:=robot serial_port:=/tmp/radio0
+ros2 launch exia_bringup radio.launch.py role:=base serial_port:=/tmp/radio1
+```
+
+**Parameters (radio_bridge_node):**
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `role` | `robot` | Bridge role: `base` or `robot` |
+| `serial_port` | `/dev/ttyUSB0` | Serial port for RFD900x radio |
+| `serial_baud` | `57600` | Serial baud rate |
+| `heartbeat_rate` | `10.0` | Heartbeat frequency (Hz) |
+| `heartbeat_timeout` | `0.5` | Seconds before e-stop on heartbeat loss |
+| `status_rate` | `5.0` | Telemetry frequency (Hz) |
+| `key_dir` | `~/.exia` | Directory containing RSA key pair |
+
 ### Systemd Autostart
+
+The startup script launches rc_driver_node, autonomous stack, and radio bridge as background processes. Requires RSA keys in `~/.exia/`. Skips radio bridge if radio not plugged in.
 
 ```bash
 # Enable autostart on boot
 sudo ~/exia_ws/scripts/exia_enable_autostart.sh
 
-# Check status
+# Check status (includes radio key check)
 ~/exia_ws/scripts/exia_status.sh
 
 # Manual start/stop
@@ -650,6 +726,9 @@ Handles RC receiver input with gear shifting for manual driving.
 sudo apt install ros-humble-robot-localization
 sudo apt install ros-humble-septentrio-gnss-driver
 sudo apt install ros-humble-nmea-msgs ros-humble-gps-msgs
+
+# Radio bridge encryption
+pip install cryptography
 ```
 
 ## Development Notes

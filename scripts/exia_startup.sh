@@ -5,7 +5,22 @@ ARDUINO_PORT="/dev/arduino_control"
 ARDUINO_CLI="/home/exialabsargus/bin/arduino-cli"
 ARDUINO_SKETCH_DIR="/home/exialabsargus/rc_control_pwm"
 WORKSPACE="/home/exialabsargus/exia_ws"
+RADIO_PORT="/dev/ttyUSB0"
+KEY_DIR="/home/exialabsargus/.exia"
 MAX_WAIT=120
+
+PIDS=()
+
+cleanup() {
+    echo "Shutting down all processes..."
+    for pid in "${PIDS[@]}"; do
+        kill "$pid" 2>/dev/null
+    done
+    wait
+    echo "Shutdown complete at $(date)"
+}
+
+trap cleanup EXIT INT TERM
 
 exec > >(tee -a "$LOGFILE") 2>&1
 echo "=========================================="
@@ -90,7 +105,33 @@ source "$WORKSPACE/install/setup.bash"
 
 export ROS_DOMAIN_ID=0
 
-echo "Starting rc_driver_node..."
-ros2 run exia_driver rc_driver_node
+if [ ! -f "$KEY_DIR/radio_private.pem" ] || [ ! -f "$KEY_DIR/radio_public.pem" ]; then
+    echo "ERROR: Radio encryption keys not found in $KEY_DIR"
+    echo "Run: bash $WORKSPACE/scripts/generate_radio_keys.sh"
+    exit 1
+fi
+echo "Radio encryption keys found"
 
-echo "Node exited at $(date)"
+echo "Starting rc_driver_node..."
+ros2 run exia_driver rc_driver_node &
+PIDS+=($!)
+
+sleep 3
+
+echo "Starting autonomous stack..."
+ros2 launch exia_bringup autonomous.launch.py use_sim_time:=false &
+PIDS+=($!)
+
+sleep 5
+
+if [ -e "$RADIO_PORT" ]; then
+    echo "Starting radio bridge (robot)..."
+    ros2 launch exia_bringup radio.launch.py role:=robot serial_port:="$RADIO_PORT" &
+    PIDS+=($!)
+else
+    echo "WARNING: Radio not detected at $RADIO_PORT, skipping radio bridge"
+fi
+
+echo "All processes launched, waiting..."
+wait
+echo "Processes exited at $(date)"

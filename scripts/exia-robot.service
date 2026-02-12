@@ -1,5 +1,5 @@
 [Unit]
-Description=Exia Ground Robot RC Driver Control
+Description=Exia Ground Robot Autonomous + Radio Bridge
 After=network.target local-fs.target
 Wants=network.target
 

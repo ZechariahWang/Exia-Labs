@@ -1,1 +1,1 @@
-python3-serial:rclpy:std_msgs:std_srvs
+exia_msgs:geometry_msgs:nav_msgs:python3-cryptography:python3-serial:rclpy:std_msgs:std_srvs

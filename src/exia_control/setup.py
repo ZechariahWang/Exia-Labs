@@ -13,8 +13,8 @@ setup(
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='Zechariah Wang',
-    maintainer_email='zech@example.com',
-    description='Navigation and control logic for Exia Ground robot',
+    maintainer_email='zechariahwang@gmail.com',
+    description='Navigation and control logic for Exia Ground robot probably.',
     license='MIT',
     entry_points={
         'console_scripts': [

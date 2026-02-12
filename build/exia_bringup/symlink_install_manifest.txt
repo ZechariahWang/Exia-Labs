@@ -1,6 +1,7 @@
 /home/zech/exia_ws/install/exia_bringup/share/exia_bringup/launch/autonomous.launch.py
 /home/zech/exia_ws/install/exia_bringup/share/exia_bringup/launch/drive_test.launch.py
 /home/zech/exia_ws/install/exia_bringup/share/exia_bringup/launch/gps_navigation.launch.py
+/home/zech/exia_ws/install/exia_bringup/share/exia_bringup/launch/radio.launch.py
 /home/zech/exia_ws/install/exia_bringup/share/exia_bringup/launch/rc_control.launch.py
 /home/zech/exia_ws/install/exia_bringup/share/exia_bringup/launch/sim.launch.py
 /home/zech/exia_ws/install/exia_bringup/share/exia_bringup/launch/turn_test.launch.py
@@ -9,6 +10,7 @@
 /home/zech/exia_ws/install/exia_bringup/share/exia_bringup/config/gps_params.yaml
 /home/zech/exia_ws/install/exia_bringup/share/exia_bringup/config/nav2_params.yaml
 /home/zech/exia_ws/install/exia_bringup/share/exia_bringup/config/pointcloud_to_laserscan.yaml
+/home/zech/exia_ws/install/exia_bringup/share/exia_bringup/config/radio_params.yaml
 /home/zech/exia_ws/install/exia_bringup/share/exia_bringup/config/septentrio_rover.yaml
 /home/zech/exia_ws/install/exia_bringup/share/exia_bringup/config/slam_toolbox_params.yaml
 /home/zech/exia_ws/install/exia_bringup/share/exia_bringup/urdf/exia_ground.urdf.xacro

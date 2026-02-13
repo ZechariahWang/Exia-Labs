@@ -49,13 +49,17 @@ struct NavigationGoal_
       this->origin_lat = 0.0;
       this->origin_lon = 0.0;
       this->direct = false;
+      this->move_type = "";
+      this->move_value = 0.0;
+      this->move_speed = 0.0;
     }
   }
 
   explicit NavigationGoal_(const ContainerAllocator & _alloc, rosidl_runtime_cpp::MessageInitialization _init = rosidl_runtime_cpp::MessageInitialization::ALL)
   : coord_type(_alloc),
     lat_dms(_alloc),
-    lon_dms(_alloc)
+    lon_dms(_alloc),
+    move_type(_alloc)
   {
     if (rosidl_runtime_cpp::MessageInitialization::ALL == _init ||
       rosidl_runtime_cpp::MessageInitialization::ZERO == _init)
@@ -70,6 +74,9 @@ struct NavigationGoal_
       this->origin_lat = 0.0;
       this->origin_lon = 0.0;
       this->direct = false;
+      this->move_type = "";
+      this->move_value = 0.0;
+      this->move_speed = 0.0;
     }
   }
 
@@ -104,6 +111,15 @@ struct NavigationGoal_
   using _direct_type =
     bool;
   _direct_type direct;
+  using _move_type_type =
+    std::basic_string<char, std::char_traits<char>, typename std::allocator_traits<ContainerAllocator>::template rebind_alloc<char>>;
+  _move_type_type move_type;
+  using _move_value_type =
+    double;
+  _move_value_type move_value;
+  using _move_speed_type =
+    double;
+  _move_speed_type move_speed;
 
   // setters for named parameter idiom
   Type & set__coord_type(
@@ -164,6 +180,24 @@ struct NavigationGoal_
     const bool & _arg)
   {
     this->direct = _arg;
+    return *this;
+  }
+  Type & set__move_type(
+    const std::basic_string<char, std::char_traits<char>, typename std::allocator_traits<ContainerAllocator>::template rebind_alloc<char>> & _arg)
+  {
+    this->move_type = _arg;
+    return *this;
+  }
+  Type & set__move_value(
+    const double & _arg)
+  {
+    this->move_value = _arg;
+    return *this;
+  }
+  Type & set__move_speed(
+    const double & _arg)
+  {
+    this->move_speed = _arg;
     return *this;
   }
 
@@ -237,6 +271,15 @@ struct NavigationGoal_
       return false;
     }
     if (this->direct != other.direct) {
+      return false;
+    }
+    if (this->move_type != other.move_type) {
+      return false;
+    }
+    if (this->move_value != other.move_value) {
+      return false;
+    }
+    if (this->move_speed != other.move_speed) {
       return false;
     }
     return true;

@@ -92,6 +92,27 @@ inline void to_flow_style_yaml(
   {
     out << "direct: ";
     rosidl_generator_traits::value_to_yaml(msg.direct, out);
+    out << ", ";
+  }
+
+  // member: move_type
+  {
+    out << "move_type: ";
+    rosidl_generator_traits::value_to_yaml(msg.move_type, out);
+    out << ", ";
+  }
+
+  // member: move_value
+  {
+    out << "move_value: ";
+    rosidl_generator_traits::value_to_yaml(msg.move_value, out);
+    out << ", ";
+  }
+
+  // member: move_speed
+  {
+    out << "move_speed: ";
+    rosidl_generator_traits::value_to_yaml(msg.move_speed, out);
   }
   out << "}";
 }  // NOLINT(readability/fn_size)
@@ -197,6 +218,36 @@ inline void to_block_style_yaml(
     }
     out << "direct: ";
     rosidl_generator_traits::value_to_yaml(msg.direct, out);
+    out << "\n";
+  }
+
+  // member: move_type
+  {
+    if (indentation > 0) {
+      out << std::string(indentation, ' ');
+    }
+    out << "move_type: ";
+    rosidl_generator_traits::value_to_yaml(msg.move_type, out);
+    out << "\n";
+  }
+
+  // member: move_value
+  {
+    if (indentation > 0) {
+      out << std::string(indentation, ' ');
+    }
+    out << "move_value: ";
+    rosidl_generator_traits::value_to_yaml(msg.move_value, out);
+    out << "\n";
+  }
+
+  // member: move_speed
+  {
+    if (indentation > 0) {
+      out << std::string(indentation, ' ');
+    }
+    out << "move_speed: ";
+    rosidl_generator_traits::value_to_yaml(msg.move_speed, out);
     out << "\n";
   }
 }  // NOLINT(readability/fn_size)

@@ -179,7 +179,6 @@ def generate_launch_description():
         name='gps_transform_node',
         output='screen',
         parameters=[gps_params_file, {'use_sim_time': use_sim_time}],
-        condition=IfCondition(use_ekf),
     )
 
     ekf_localization_node = Node(

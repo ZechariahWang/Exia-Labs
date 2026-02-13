@@ -120,9 +120,8 @@ class NavigatorState(Enum):
     EXECUTING = 2
     RECOVERING = 3
     DIRECT_REVERSING = 4
-
-    # kovid wux ere 2k26
-    # uwu xoxo nyahh ~~~~~ >;) - Eric
+    MOVE_FORWARD = 5
+    MOVE_TURN = 6
 
 class DynamicNavigator(Node):
 
@@ -179,6 +178,14 @@ class DynamicNavigator(Node):
         self._sensor_warned = False
         self._latest_scan: Optional[LaserScan] = None
 
+        self._move_type = ''
+        self._move_value = 0.0
+        self._move_speed = 0.0
+        self._move_start_time = 0.0
+        self._move_start_x = 0.0
+        self._move_start_y = 0.0
+        self._move_target_heading = 0.0
+
         # configure pp controller
         pp_config = PurePursuitConfig(
             lookahead_distance=lookahead,
@@ -227,6 +234,17 @@ class DynamicNavigator(Node):
         )
         self.scan_sub = self.create_subscription(
             LaserScan, '/scan', self._scan_callback, scan_qos)
+
+        self._gps_x = 0.0
+        self._gps_y = 0.0
+        self._gps_available = False
+        self._gps_to_map_offset_x = 0.0
+        self._gps_to_map_offset_y = 0.0
+        self._goal_gps_x = 0.0
+        self._goal_gps_y = 0.0
+        self._goal_uses_gps = False
+        self.gps_odom_sub = self.create_subscription(
+            Odometry, '/gps/odom', self._gps_odom_callback, 10)
 
         # create publishers
         self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
@@ -323,6 +341,16 @@ class DynamicNavigator(Node):
         self._last_scan_time = time.time()
         self._latest_scan = msg
 
+    def _gps_odom_callback(self, msg: Odometry):
+        self._gps_x = msg.pose.pose.position.x
+        self._gps_y = msg.pose.pose.position.y
+        if not self._gps_available:
+            self._gps_available = True
+            self.get_logger().info(
+                f'GPS reference active: ({self._gps_x:.2f}, {self._gps_y:.2f})')
+        self._gps_to_map_offset_x = self.robot_x - self._gps_x
+        self._gps_to_map_offset_y = self.robot_y - self._gps_y
+
     def _odom_callback(self, msg: Odometry):
         self._last_odom_time = time.time()
         self.robot_speed = msg.twist.twist.linear.x
@@ -352,6 +380,7 @@ class DynamicNavigator(Node):
 
     def _goal_pose_callback(self, msg: PoseStamped):
         self._direct_mode = False
+        self._goal_uses_gps = False
         self._goal_callback(msg)
 
     def _nav_goal_callback(self, msg: NavigationGoal):
@@ -377,9 +406,68 @@ class DynamicNavigator(Node):
             self.get_logger().info(
                 f'Navigation goal (dms): ({lat:.6f}, {lon:.6f}) -> ({target_x:.2f}, {target_y:.2f})')
 
-        else:
-            self.get_logger().error(f'Unknown coord_type: "{coord_type}". Use "xy", "latlon", or "dms".')
+        elif coord_type == 'forward':
+            with self._nav_lock:
+                self._move_type = msg.move_type
+                self._move_value = msg.move_value
+                self._move_speed = msg.move_speed
+                self._move_start_time = time.time()
+                self._move_start_x = self.robot_x
+                self._move_start_y = self.robot_y
+                self.current_goal = None
+                self.current_path = None
+                self.current_nav_path = None
+                self._direct_mode = False
+                self.state = NavigatorState.MOVE_FORWARD
+                self.get_logger().info(
+                    f'Move forward: {self._move_type}={self._move_value:.1f}, '
+                    f'speed={self._move_speed:.1f} m/s')
             return
+
+        elif coord_type == 'turn':
+            with self._nav_lock:
+                self._move_type = msg.move_type
+                self._move_value = msg.move_value
+                self._move_speed = msg.move_speed
+                self._move_start_time = time.time()
+                if self._move_type == 'heading':
+                    target = self.robot_yaw + math.radians(msg.move_value)
+                    while target > math.pi:
+                        target -= 2.0 * math.pi
+                    while target < -math.pi:
+                        target += 2.0 * math.pi
+                    self._move_target_heading = target
+                self.current_goal = None
+                self.current_path = None
+                self.current_nav_path = None
+                self._direct_mode = False
+                self.state = NavigatorState.MOVE_TURN
+                if self._move_type == 'heading':
+                    self.get_logger().info(
+                        f'Turn {msg.move_value:.1f} deg (current: {math.degrees(self.robot_yaw):.1f}, '
+                        f'target: {math.degrees(self._move_target_heading):.1f}), '
+                        f'forward speed={self._move_speed:.1f} m/s')
+                else:
+                    self.get_logger().info(
+                        f'Timed turn: {self._move_value:.1f}s at {self._move_speed:.2f} rad/s')
+            return
+
+        else:
+            self.get_logger().error(f'Unknown coord_type: "{coord_type}". Use "xy", "latlon", "dms", "forward", or "turn".')
+            return
+
+        self._goal_gps_x = target_x
+        self._goal_gps_y = target_y
+        self._goal_uses_gps = self._gps_available
+
+        if self._goal_uses_gps:
+            map_x = target_x + self._gps_to_map_offset_x
+            map_y = target_y + self._gps_to_map_offset_y
+            self.get_logger().info(
+                f'GPS->map: ({target_x:.2f}, {target_y:.2f}) -> ({map_x:.2f}, {map_y:.2f})')
+        else:
+            map_x = target_x
+            map_y = target_y
 
         self._direct_mode = msg.direct
         if self._direct_mode:
@@ -389,8 +477,8 @@ class DynamicNavigator(Node):
         goal = PoseStamped()
         goal.header.frame_id = 'map'
         goal.header.stamp = self.get_clock().now().to_msg()
-        goal.pose.position.x = target_x
-        goal.pose.position.y = target_y
+        goal.pose.position.x = map_x
+        goal.pose.position.y = map_y
         goal.pose.orientation.w = 1.0
         self._goal_callback(goal)
 
@@ -410,6 +498,7 @@ class DynamicNavigator(Node):
         self.current_goal = None
         self.current_path = None
         self._direct_mode = False
+        self._move_type = ''
         self._publish_stop()
         response.success = True
         response.message = 'Navigation cancelled'
@@ -453,6 +542,10 @@ class DynamicNavigator(Node):
                 self._execute_recovery()
             elif self.state == NavigatorState.DIRECT_REVERSING:
                 self._execute_direct_reverse()
+            elif self.state == NavigatorState.MOVE_FORWARD:
+                self._execute_move_forward()
+            elif self.state == NavigatorState.MOVE_TURN:
+                self._execute_move_turn()
 
     def _check_ahead_for_obstacle(self) -> bool:
         scan = self._latest_scan
@@ -519,6 +612,104 @@ class DynamicNavigator(Node):
             cmd.angular.z = 0.0
             self.cmd_vel_pub.publish(cmd)
 
+    def _check_forward_obstacle(self) -> bool:
+        scan = self._latest_scan
+        if scan is None:
+            return False
+
+        stop_distance = 3.0
+        cone_half_angle = math.radians(30.0)
+
+        min_range = float('inf')
+        for i, r in enumerate(scan.ranges):
+            if r < scan.range_min or r > scan.range_max or math.isinf(r) or math.isnan(r):
+                continue
+            beam_angle = scan.angle_min + i * scan.angle_increment
+            if abs(beam_angle) <= cone_half_angle and r < min_range:
+                min_range = r
+
+        return min_range <= stop_distance
+
+    def _execute_move_forward(self):
+        if self._check_forward_obstacle():
+            self._publish_stop()
+            self.get_logger().warn(
+                f'Forward stopped: obstacle detected. '
+                f'Position: ({self.robot_x:.2f}, {self.robot_y:.2f}), '
+                f'heading: {math.degrees(self.robot_yaw):.1f} deg')
+            self._publish_status('OBSTACLE_STOPPED')
+            self._move_type = ''
+            self.state = NavigatorState.IDLE
+            return
+
+        elapsed = time.time() - self._move_start_time
+        dx = self.robot_x - self._move_start_x
+        dy = self.robot_y - self._move_start_y
+        dist_traveled = math.sqrt(dx * dx + dy * dy)
+
+        done = False
+        if self._move_type == 'time' and elapsed >= self._move_value:
+            done = True
+        elif self._move_type == 'distance' and dist_traveled >= self._move_value:
+            done = True
+
+        if done:
+            self._publish_stop()
+            self.get_logger().info(
+                f'Forward complete: {dist_traveled:.2f}m in {elapsed:.1f}s. '
+                f'Position: ({self.robot_x:.2f}, {self.robot_y:.2f}), '
+                f'heading: {math.degrees(self.robot_yaw):.1f} deg')
+            self._publish_status('MOVE_COMPLETE')
+            self._move_type = ''
+            self.state = NavigatorState.IDLE
+            return
+
+        cmd = Twist()
+        cmd.linear.x = self._move_speed
+        cmd.angular.z = 0.0
+        self.cmd_vel_pub.publish(cmd)
+
+    def _execute_move_turn(self):
+        elapsed = time.time() - self._move_start_time
+
+        if self._move_type == 'time':
+            if elapsed >= self._move_value:
+                self._publish_stop()
+                self.get_logger().info(
+                    f'Timed turn complete: {elapsed:.1f}s. '
+                    f'Position: ({self.robot_x:.2f}, {self.robot_y:.2f}), '
+                    f'heading: {math.degrees(self.robot_yaw):.1f} deg')
+                self._publish_status('TURN_COMPLETE')
+                self._move_type = ''
+                self.state = NavigatorState.IDLE
+                return
+            cmd = Twist()
+            cmd.linear.x = 1.0
+            cmd.angular.z = self._move_speed
+            self.cmd_vel_pub.publish(cmd)
+
+        elif self._move_type == 'heading':
+            error = math.atan2(
+                math.sin(self._move_target_heading - self.robot_yaw),
+                math.cos(self._move_target_heading - self.robot_yaw))
+
+            if abs(error) < math.radians(3.0):
+                self._publish_stop()
+                self.get_logger().info(
+                    f'Heading reached: {math.degrees(self.robot_yaw):.1f} deg '
+                    f'(target: {math.degrees(self._move_target_heading):.1f} deg). '
+                    f'Position: ({self.robot_x:.2f}, {self.robot_y:.2f})')
+                self._publish_status('TURN_COMPLETE')
+                self._move_type = ''
+                self.state = NavigatorState.IDLE
+                return
+
+            kp = 2.0
+            cmd = Twist()
+            cmd.linear.x = self._move_speed
+            cmd.angular.z = max(min(kp * error, 1.0), -1.0)
+            self.cmd_vel_pub.publish(cmd)
+
     def _execute_path(self):
         if self.current_path is None or self.current_goal is None:
             self.state = NavigatorState.IDLE
@@ -527,9 +718,15 @@ class DynamicNavigator(Node):
         if self._direct_mode and self._check_ahead_for_obstacle():
             return
 
-        goal_x = self.current_goal.pose.position.x
-        goal_y = self.current_goal.pose.position.y
-        dist_to_goal = math.sqrt((goal_x - self.robot_x)**2 + (goal_y - self.robot_y)**2)
+        if self._goal_uses_gps and self._gps_available:
+            dist_to_goal = math.sqrt(
+                (self._goal_gps_x - self._gps_x)**2 +
+                (self._goal_gps_y - self._gps_y)**2)
+        else:
+            goal_x = self.current_goal.pose.position.x
+            goal_y = self.current_goal.pose.position.y
+            dist_to_goal = math.sqrt(
+                (goal_x - self.robot_x)**2 + (goal_y - self.robot_y)**2)
 
         if dist_to_goal < self.goal_tolerance:
             self.get_logger().info(f'Goal reached! Distance: {dist_to_goal:.2f}m')
@@ -623,11 +820,49 @@ class DynamicNavigator(Node):
         if not self.replan_pending:
             self._request_replan()
 
-    # this is the path planned initially before any obstacles are detected via lidar. once this happens, it will request a replan
+    def _update_map_goal(self):
+        if self._goal_uses_gps and self._gps_available and self.current_goal is not None:
+            self.current_goal.pose.position.x = self._goal_gps_x + self._gps_to_map_offset_x
+            self.current_goal.pose.position.y = self._goal_gps_y + self._gps_to_map_offset_y
+
+    def _get_report_position(self):
+        if self._gps_available:
+            return self._gps_x, self._gps_y
+        return self.robot_x, self.robot_y
+
+    def _clamp_planning_goal(self, goal: PoseStamped) -> PoseStamped:
+        if self.costmap is not None:
+            half_w = (self.costmap.info.width * self.costmap.info.resolution) / 2.0
+            half_h = (self.costmap.info.height * self.costmap.info.resolution) / 2.0
+            max_dist = min(half_w, half_h) - 5.0
+        else:
+            max_dist = 45.0
+
+        dx = goal.pose.position.x - self.robot_x
+        dy = goal.pose.position.y - self.robot_y
+        dist = math.sqrt(dx * dx + dy * dy)
+
+        if dist <= max_dist:
+            return goal
+
+        scale = max_dist / dist
+        clamped = PoseStamped()
+        clamped.header = goal.header
+        clamped.pose.position.x = self.robot_x + dx * scale
+        clamped.pose.position.y = self.robot_y + dy * scale
+        clamped.pose.orientation = goal.pose.orientation
+        self.get_logger().info(
+            f'Goal clamped: ({goal.pose.position.x:.2f}, {goal.pose.position.y:.2f}) -> '
+            f'({clamped.pose.position.x:.2f}, {clamped.pose.position.y:.2f}) '
+            f'(dist {dist:.1f}m > costmap {max_dist:.1f}m)')
+        return clamped
+
     def _request_initial_plan(self):
         if self.current_goal is None:
             self.state = NavigatorState.IDLE
             return
+
+        self._update_map_goal()
 
         if self._direct_mode:
             self._plan_straight_line()
@@ -640,12 +875,14 @@ class DynamicNavigator(Node):
         start.pose.position.y = self.robot_y
         start.pose.orientation = self._yaw_to_quaternion(self.robot_yaw)
 
+        planning_goal = self._clamp_planning_goal(self.current_goal)
+
         self.get_logger().info(
             f'Planning: ({self.robot_x:.2f}, {self.robot_y:.2f}) -> '
-            f'({self.current_goal.pose.position.x:.2f}, {self.current_goal.pose.position.y:.2f})')
+            f'({planning_goal.pose.position.x:.2f}, {planning_goal.pose.position.y:.2f})')
 
         self.replan_pending = True
-        self.planner.plan_path_async(start, self.current_goal, self._on_initial_path)
+        self.planner.plan_path_async(start, planning_goal, self._on_initial_path)
 
     def _plan_straight_line(self):
         goal_x = self.current_goal.pose.position.x
@@ -681,6 +918,8 @@ class DynamicNavigator(Node):
         if self.current_goal is None:
             return
 
+        self._update_map_goal()
+
         now = self.get_clock().now().nanoseconds / 1e9
         if now - self.last_replan_time < 0.5:
             return
@@ -692,9 +931,11 @@ class DynamicNavigator(Node):
         start.pose.position.y = self.robot_y
         start.pose.orientation = self._yaw_to_quaternion(self.robot_yaw)
 
+        planning_goal = self._clamp_planning_goal(self.current_goal)
+
         self.replan_pending = True
         self.last_replan_time = now
-        self.planner.plan_path_async(start, self.current_goal, self._on_replan_received)
+        self.planner.plan_path_async(start, planning_goal, self._on_replan_received)
 
 
     def _on_initial_path(self, result):
@@ -946,8 +1187,9 @@ class DynamicNavigator(Node):
         self.cmd_vel_pub.publish(Twist())
 
     def _publish_status(self, status_type: str):
+        rx, ry = self._get_report_position()
         msg = String()
-        msg.data = f'{status_type} {self.robot_x:.2f} {self.robot_y:.2f} {math.degrees(self.robot_yaw):.1f}'
+        msg.data = f'{status_type} {rx:.2f} {ry:.2f} {math.degrees(self.robot_yaw):.1f}'
         self.status_pub.publish(msg)
 
     @staticmethod

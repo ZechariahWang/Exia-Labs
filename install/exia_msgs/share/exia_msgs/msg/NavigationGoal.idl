@@ -25,6 +25,12 @@ module exia_msgs {
       double origin_lon;
 
       boolean direct;
+
+      string move_type;
+
+      double move_value;
+
+      double move_speed;
     };
   };
 };

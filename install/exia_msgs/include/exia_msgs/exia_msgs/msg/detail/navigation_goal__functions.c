@@ -15,6 +15,7 @@
 // Member `coord_type`
 // Member `lat_dms`
 // Member `lon_dms`
+// Member `move_type`
 #include "rosidl_runtime_c/string_functions.h"
 
 bool
@@ -45,6 +46,13 @@ exia_msgs__msg__NavigationGoal__init(exia_msgs__msg__NavigationGoal * msg)
   // origin_lat
   // origin_lon
   // direct
+  // move_type
+  if (!rosidl_runtime_c__String__init(&msg->move_type)) {
+    exia_msgs__msg__NavigationGoal__fini(msg);
+    return false;
+  }
+  // move_value
+  // move_speed
   return true;
 }
 
@@ -67,6 +75,10 @@ exia_msgs__msg__NavigationGoal__fini(exia_msgs__msg__NavigationGoal * msg)
   // origin_lat
   // origin_lon
   // direct
+  // move_type
+  rosidl_runtime_c__String__fini(&msg->move_type);
+  // move_value
+  // move_speed
 }
 
 bool
@@ -121,6 +133,20 @@ exia_msgs__msg__NavigationGoal__are_equal(const exia_msgs__msg__NavigationGoal *
   if (lhs->direct != rhs->direct) {
     return false;
   }
+  // move_type
+  if (!rosidl_runtime_c__String__are_equal(
+      &(lhs->move_type), &(rhs->move_type)))
+  {
+    return false;
+  }
+  // move_value
+  if (lhs->move_value != rhs->move_value) {
+    return false;
+  }
+  // move_speed
+  if (lhs->move_speed != rhs->move_speed) {
+    return false;
+  }
   return true;
 }
 
@@ -164,6 +190,16 @@ exia_msgs__msg__NavigationGoal__copy(
   output->origin_lon = input->origin_lon;
   // direct
   output->direct = input->direct;
+  // move_type
+  if (!rosidl_runtime_c__String__copy(
+      &(input->move_type), &(output->move_type)))
+  {
+    return false;
+  }
+  // move_value
+  output->move_value = input->move_value;
+  // move_speed
+  output->move_speed = input->move_speed;
   return true;
 }
 

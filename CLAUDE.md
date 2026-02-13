@@ -1,6 +1,6 @@
 # Exia Ground Robot Workspace
 # Author: Zechariah Wang (Dec 25, 2025)
-# Updated: February 2026 - Safety Hardening + Runtime Navigation Commands + Radio Bridge
+# Updated: February 2026 - Safety Hardening + Runtime Navigation Commands + Radio Bridge + GPS-Referenced Navigation
 
 ROS 2 workspace for the Exia Ground robot platform.
 
@@ -66,9 +66,7 @@ exia_ws/
 │   │   │   ├── autonomous.launch.py # SLAM + Nav2 + Dynamic navigator
 │   │   │   ├── rc_control.launch.py # Hardware RC driver mode
 │   │   │   ├── gps_navigation.launch.py # GPS + EKF sensor fusion
-│   │   │   ├── radio.launch.py      # Radio bridge (RFD900x)
-│   │   │   ├── drive_test.launch.py # Straight-line drive test
-│   │   │   └── turn_test.launch.py  # Heading turn test
+│   │   │   └── radio.launch.py      # Radio bridge (RFD900x)
 │   │   ├── config/
 │   │   │   ├── ackermann_controllers.yaml
 │   │   │   ├── nav2_params.yaml
@@ -88,8 +86,6 @@ exia_ws/
 │   │       ├── ackermann_drive_node.py    # cmd_vel -> actuators, odom, TF
 │   │       ├── dynamic_navigator_node.py  # Goal navigation with replanning
 │   │       ├── nav_to_cmd.py              # CLI tool for runtime goals
-│   │       ├── drive_forward_test_node.py # Straight-line drive test
-│   │       ├── turn_to_heading_test_node.py # Heading turn test
 │   │       ├── planning/
 │   │       │   └── pure_pursuit.py
 │   │       └── navigation/
@@ -152,11 +148,16 @@ ros2 launch exia_bringup autonomous.launch.py use_ekf:=true
 
 Send navigation goals at runtime without restarting the simulation. Uses the `NavigationGoal` custom message on `/navigation/goal`.
 
+All coordinates are GPS-referenced when GPS is available. The `gps_transform_node` converts GPS lat/lon to local XY, and the dynamic navigator computes a live GPS-to-map offset so all goal types use GPS as the coordinate reference. When GPS is unavailable, falls back to SLAM map-frame coordinates.
+
 ```bash
-# XY coordinates (map frame, meters)
+# XY coordinates (GPS-referenced local meters, relative to GPS origin)
 ros2 run exia_control nav_to xy 30.0 15.0
 
-# Lat/lon coordinates (uses default origin from node)
+# Negative coordinates work (navigates via costmap clamping for distant goals)
+ros2 run exia_control nav_to xy -50.0 -50.0
+
+# Lat/lon coordinates (converted to local XY via equirectangular projection)
 ros2 run exia_control nav_to latlon 49.666667 11.841389
 
 # Lat/lon with custom origin
@@ -192,10 +193,46 @@ In direct mode the CLI blocks until one of:
 
 Without `--direct`, behavior is 100% unchanged (full A* planning + replanning + recovery).
 
+### Movement Commands (`forward` / `turn`)
+
+Low-level movement commands that send cmd_vel directly without path planning. The CLI blocks until the movement completes or an obstacle is detected. Ackermann constraint: the robot cannot rotate in place, so turn commands use a forward speed while steering.
+
+```bash
+# Move forward for 3 seconds at 2.0 m/s
+ros2 run exia_control nav_to forward 3s 2.0
+
+# Move forward 50 meters at 1.5 m/s
+ros2 run exia_control nav_to forward 50m 1.5
+
+# Move forward for 5 seconds at default speed (1.0 m/s)
+ros2 run exia_control nav_to forward 5s
+
+# Turn for 3 seconds at 0.5 rad/s angular velocity (forward at 1.0 m/s)
+ros2 run exia_control nav_to turn 3s 0.5
+
+# Turn left 90 degrees (positive = counterclockwise)
+ros2 run exia_control nav_to turn 90
+
+# Turn right 90 degrees (negative = clockwise)
+ros2 run exia_control nav_to turn -90
+
+# Turn 180 degrees
+ros2 run exia_control nav_to turn 180
+```
+
+**Forward movement** checks lidar in a +/-30 degree forward cone at 3m. If an obstacle is detected, the robot stops immediately and the CLI reports `OBSTACLE_STOPPED` with position. Speed is capped at 5.0 m/s (robot max).
+
+**Turn commands** drive forward at 0.5 m/s while steering (Ackermann constraint). For timed turns, the angular velocity is applied directly. For heading turns, the robot steers at the specified rate toward the target heading and stops within 3-degree tolerance.
+
+The CLI blocks until one of:
+- **Move/turn complete**: prints final position and heading
+- **Obstacle detected** (forward only): stops, prints position
+- **Ctrl+C**: cancels via `/navigation/cancel` service
+
 ### NavigationGoal Message (exia_msgs/msg/NavigationGoal)
 
 ```
-string coord_type        # "xy", "latlon", or "dms"
+string coord_type        # "xy", "latlon", "dms", "forward", or "turn"
 float64 x                # X coordinate (xy mode)
 float64 y                # Y coordinate (xy mode)
 float64 lat              # Latitude (latlon mode)
@@ -205,6 +242,9 @@ string lon_dms           # Longitude DMS string (dms mode)
 float64 origin_lat       # Optional origin override
 float64 origin_lon       # Optional origin override
 bool direct              # Direct mode (no replanning, stop on obstacle)
+string move_type         # "time", "distance", or "heading" (forward/turn modes)
+float64 move_value       # Duration(s), distance(m), or heading(deg)
+float64 move_speed       # Speed(m/s) or angular velocity(rad/s)
 ```
 
 ## GPS Waypoint Navigation
@@ -248,8 +288,16 @@ ORIGIN_GPS = [49.666400, 11.841100]  # [lat, lon] reference origin
                                                      │ dynamic_navigator│
                         ┌─────────────────────┐     │  /navigation/goal│
                         │  nav_to CLI tool    │────>│  (xy/latlon/dms) │
-                        └─────────────────────┘     └──────────────────┘
+                        └─────────────────────┘     │                  │
+                                                     │ GPS->map offset: │
+                                                     │  goal_map = goal │
+                                                     │  _gps + offset   │
+                                                     │ offset = map_pos │
+                                                     │  - gps_pos       │
+                                                     └──────────────────┘
 ```
+
+`gps_transform_node` always launches with `autonomous.launch.py` (no longer gated behind `use_ekf`). The dynamic navigator subscribes to `/gps/odom` and computes a live GPS-to-map offset to convert GPS-local goals into the SLAM map frame for the A* planner. Goal-reached checks use GPS-local distance. When GPS is unavailable, all behavior falls back to SLAM map-frame coordinates.
 
 ### EKF Sensor Fusion
 
@@ -268,12 +316,10 @@ Launch files, configuration, URDF, and world files.
 | Launch File | Purpose |
 |-------------|---------|
 | `sim.launch.py` | Gazebo Fortress simulation with controllers |
-| `autonomous.launch.py` | SLAM + Nav2 planner + Dynamic navigator |
+| `autonomous.launch.py` | SLAM + Nav2 planner + GPS transform + Dynamic navigator |
 | `rc_control.launch.py` | Hardware RC driver for physical robot |
 | `gps_navigation.launch.py` | GPS driver + EKF sensor fusion |
 | `radio.launch.py` | RFD900x radio bridge (base or robot role) |
-| `drive_test.launch.py` | Straight-line drive validation test |
-| `turn_test.launch.py` | Heading turn validation test |
 
 ### exia_control (ament_python)
 Navigation and control logic.
@@ -283,8 +329,6 @@ Navigation and control logic.
 | `ackermann_drive_node` | cmd_vel -> controller commands, publishes odom + TF |
 | `dynamic_navigator_node` | Goal-based navigation with replanning |
 | `nav_to` | CLI tool for sending navigation goals at runtime |
-| `drive_forward_test_node` | Straight-line drive test |
-| `turn_to_heading_test_node` | Heading turn test |
 
 | Module | Purpose |
 |--------|---------|
@@ -329,6 +373,12 @@ Custom message definitions.
 | One-shot timers | Prevents timer storms from repeated create_timer calls |
 | Direct mode lidar scan | Raw LaserScan obstacle check at 50Hz in +/-30deg forward cone |
 | Direct mode reverse | Straightens wheels + reverses 1.5m after obstacle stop for clearance |
+| Forward move obstacle check | Lidar obstacle detection during forward movement commands (3m, +/-30deg) |
+| Turn heading tolerance | 3-degree tolerance for heading turn completion |
+| Move speed cap | Forward speed validated at CLI level (max 5.0 m/s) |
+| GPS-referenced coordinates | All nav_to goals use GPS as coordinate reference when available |
+| Costmap clamping | Goals beyond costmap range use intermediate waypoints with progressive replanning |
+| GPS fallback | Falls back to SLAM map-frame when GPS unavailable |
 
 ### Arduino Safety (exia_servo_controller.ino)
 
@@ -387,12 +437,20 @@ Custom message definitions.
 |                    ^           |         |
 |                    +-- RECOVERING        |
 |                    +-- DIRECT_REVERSING  |
+|         IDLE -> MOVE_FORWARD (cmd_vel)   |
+|         IDLE -> MOVE_TURN    (cmd_vel)   |
 |                                          |
 |  - /navigation/goal subscriber           |
-|    (accepts xy, latlon, dms coords)      |
+|    (xy, latlon, dms, forward, turn)      |
+|  - GPS-referenced coordinate system      |
+|    (subscribes /gps/odom, computes       |
+|     GPS->map offset for goal placement)  |
+|  - Costmap clamping for distant goals    |
 |  - 500ms continuous replanning           |
 |  - Obstacle-triggered immediate replan   |
 |  - Pure Pursuit path execution           |
+|  - Movement commands: forward/turn with  |
+|    lidar obstacle detection              |
 |  - Sensor health watchdog                |
 |  - Thread-safe with nav_lock             |
 |  - Direct mode: straight-line path,      |
@@ -447,6 +505,13 @@ ros2 run exia_control nav_to xy 22.0 24.0
 
 # Direct mode (straight-line, stop on obstacle, CLI blocks)
 ros2 run exia_control nav_to xy 30.0 15.0 --direct
+
+# Movement commands (CLI blocks until complete)
+ros2 run exia_control nav_to forward 3s 2.0    # 3 seconds at 2 m/s
+ros2 run exia_control nav_to forward 50m 1.5   # 50 meters at 1.5 m/s
+ros2 run exia_control nav_to turn 90           # turn left 90 degrees
+ros2 run exia_control nav_to turn -90          # turn right 90 degrees
+ros2 run exia_control nav_to turn 3s 0.5       # turn 3s at 0.5 rad/s
 
 # Drive forward at 1.0 m/s
 ros2 topic pub /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 1.0}, angular: {z: 0.0}}" -1
@@ -737,7 +802,9 @@ pip install cryptography
 - **Ackermann steering**: Cannot rotate in place, must have forward velocity to turn
 - **RViz Fixed Frame**: Use `odom` or `map` depending on navigation mode
 - **Gazebo multicast warnings**: Set `export IGN_IP=127.0.0.1` to suppress
-- **GPS Mode**: Set `USE_GPS_MODE = True` in dynamic_navigator_node.py for GPS waypoints
+- **GPS Mode**: Set `USE_GPS_MODE = True` in dynamic_navigator_node.py for GPS waypoints. GPS coordinate reference is automatic when `gps_transform_node` is running (always launched by `autonomous.launch.py`)
+- **Coordinate reference**: All `nav_to` goals are GPS-referenced when GPS is available. The navigator computes a live GPS->map offset. When GPS is unavailable, coordinates are treated as SLAM map-frame
+- **Distant goals**: Goals beyond the costmap range (50m from robot) are handled via intermediate waypoint clamping with progressive replanning
 - **After building exia_msgs**: Must re-source `install/setup.bash` before launching nodes that depend on it
 - **Costmap data type**: path_validator uses uint8 (not int8) to correctly handle obstacle values 128-255
 - **Thread safety**: dynamic_navigator_node uses threading.Lock for concurrent callback protection with ReentrantCallbackGroup

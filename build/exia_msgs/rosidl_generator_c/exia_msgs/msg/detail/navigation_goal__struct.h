@@ -21,6 +21,7 @@ extern "C"
 // Member 'coord_type'
 // Member 'lat_dms'
 // Member 'lon_dms'
+// Member 'move_type'
 #include "rosidl_runtime_c/string.h"
 
 /// Struct defined in msg/NavigationGoal in the package exia_msgs.
@@ -36,6 +37,9 @@ typedef struct exia_msgs__msg__NavigationGoal
   double origin_lat;
   double origin_lon;
   bool direct;
+  rosidl_runtime_c__String move_type;
+  double move_value;
+  double move_speed;
 } exia_msgs__msg__NavigationGoal;
 
 // Struct for a sequence of exia_msgs__msg__NavigationGoal.

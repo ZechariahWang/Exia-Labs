@@ -16,6 +16,7 @@
 // Member `coord_type`
 // Member `lat_dms`
 // Member `lon_dms`
+// Member `move_type`
 #include "rosidl_runtime_c/string_functions.h"
 
 #ifdef __cplusplus
@@ -37,7 +38,7 @@ void exia_msgs__msg__NavigationGoal__rosidl_typesupport_introspection_c__Navigat
   exia_msgs__msg__NavigationGoal__fini(message_memory);
 }
 
-static rosidl_typesupport_introspection_c__MessageMember exia_msgs__msg__NavigationGoal__rosidl_typesupport_introspection_c__NavigationGoal_message_member_array[10] = {
+static rosidl_typesupport_introspection_c__MessageMember exia_msgs__msg__NavigationGoal__rosidl_typesupport_introspection_c__NavigationGoal_message_member_array[13] = {
   {
     "coord_type",  // name
     rosidl_typesupport_introspection_c__ROS_TYPE_STRING,  // type
@@ -207,13 +208,64 @@ static rosidl_typesupport_introspection_c__MessageMember exia_msgs__msg__Navigat
     NULL,  // fetch(index, &value) function pointer
     NULL,  // assign(index, value) function pointer
     NULL  // resize(index) function pointer
+  },
+  {
+    "move_type",  // name
+    rosidl_typesupport_introspection_c__ROS_TYPE_STRING,  // type
+    0,  // upper bound of string
+    NULL,  // members of sub message
+    false,  // is array
+    0,  // array size
+    false,  // is upper bound
+    offsetof(exia_msgs__msg__NavigationGoal, move_type),  // bytes offset in struct
+    NULL,  // default value
+    NULL,  // size() function pointer
+    NULL,  // get_const(index) function pointer
+    NULL,  // get(index) function pointer
+    NULL,  // fetch(index, &value) function pointer
+    NULL,  // assign(index, value) function pointer
+    NULL  // resize(index) function pointer
+  },
+  {
+    "move_value",  // name
+    rosidl_typesupport_introspection_c__ROS_TYPE_DOUBLE,  // type
+    0,  // upper bound of string
+    NULL,  // members of sub message
+    false,  // is array
+    0,  // array size
+    false,  // is upper bound
+    offsetof(exia_msgs__msg__NavigationGoal, move_value),  // bytes offset in struct
+    NULL,  // default value
+    NULL,  // size() function pointer
+    NULL,  // get_const(index) function pointer
+    NULL,  // get(index) function pointer
+    NULL,  // fetch(index, &value) function pointer
+    NULL,  // assign(index, value) function pointer
+    NULL  // resize(index) function pointer
+  },
+  {
+    "move_speed",  // name
+    rosidl_typesupport_introspection_c__ROS_TYPE_DOUBLE,  // type
+    0,  // upper bound of string
+    NULL,  // members of sub message
+    false,  // is array
+    0,  // array size
+    false,  // is upper bound
+    offsetof(exia_msgs__msg__NavigationGoal, move_speed),  // bytes offset in struct
+    NULL,  // default value
+    NULL,  // size() function pointer
+    NULL,  // get_const(index) function pointer
+    NULL,  // get(index) function pointer
+    NULL,  // fetch(index, &value) function pointer
+    NULL,  // assign(index, value) function pointer
+    NULL  // resize(index) function pointer
   }
 };
 
 static const rosidl_typesupport_introspection_c__MessageMembers exia_msgs__msg__NavigationGoal__rosidl_typesupport_introspection_c__NavigationGoal_message_members = {
   "exia_msgs__msg",  // message namespace
   "NavigationGoal",  // message name
-  10,  // number of fields
+  13,  // number of fields
   sizeof(exia_msgs__msg__NavigationGoal),
   exia_msgs__msg__NavigationGoal__rosidl_typesupport_introspection_c__NavigationGoal_message_member_array,  // message members
   exia_msgs__msg__NavigationGoal__rosidl_typesupport_introspection_c__NavigationGoal_init_function,  // function to initialize message memory (memory has to be allocated)

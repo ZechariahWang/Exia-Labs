@@ -21,16 +21,64 @@ namespace msg
 namespace builder
 {
 
+class Init_NavigationGoal_move_speed
+{
+public:
+  explicit Init_NavigationGoal_move_speed(::exia_msgs::msg::NavigationGoal & msg)
+  : msg_(msg)
+  {}
+  ::exia_msgs::msg::NavigationGoal move_speed(::exia_msgs::msg::NavigationGoal::_move_speed_type arg)
+  {
+    msg_.move_speed = std::move(arg);
+    return std::move(msg_);
+  }
+
+private:
+  ::exia_msgs::msg::NavigationGoal msg_;
+};
+
+class Init_NavigationGoal_move_value
+{
+public:
+  explicit Init_NavigationGoal_move_value(::exia_msgs::msg::NavigationGoal & msg)
+  : msg_(msg)
+  {}
+  Init_NavigationGoal_move_speed move_value(::exia_msgs::msg::NavigationGoal::_move_value_type arg)
+  {
+    msg_.move_value = std::move(arg);
+    return Init_NavigationGoal_move_speed(msg_);
+  }
+
+private:
+  ::exia_msgs::msg::NavigationGoal msg_;
+};
+
+class Init_NavigationGoal_move_type
+{
+public:
+  explicit Init_NavigationGoal_move_type(::exia_msgs::msg::NavigationGoal & msg)
+  : msg_(msg)
+  {}
+  Init_NavigationGoal_move_value move_type(::exia_msgs::msg::NavigationGoal::_move_type_type arg)
+  {
+    msg_.move_type = std::move(arg);
+    return Init_NavigationGoal_move_value(msg_);
+  }
+
+private:
+  ::exia_msgs::msg::NavigationGoal msg_;
+};
+
 class Init_NavigationGoal_direct
 {
 public:
   explicit Init_NavigationGoal_direct(::exia_msgs::msg::NavigationGoal & msg)
   : msg_(msg)
   {}
-  ::exia_msgs::msg::NavigationGoal direct(::exia_msgs::msg::NavigationGoal::_direct_type arg)
+  Init_NavigationGoal_move_type direct(::exia_msgs::msg::NavigationGoal::_direct_type arg)
   {
     msg_.direct = std::move(arg);
-    return std::move(msg_);
+    return Init_NavigationGoal_move_type(msg_);
   }
 
 private:

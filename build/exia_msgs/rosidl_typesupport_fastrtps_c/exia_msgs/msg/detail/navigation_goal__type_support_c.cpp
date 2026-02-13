@@ -34,8 +34,8 @@ extern "C"
 {
 #endif
 
-#include "rosidl_runtime_c/string.h"  // coord_type, lat_dms, lon_dms
-#include "rosidl_runtime_c/string_functions.h"  // coord_type, lat_dms, lon_dms
+#include "rosidl_runtime_c/string.h"  // coord_type, lat_dms, lon_dms, move_type
+#include "rosidl_runtime_c/string_functions.h"  // coord_type, lat_dms, lon_dms, move_type
 
 // forward declare type support functions
 
@@ -126,6 +126,30 @@ static bool _NavigationGoal__cdr_serialize(
   // Field name: direct
   {
     cdr << (ros_message->direct ? true : false);
+  }
+
+  // Field name: move_type
+  {
+    const rosidl_runtime_c__String * str = &ros_message->move_type;
+    if (str->capacity == 0 || str->capacity <= str->size) {
+      fprintf(stderr, "string capacity not greater than size\n");
+      return false;
+    }
+    if (str->data[str->size] != '\0') {
+      fprintf(stderr, "string not null-terminated\n");
+      return false;
+    }
+    cdr << str->data;
+  }
+
+  // Field name: move_value
+  {
+    cdr << ros_message->move_value;
+  }
+
+  // Field name: move_speed
+  {
+    cdr << ros_message->move_speed;
   }
 
   return true;
@@ -225,6 +249,32 @@ static bool _NavigationGoal__cdr_deserialize(
     ros_message->direct = tmp ? true : false;
   }
 
+  // Field name: move_type
+  {
+    std::string tmp;
+    cdr >> tmp;
+    if (!ros_message->move_type.data) {
+      rosidl_runtime_c__String__init(&ros_message->move_type);
+    }
+    bool succeeded = rosidl_runtime_c__String__assign(
+      &ros_message->move_type,
+      tmp.c_str());
+    if (!succeeded) {
+      fprintf(stderr, "failed to assign string into field 'move_type'\n");
+      return false;
+    }
+  }
+
+  // Field name: move_value
+  {
+    cdr >> ros_message->move_value;
+  }
+
+  // Field name: move_speed
+  {
+    cdr >> ros_message->move_speed;
+  }
+
   return true;
 }  // NOLINT(readability/fn_size)
 
@@ -293,6 +343,22 @@ size_t get_serialized_size_exia_msgs__msg__NavigationGoal(
   // field.name direct
   {
     size_t item_size = sizeof(ros_message->direct);
+    current_alignment += item_size +
+      eprosima::fastcdr::Cdr::alignment(current_alignment, item_size);
+  }
+  // field.name move_type
+  current_alignment += padding +
+    eprosima::fastcdr::Cdr::alignment(current_alignment, padding) +
+    (ros_message->move_type.size + 1);
+  // field.name move_value
+  {
+    size_t item_size = sizeof(ros_message->move_value);
+    current_alignment += item_size +
+      eprosima::fastcdr::Cdr::alignment(current_alignment, item_size);
+  }
+  // field.name move_speed
+  {
+    size_t item_size = sizeof(ros_message->move_speed);
     current_alignment += item_size +
       eprosima::fastcdr::Cdr::alignment(current_alignment, item_size);
   }
@@ -416,6 +482,34 @@ size_t max_serialized_size_exia_msgs__msg__NavigationGoal(
     last_member_size = array_size * sizeof(uint8_t);
     current_alignment += array_size * sizeof(uint8_t);
   }
+  // member: move_type
+  {
+    size_t array_size = 1;
+
+    full_bounded = false;
+    is_plain = false;
+    for (size_t index = 0; index < array_size; ++index) {
+      current_alignment += padding +
+        eprosima::fastcdr::Cdr::alignment(current_alignment, padding) +
+        1;
+    }
+  }
+  // member: move_value
+  {
+    size_t array_size = 1;
+
+    last_member_size = array_size * sizeof(uint64_t);
+    current_alignment += array_size * sizeof(uint64_t) +
+      eprosima::fastcdr::Cdr::alignment(current_alignment, sizeof(uint64_t));
+  }
+  // member: move_speed
+  {
+    size_t array_size = 1;
+
+    last_member_size = array_size * sizeof(uint64_t);
+    current_alignment += array_size * sizeof(uint64_t) +
+      eprosima::fastcdr::Cdr::alignment(current_alignment, sizeof(uint64_t));
+  }
 
   size_t ret_val = current_alignment - initial_alignment;
   if (is_plain) {
@@ -425,7 +519,7 @@ size_t max_serialized_size_exia_msgs__msg__NavigationGoal(
     using DataType = exia_msgs__msg__NavigationGoal;
     is_plain =
       (
-      offsetof(DataType, direct) +
+      offsetof(DataType, move_speed) +
       last_member_size
       ) == ret_val;
   }

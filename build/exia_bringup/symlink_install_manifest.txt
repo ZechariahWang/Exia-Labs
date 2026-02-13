@@ -1,10 +1,8 @@
 /home/zech/exia_ws/install/exia_bringup/share/exia_bringup/launch/autonomous.launch.py
-/home/zech/exia_ws/install/exia_bringup/share/exia_bringup/launch/drive_test.launch.py
 /home/zech/exia_ws/install/exia_bringup/share/exia_bringup/launch/gps_navigation.launch.py
 /home/zech/exia_ws/install/exia_bringup/share/exia_bringup/launch/radio.launch.py
 /home/zech/exia_ws/install/exia_bringup/share/exia_bringup/launch/rc_control.launch.py
 /home/zech/exia_ws/install/exia_bringup/share/exia_bringup/launch/sim.launch.py
-/home/zech/exia_ws/install/exia_bringup/share/exia_bringup/launch/turn_test.launch.py
 /home/zech/exia_ws/install/exia_bringup/share/exia_bringup/config/ackermann_controllers.yaml
 /home/zech/exia_ws/install/exia_bringup/share/exia_bringup/config/ekf_params.yaml
 /home/zech/exia_ws/install/exia_bringup/share/exia_bringup/config/gps_params.yaml

@@ -161,6 +161,39 @@ bool exia_msgs__msg__navigation_goal__convert_from_py(PyObject * _pymsg, void * 
     ros_message->direct = (Py_True == field);
     Py_DECREF(field);
   }
+  {  // move_type
+    PyObject * field = PyObject_GetAttrString(_pymsg, "move_type");
+    if (!field) {
+      return false;
+    }
+    assert(PyUnicode_Check(field));
+    PyObject * encoded_field = PyUnicode_AsUTF8String(field);
+    if (!encoded_field) {
+      Py_DECREF(field);
+      return false;
+    }
+    rosidl_runtime_c__String__assign(&ros_message->move_type, PyBytes_AS_STRING(encoded_field));
+    Py_DECREF(encoded_field);
+    Py_DECREF(field);
+  }
+  {  // move_value
+    PyObject * field = PyObject_GetAttrString(_pymsg, "move_value");
+    if (!field) {
+      return false;
+    }
+    assert(PyFloat_Check(field));
+    ros_message->move_value = PyFloat_AS_DOUBLE(field);
+    Py_DECREF(field);
+  }
+  {  // move_speed
+    PyObject * field = PyObject_GetAttrString(_pymsg, "move_speed");
+    if (!field) {
+      return false;
+    }
+    assert(PyFloat_Check(field));
+    ros_message->move_speed = PyFloat_AS_DOUBLE(field);
+    Py_DECREF(field);
+  }
 
   return true;
 }
@@ -305,6 +338,45 @@ PyObject * exia_msgs__msg__navigation_goal__convert_to_py(void * raw_ros_message
     field = PyBool_FromLong(ros_message->direct ? 1 : 0);
     {
       int rc = PyObject_SetAttrString(_pymessage, "direct", field);
+      Py_DECREF(field);
+      if (rc) {
+        return NULL;
+      }
+    }
+  }
+  {  // move_type
+    PyObject * field = NULL;
+    field = PyUnicode_DecodeUTF8(
+      ros_message->move_type.data,
+      strlen(ros_message->move_type.data),
+      "replace");
+    if (!field) {
+      return NULL;
+    }
+    {
+      int rc = PyObject_SetAttrString(_pymessage, "move_type", field);
+      Py_DECREF(field);
+      if (rc) {
+        return NULL;
+      }
+    }
+  }
+  {  // move_value
+    PyObject * field = NULL;
+    field = PyFloat_FromDouble(ros_message->move_value);
+    {
+      int rc = PyObject_SetAttrString(_pymessage, "move_value", field);
+      Py_DECREF(field);
+      if (rc) {
+        return NULL;
+      }
+    }
+  }
+  {  // move_speed
+    PyObject * field = NULL;
+    field = PyFloat_FromDouble(ros_message->move_speed);
+    {
+      int rc = PyObject_SetAttrString(_pymessage, "move_speed", field);
       Py_DECREF(field);
       if (rc) {
         return NULL;

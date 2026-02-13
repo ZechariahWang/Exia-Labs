@@ -52,6 +52,12 @@ cdr_serialize(
   cdr << ros_message.origin_lon;
   // Member: direct
   cdr << (ros_message.direct ? true : false);
+  // Member: move_type
+  cdr << ros_message.move_type;
+  // Member: move_value
+  cdr << ros_message.move_value;
+  // Member: move_speed
+  cdr << ros_message.move_speed;
   return true;
 }
 
@@ -94,6 +100,15 @@ cdr_deserialize(
     cdr >> tmp;
     ros_message.direct = tmp ? true : false;
   }
+
+  // Member: move_type
+  cdr >> ros_message.move_type;
+
+  // Member: move_value
+  cdr >> ros_message.move_value;
+
+  // Member: move_speed
+  cdr >> ros_message.move_speed;
 
   return true;
 }  // NOLINT(readability/fn_size)
@@ -162,6 +177,22 @@ get_serialized_size(
   // Member: direct
   {
     size_t item_size = sizeof(ros_message.direct);
+    current_alignment += item_size +
+      eprosima::fastcdr::Cdr::alignment(current_alignment, item_size);
+  }
+  // Member: move_type
+  current_alignment += padding +
+    eprosima::fastcdr::Cdr::alignment(current_alignment, padding) +
+    (ros_message.move_type.size() + 1);
+  // Member: move_value
+  {
+    size_t item_size = sizeof(ros_message.move_value);
+    current_alignment += item_size +
+      eprosima::fastcdr::Cdr::alignment(current_alignment, item_size);
+  }
+  // Member: move_speed
+  {
+    size_t item_size = sizeof(ros_message.move_speed);
     current_alignment += item_size +
       eprosima::fastcdr::Cdr::alignment(current_alignment, item_size);
   }
@@ -290,6 +321,37 @@ max_serialized_size_NavigationGoal(
     current_alignment += array_size * sizeof(uint8_t);
   }
 
+  // Member: move_type
+  {
+    size_t array_size = 1;
+
+    full_bounded = false;
+    is_plain = false;
+    for (size_t index = 0; index < array_size; ++index) {
+      current_alignment += padding +
+        eprosima::fastcdr::Cdr::alignment(current_alignment, padding) +
+        1;
+    }
+  }
+
+  // Member: move_value
+  {
+    size_t array_size = 1;
+
+    last_member_size = array_size * sizeof(uint64_t);
+    current_alignment += array_size * sizeof(uint64_t) +
+      eprosima::fastcdr::Cdr::alignment(current_alignment, sizeof(uint64_t));
+  }
+
+  // Member: move_speed
+  {
+    size_t array_size = 1;
+
+    last_member_size = array_size * sizeof(uint64_t);
+    current_alignment += array_size * sizeof(uint64_t) +
+      eprosima::fastcdr::Cdr::alignment(current_alignment, sizeof(uint64_t));
+  }
+
   size_t ret_val = current_alignment - initial_alignment;
   if (is_plain) {
     // All members are plain, and type is not empty.
@@ -298,7 +360,7 @@ max_serialized_size_NavigationGoal(
     using DataType = exia_msgs::msg::NavigationGoal;
     is_plain =
       (
-      offsetof(DataType, direct) +
+      offsetof(DataType, move_speed) +
       last_member_size
       ) == ret_val;
   }

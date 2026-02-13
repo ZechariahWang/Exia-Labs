@@ -13,3 +13,7 @@ float64 origin_lat
 float64 origin_lon
 
 bool direct
+
+string move_type
+float64 move_value
+float64 move_speed

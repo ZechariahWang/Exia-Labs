@@ -67,6 +67,9 @@ class NavigationGoal(metaclass=Metaclass_NavigationGoal):
         '_origin_lat',
         '_origin_lon',
         '_direct',
+        '_move_type',
+        '_move_value',
+        '_move_speed',
     ]
 
     _fields_and_field_types = {
@@ -80,6 +83,9 @@ class NavigationGoal(metaclass=Metaclass_NavigationGoal):
         'origin_lat': 'double',
         'origin_lon': 'double',
         'direct': 'boolean',
+        'move_type': 'string',
+        'move_value': 'double',
+        'move_speed': 'double',
     }
 
     SLOT_TYPES = (
@@ -93,6 +99,9 @@ class NavigationGoal(metaclass=Metaclass_NavigationGoal):
         rosidl_parser.definition.BasicType('double'),  # noqa: E501
         rosidl_parser.definition.BasicType('double'),  # noqa: E501
         rosidl_parser.definition.BasicType('boolean'),  # noqa: E501
+        rosidl_parser.definition.UnboundedString(),  # noqa: E501
+        rosidl_parser.definition.BasicType('double'),  # noqa: E501
+        rosidl_parser.definition.BasicType('double'),  # noqa: E501
     )
 
     def __init__(self, **kwargs):
@@ -109,6 +118,9 @@ class NavigationGoal(metaclass=Metaclass_NavigationGoal):
         self.origin_lat = kwargs.get('origin_lat', float())
         self.origin_lon = kwargs.get('origin_lon', float())
         self.direct = kwargs.get('direct', bool())
+        self.move_type = kwargs.get('move_type', str())
+        self.move_value = kwargs.get('move_value', float())
+        self.move_speed = kwargs.get('move_speed', float())
 
     def __repr__(self):
         typename = self.__class__.__module__.split('.')
@@ -158,6 +170,12 @@ class NavigationGoal(metaclass=Metaclass_NavigationGoal):
         if self.origin_lon != other.origin_lon:
             return False
         if self.direct != other.direct:
+            return False
+        if self.move_type != other.move_type:
+            return False
+        if self.move_value != other.move_value:
+            return False
+        if self.move_speed != other.move_speed:
             return False
         return True
 
@@ -307,3 +325,46 @@ class NavigationGoal(metaclass=Metaclass_NavigationGoal):
                 isinstance(value, bool), \
                 "The 'direct' field must be of type 'bool'"
         self._direct = value
+
+    @builtins.property
+    def move_type(self):
+        """Message field 'move_type'."""
+        return self._move_type
+
+    @move_type.setter
+    def move_type(self, value):
+        if __debug__:
+            assert \
+                isinstance(value, str), \
+                "The 'move_type' field must be of type 'str'"
+        self._move_type = value
+
+    @builtins.property
+    def move_value(self):
+        """Message field 'move_value'."""
+        return self._move_value
+
+    @move_value.setter
+    def move_value(self, value):
+        if __debug__:
+            assert \
+                isinstance(value, float), \
+                "The 'move_value' field must be of type 'float'"
+            assert not (value < -1.7976931348623157e+308 or value > 1.7976931348623157e+308) or math.isinf(value), \
+                "The 'move_value' field must be a double in [-1.7976931348623157e+308, 1.7976931348623157e+308]"
+        self._move_value = value
+
+    @builtins.property
+    def move_speed(self):
+        """Message field 'move_speed'."""
+        return self._move_speed
+
+    @move_speed.setter
+    def move_speed(self, value):
+        if __debug__:
+            assert \
+                isinstance(value, float), \
+                "The 'move_speed' field must be of type 'float'"
+            assert not (value < -1.7976931348623157e+308 or value > 1.7976931348623157e+308) or math.isinf(value), \
+                "The 'move_speed' field must be a double in [-1.7976931348623157e+308, 1.7976931348623157e+308]"
+        self._move_speed = value

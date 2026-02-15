@@ -1,6 +1,6 @@
 # Exia Ground Robot Workspace
 # Author: Zechariah Wang (Dec 25, 2025)
-# Updated: February 2026 - Safety Hardening + Runtime Navigation Commands + Radio Bridge + GPS-Referenced Navigation
+# Updated: February 2026 - Safety Hardening + Runtime Navigation Commands + Radio Bridge + GPS-Referenced Navigation + Foxglove Visualization
 
 ROS 2 workspace for the Exia Ground robot platform.
 
@@ -125,15 +125,18 @@ exia_ws/
 ## Quick Start
 
 ```bash
-# Terminal 1: Start simulation
+# Terminal 1: Foxglove Bridge (default visualization)
+ros2 launch foxglove_bridge foxglove_bridge_launch.xml port:=8765
+
+# Terminal 2: Start simulation
 source ~/exia_ws/install/setup.bash
 ros2 launch exia_bringup sim.launch.py
 
-# Terminal 2: Start autonomous stack (after Gazebo loads, waits for nav_to command)
+# Terminal 3: Start autonomous stack (after Gazebo loads, waits for nav_to command)
 source ~/exia_ws/install/setup.bash
 ros2 launch exia_bringup autonomous.launch.py
 
-# Terminal 3: Send navigation goals at runtime (no restart needed)
+# Terminal 4: Send navigation goals at runtime (no restart needed)
 source ~/exia_ws/install/setup.bash
 ros2 run exia_control nav_to xy 22.0 24.0
 
@@ -595,6 +598,56 @@ map (from SLAM)
                     +-- gps_link
 ```
 
+## Visualization (Foxglove Studio)
+
+Foxglove Studio is the default visualization tool for this project. It connects to ROS 2 topics via the Foxglove Bridge WebSocket server.
+
+### Setup
+
+```bash
+# Install (one-time)
+sudo apt install ros-$ROS_DISTRO-foxglove-bridge
+
+# Launch bridge (run before or after simulation)
+ros2 launch foxglove_bridge foxglove_bridge_launch.xml port:=8765
+```
+
+Open Foxglove Studio (desktop app or web) and connect: **Open connection > Foxglove WebSocket > `ws://localhost:8765`**
+
+For remote access (e.g. Jetson), connect to `ws://<jetson-ip>:8765`.
+
+### 3D Panel Configuration
+
+Set the **Frame** dropdown to `map` (globally correct positioning). Do not use `base_link` as the frame — the camera follows the robot and it will appear stationary.
+
+Enable these topics in the 3D panel sidebar:
+
+| Topic | What it shows |
+|-------|---------------|
+| `/robot_description` | Robot URDF model |
+| `/tf` | Live transform tree (robot motion) |
+| `/tf_static` | Static transforms (sensor frames) |
+| `/scan` | Lidar point cloud (environment outline, obstacles, trees) |
+| `/map` | SLAM occupancy grid |
+| `/global_costmap/costmap` | Obstacle costmap overlay |
+| `/planned_path` | Navigation path line (only while navigating) |
+| `/nav_markers` | Navigation visualization markers |
+
+### Additional Useful Panels
+
+| Panel | Topic | What it shows |
+|-------|-------|---------------|
+| Plot | `/cmd_vel` | Linear/angular velocity over time |
+| Raw Messages | `/navigation/status` | Nav status feedback |
+| Raw Messages | `/navigation/goal` | Goal commands |
+| GPS | `/gps/fix` | GPS position on world map |
+
+### Notes
+
+- Foxglove does NOT render the Gazebo world (ground, trees, buildings). Use `/scan` for lidar outlines and `/map` for the SLAM-built map instead.
+- `/planned_path` only publishes while the robot is actively navigating to a goal.
+- `odom` frame is locally smooth but drifts over time. `map` frame is globally correct but can have small jumps when SLAM corrects drift. Use `map` for navigation visualization.
+
 ## Debugging
 
 ```bash
@@ -787,6 +840,9 @@ Handles RC receiver input with gear shifting for manual driving.
 ## Dependencies
 
 ```bash
+# Visualization
+sudo apt install ros-$ROS_DISTRO-foxglove-bridge
+
 # GPS and sensor fusion packages
 sudo apt install ros-humble-robot-localization
 sudo apt install ros-humble-septentrio-gnss-driver
@@ -800,7 +856,7 @@ pip install cryptography
 
 - **Simulator**: Gazebo Fortress (not Classic)
 - **Ackermann steering**: Cannot rotate in place, must have forward velocity to turn
-- **RViz Fixed Frame**: Use `odom` or `map` depending on navigation mode
+- **Foxglove Studio**: Default visualization tool. Run `ros2 launch foxglove_bridge foxglove_bridge_launch.xml port:=8765` and connect at `ws://localhost:8765`. Set 3D panel frame to `map`
 - **Gazebo multicast warnings**: Set `export IGN_IP=127.0.0.1` to suppress
 - **GPS Mode**: Set `USE_GPS_MODE = True` in dynamic_navigator_node.py for GPS waypoints. GPS coordinate reference is automatic when `gps_transform_node` is running (always launched by `autonomous.launch.py`)
 - **Coordinate reference**: All `nav_to` goals are GPS-referenced when GPS is available. The navigator computes a live GPS->map offset. When GPS is unavailable, coordinates are treated as SLAM map-frame

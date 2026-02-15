@@ -44,6 +44,8 @@ USE_GPS_MODE = True
 TARGET_GPS = [49.666667, 11.841389]  # 49°40'00"N 11°50'29"E germany hill loc i think
 ORIGIN_GPS = [49.666400, 11.841100]
 
+# this is for the foxglove:
+# ros2 launch foxglove_bridge foxglove_bridge_launch.xml
 
 #   Go to local coordinates                                                                                                                                                           
 #   ros2 run exia_control nav_to xy 30.0 15.0

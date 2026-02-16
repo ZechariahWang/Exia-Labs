@@ -165,6 +165,7 @@ class RadioBridge(Node):
         self._rx_expected_counter = 1 if self._role == 'base' else 0
         self._handshake_complete = False
         self._estop_active = False
+        self._estop_from_remote = False
 
         self._rsa_private, self._rsa_public = load_rsa_keys(self._key_dir)
 
@@ -651,7 +652,11 @@ class RadioBridge(Node):
 
     def _robot_handle_heartbeat(self, payload):
         self._last_heartbeat_time = time.monotonic()
-        self.get_logger().info(f'Heartbeat received: {payload}')
+        with self._state_lock:
+            if self._estop_active and not self._estop_from_remote:
+                self._estop_active = False
+                self.get_logger().info('Heartbeat-loss e-stop auto-cleared')
+                self._serial_write('EA', 'auto_cleared')
         self._serial_write('A', payload)
 
     def _robot_handle_nav_goal(self, payload):
@@ -741,6 +746,7 @@ class RadioBridge(Node):
     def _robot_handle_estop(self):
         with self._state_lock:
             self._estop_active = True
+            self._estop_from_remote = True
         stop = Twist()
         self._cmd_vel_pub.publish(stop)
         self.get_logger().warn('Remote e-stop activated')
@@ -750,6 +756,7 @@ class RadioBridge(Node):
     def _robot_handle_estop_clear(self):
         with self._state_lock:
             self._estop_active = False
+            self._estop_from_remote = False
         self.get_logger().info('Remote e-stop cleared')
         self._serial_write('EA', 'cleared')
 

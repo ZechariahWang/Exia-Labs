@@ -24,7 +24,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 SERIAL_BUFFER_MAX = 4096
 SERIAL_RECONNECT_INTERVAL = 1.0
 KEY_FRAGMENT_TIMEOUT = 0.5
-HEARTBEAT_ACK_MISS_LIMIT = 10
+HEARTBEAT_ACK_MISS_LIMIT = 50
 
 
 def load_rsa_keys(key_dir):

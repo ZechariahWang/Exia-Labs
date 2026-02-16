@@ -24,7 +24,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 SERIAL_BUFFER_MAX = 4096
 SERIAL_RECONNECT_INTERVAL = 1.0
 KEY_FRAGMENT_TIMEOUT = 0.5
-HEARTBEAT_ACK_MISS_LIMIT = 50
+HEARTBEAT_ACK_MISS_LIMIT = 300
 
 
 def load_rsa_keys(key_dir):
@@ -652,11 +652,14 @@ class RadioBridge(Node):
 
     def _robot_handle_heartbeat(self, payload):
         self._last_heartbeat_time = time.monotonic()
+        auto_clear = False
         with self._state_lock:
             if self._estop_active and not self._estop_from_remote:
                 self._estop_active = False
-                self.get_logger().info('Heartbeat-loss e-stop auto-cleared')
-                self._serial_write('EA', 'auto_cleared')
+                auto_clear = True
+        if auto_clear:
+            self.get_logger().info('Heartbeat-loss e-stop auto-cleared')
+            self._serial_write('EA', 'auto_cleared')
         self._serial_write('A', payload)
 
     def _robot_handle_nav_goal(self, payload):

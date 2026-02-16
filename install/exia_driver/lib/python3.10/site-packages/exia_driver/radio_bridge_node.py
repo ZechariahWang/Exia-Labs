@@ -327,11 +327,13 @@ class RadioBridge(Node):
 
         with self._state_lock:
             if not self._handshake_complete or self._aes_key is None:
+                self.get_logger().debug(f'Ignoring line (no handshake): {line[:40]}')
                 return
             aes_key = self._aes_key
 
         result = decode_frame(line, aes_key)
         if result is None:
+            self.get_logger().warn(f'Failed to decode frame: len={len(line)} start={line[:30]}')
             return
 
         msg_type, payload, nonce_counter = result
@@ -649,6 +651,7 @@ class RadioBridge(Node):
 
     def _robot_handle_heartbeat(self, payload):
         self._last_heartbeat_time = time.monotonic()
+        self.get_logger().info(f'Heartbeat received: {payload}')
         self._serial_write('A', payload)
 
     def _robot_handle_nav_goal(self, payload):

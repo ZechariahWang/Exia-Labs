@@ -24,7 +24,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 SERIAL_BUFFER_MAX = 4096
 SERIAL_RECONNECT_INTERVAL = 1.0
 KEY_FRAGMENT_TIMEOUT = 0.5
-HEARTBEAT_ACK_MISS_LIMIT = 300
+HEARTBEAT_ACK_MISS_LIMIT = 15
 
 
 def load_rsa_keys(key_dir):
@@ -142,7 +142,7 @@ class RadioBridge(Node):
         self.declare_parameter('serial_port', '/dev/exia_radio')
         self.declare_parameter('serial_baud', 57600)
         self.declare_parameter('heartbeat_rate', 5.0)
-        self.declare_parameter('heartbeat_timeout', 3.0)
+        self.declare_parameter('heartbeat_timeout', 1.0)
         self.declare_parameter('status_rate', 5.0)
         self.declare_parameter('key_dir', '~/.exia')
 
@@ -281,6 +281,15 @@ class RadioBridge(Node):
                 self._last_reconnect_attempt = now
                 self.get_logger().info('Attempting serial reconnect...')
                 self._open_serial()
+            return
+
+        if not os.path.exists(self._serial_port):
+            self.get_logger().warn('Serial device disconnected')
+            try:
+                self._serial.close()
+            except Exception:
+                pass
+            self._serial = None
             return
 
         try:

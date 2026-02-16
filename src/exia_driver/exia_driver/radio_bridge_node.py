@@ -23,6 +23,8 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 SERIAL_BUFFER_MAX = 4096
 SERIAL_RECONNECT_INTERVAL = 1.0
+KEY_FRAGMENT_TIMEOUT = 0.5
+HEARTBEAT_ACK_MISS_LIMIT = 10
 
 
 def load_rsa_keys(key_dir):
@@ -137,10 +139,10 @@ class RadioBridge(Node):
         super().__init__('radio_bridge')
 
         self.declare_parameter('role', 'robot')
-        self.declare_parameter('serial_port', '/dev/ttyUSB0')
+        self.declare_parameter('serial_port', '/dev/exia_radio')
         self.declare_parameter('serial_baud', 57600)
-        self.declare_parameter('heartbeat_rate', 10.0)
-        self.declare_parameter('heartbeat_timeout', 0.5)
+        self.declare_parameter('heartbeat_rate', 5.0)
+        self.declare_parameter('heartbeat_timeout', 1.0)
         self.declare_parameter('status_rate', 5.0)
         self.declare_parameter('key_dir', '~/.exia')
 
@@ -157,16 +159,22 @@ class RadioBridge(Node):
         self._serial_buffer = ''
         self._last_reconnect_attempt = 0.0
 
+        self._state_lock = threading.Lock()
         self._aes_key = None
         self._tx_counter = 0 if self._role == 'base' else 1
         self._rx_expected_counter = 1 if self._role == 'base' else 0
         self._handshake_complete = False
+        self._estop_active = False
 
         self._rsa_private, self._rsa_public = load_rsa_keys(self._key_dir)
 
         self._heartbeat_seq = 0
         self._last_heartbeat_time = None
-        self._estop_active = False
+        self._heartbeat_ack_miss_count = 0
+        self._last_heartbeat_ack_seq = 0
+
+        self._key_fragment_1 = None
+        self._key_fragment_1_time = 0.0
 
         self._last_odom_x = 0.0
         self._last_odom_y = 0.0
@@ -196,14 +204,31 @@ class RadioBridge(Node):
 
         self.get_logger().info(f'RadioBridge started: role={self._role}, port={self._serial_port}')
 
+    def _reset_handshake_state(self):
+        with self._state_lock:
+            self._handshake_complete = False
+            self._aes_key = None
+            self._tx_counter = 0 if self._role == 'base' else 1
+            self._rx_expected_counter = 1 if self._role == 'base' else 0
+            self._heartbeat_ack_miss_count = 0
+            self._last_heartbeat_ack_seq = 0
+            self._key_fragment_1 = None
+            self._key_fragment_1_time = 0.0
+            if self._role == 'base':
+                self._aes_key = os.urandom(32)
+
     def _open_serial(self):
+        self._reset_handshake_state()
         try:
             self._serial = serial.Serial(
                 port=self._serial_port,
                 baudrate=self._serial_baud,
                 timeout=0.01,
+                rtscts=False,
+                dsrdtr=False,
+                write_timeout=0.1,
             )
-            time.sleep(0.5)
+            time.sleep(3.0)
             self._serial.reset_input_buffer()
             self._serial_buffer = ''
             self.get_logger().info(f'Serial connected: {self._serial_port}')
@@ -228,11 +253,12 @@ class RadioBridge(Node):
             return False
 
     def _serial_write(self, msg_type, payload=''):
-        if not self._handshake_complete:
-            return False
-        with self._serial_lock:
+        with self._state_lock:
+            if not self._handshake_complete:
+                return False
             frame = encode_frame(msg_type, payload, self._aes_key, self._tx_counter)
             self._tx_counter += 2
+        with self._serial_lock:
             if self._serial is None:
                 return False
             try:
@@ -271,8 +297,12 @@ class RadioBridge(Node):
             return
 
         if '\n' not in self._serial_buffer and len(self._serial_buffer) > SERIAL_BUFFER_MAX:
-            self.get_logger().warn(f'Serial buffer overflow ({len(self._serial_buffer)} bytes), discarding')
-            self._serial_buffer = ''
+            self.get_logger().warn(f'Serial buffer overflow ({len(self._serial_buffer)} bytes), trimming')
+            last_marker = self._serial_buffer.rfind('$')
+            if last_marker >= 0:
+                self._serial_buffer = self._serial_buffer[last_marker:]
+            else:
+                self._serial_buffer = ''
             return
 
         while '\n' in self._serial_buffer:
@@ -283,27 +313,34 @@ class RadioBridge(Node):
             self._dispatch_line(line)
 
     def _dispatch_line(self, line):
-        if line.startswith('$K,'):
-            self._handle_key_exchange(line)
+        if line.startswith('$K1,'):
+            self._handle_key_fragment_1(line)
+            return
+
+        if line.startswith('$K2,'):
+            self._handle_key_fragment_2(line)
             return
 
         if line.startswith('$A,'):
             self._handle_key_ack(line)
             return
 
-        if not self._handshake_complete or self._aes_key is None:
-            return
+        with self._state_lock:
+            if not self._handshake_complete or self._aes_key is None:
+                return
+            aes_key = self._aes_key
 
-        result = decode_frame(line, self._aes_key)
+        result = decode_frame(line, aes_key)
         if result is None:
             return
 
         msg_type, payload, nonce_counter = result
 
-        if nonce_counter < self._rx_expected_counter:
-            self.get_logger().warn(f'Stale nonce {nonce_counter} < {self._rx_expected_counter}, dropping')
-            return
-        self._rx_expected_counter = nonce_counter + 2
+        with self._state_lock:
+            if nonce_counter < self._rx_expected_counter:
+                self.get_logger().warn(f'Stale nonce {nonce_counter} < {self._rx_expected_counter}, dropping')
+                return
+            self._rx_expected_counter = nonce_counter + 2
 
         if self._role == 'robot':
             self._robot_dispatch(msg_type, payload)
@@ -311,7 +348,8 @@ class RadioBridge(Node):
             self._base_dispatch(msg_type, payload)
 
     def _setup_base(self):
-        self._aes_key = os.urandom(32)
+        with self._state_lock:
+            self._aes_key = os.urandom(32)
 
         self._goal_sub = self.create_subscription(
             NavigationGoal, '/navigation/goal',
@@ -333,6 +371,12 @@ class RadioBridge(Node):
             callback_group=self._cb_group,
         )
 
+        self._estop_clear_srv = self.create_service(
+            Trigger, '/radio/estop_clear',
+            self._base_estop_clear_callback,
+            callback_group=self._cb_group,
+        )
+
         self._heartbeat_timer = self.create_timer(
             1.0 / self._heartbeat_rate,
             self._base_send_heartbeat,
@@ -342,33 +386,63 @@ class RadioBridge(Node):
         self.create_timer(1.0, self._base_try_handshake, callback_group=self._cb_group)
 
     def _base_try_handshake(self):
-        if self._handshake_complete:
-            return
+        with self._state_lock:
+            if self._handshake_complete:
+                return
         if self._serial is None:
             return
         if self._rsa_public is None:
             self.get_logger().error('No RSA public key found')
             return
 
-        encrypted = rsa_encrypt_aes_key(self._rsa_public, self._aes_key)
-        b64 = base64.b64encode(encrypted).decode('ascii')
-        frame = f'$K,{b64}\n'.encode('utf-8')
-        self._serial_write_raw(frame)
-        self.get_logger().info('Sent key exchange')
+        with self._state_lock:
+            aes_key = self._aes_key
 
-    def _handle_key_exchange(self, line):
+        encrypted = rsa_encrypt_aes_key(self._rsa_public, aes_key)
+        b64 = base64.b64encode(encrypted).decode('ascii')
+        mid = len(b64) // 2
+        frame1 = f'$K1,{b64[:mid]}\n'.encode('utf-8')
+        frame2 = f'$K2,{b64[mid:]}\n'.encode('utf-8')
+        self._serial_write_raw(frame1)
+        time.sleep(0.05)
+        self._serial_write_raw(frame2)
+        self.get_logger().info('Sent fragmented key exchange')
+
+    def _handle_key_fragment_1(self, line):
+        if self._role != 'robot':
+            return
+        with self._state_lock:
+            self._key_fragment_1 = line[4:]
+            self._key_fragment_1_time = time.monotonic()
+
+    def _handle_key_fragment_2(self, line):
         if self._role != 'robot':
             return
         if self._rsa_private is None:
             self.get_logger().error('No RSA private key found')
             return
 
+        with self._state_lock:
+            if self._key_fragment_1 is None:
+                self.get_logger().warn('Received K2 without K1, discarding')
+                return
+            elapsed = time.monotonic() - self._key_fragment_1_time
+            if elapsed > KEY_FRAGMENT_TIMEOUT:
+                self.get_logger().warn(f'K1 fragment expired ({elapsed:.2f}s), discarding')
+                self._key_fragment_1 = None
+                return
+            b64_data = self._key_fragment_1 + line[4:]
+            self._key_fragment_1 = None
+
         try:
-            b64_data = line[3:]
             encrypted = base64.b64decode(b64_data)
-            self._aes_key = rsa_decrypt_aes_key(self._rsa_private, encrypted)
-            self._handshake_complete = True
-            key_hash = aes_key_hash(self._aes_key)
+            aes_key = rsa_decrypt_aes_key(self._rsa_private, encrypted)
+            with self._state_lock:
+                self._aes_key = aes_key
+                self._handshake_complete = True
+                self._tx_counter = 1
+                self._rx_expected_counter = 0
+            key_hash = aes_key_hash(aes_key)
             ack = f'$A,{key_hash}\n'.encode('utf-8')
             self._serial_write_raw(ack)
             self.get_logger().info('Key exchange complete (robot)')
@@ -380,13 +454,16 @@ class RadioBridge(Node):
             return
 
         received_hash = line[3:].strip()
-        expected_hash = aes_key_hash(self._aes_key)
+        with self._state_lock:
+            expected_hash = aes_key_hash(self._aes_key)
 
         if received_hash != expected_hash:
             self.get_logger().error(f'Key ACK hash mismatch: got {received_hash}, expected {expected_hash}')
             return
 
-        self._handshake_complete = True
+        with self._state_lock:
+            self._handshake_complete = True
+            self._heartbeat_ack_miss_count = 0
         self.get_logger().info('Key exchange complete (base)')
 
     def _goal_hash(self, msg):
@@ -397,9 +474,10 @@ class RadioBridge(Node):
         )
 
     def _base_goal_callback(self, msg):
-        if not self._handshake_complete:
-            self.get_logger().warn('Cannot send goal: handshake not complete')
-            return
+        with self._state_lock:
+            if not self._handshake_complete:
+                self.get_logger().warn('Cannot send goal: handshake not complete')
+                return
 
         goal_hash = self._goal_hash(msg)
         now = time.monotonic()
@@ -418,6 +496,10 @@ class RadioBridge(Node):
             payload = f'dms|{msg.lat_dms}|{msg.lon_dms}|{int(msg.direct)}'
             if msg.origin_lat != 0.0 or msg.origin_lon != 0.0:
                 payload += f'|{msg.origin_lat:.10f}|{msg.origin_lon:.10f}'
+        elif msg.coord_type == 'forward':
+            payload = f'forward,{msg.move_type},{msg.move_value:.6f},{msg.move_speed:.6f}'
+        elif msg.coord_type == 'turn':
+            payload = f'turn,{msg.move_type},{msg.move_value:.6f},{msg.move_speed:.6f}'
         else:
             self.get_logger().warn(f'Unknown coord_type: {msg.coord_type}')
             return
@@ -428,7 +510,9 @@ class RadioBridge(Node):
         self.get_logger().info(f'Sent nav goal: {msg.coord_type}')
 
     def _base_cancel_callback(self, request, response):
-        if self._handshake_complete:
+        with self._state_lock:
+            handshake_ok = self._handshake_complete
+        if handshake_ok:
             self._serial_write('C')
             response.success = True
             response.message = 'Cancel sent over radio'
@@ -438,7 +522,9 @@ class RadioBridge(Node):
         return response
 
     def _base_estop_callback(self, request, response):
-        if self._handshake_complete:
+        with self._state_lock:
+            handshake_ok = self._handshake_complete
+        if handshake_ok:
             self._serial_write('E')
             response.success = True
             response.message = 'E-stop sent over radio'
@@ -447,19 +533,45 @@ class RadioBridge(Node):
             response.message = 'Radio handshake not complete'
         return response
 
+    def _base_estop_clear_callback(self, request, response):
+        with self._state_lock:
+            handshake_ok = self._handshake_complete
+        if handshake_ok:
+            self._serial_write('X')
+            response.success = True
+            response.message = 'E-stop clear sent over radio'
+        else:
+            response.success = False
+            response.message = 'Radio handshake not complete'
+        return response
+
     def _base_send_heartbeat(self):
-        if not self._handshake_complete:
-            return
-        self._heartbeat_seq += 1
-        self._serial_write('H', str(self._heartbeat_seq))
+        with self._state_lock:
+            if not self._handshake_complete:
+                return
+            self._heartbeat_seq += 1
+            seq = self._heartbeat_seq
+            self._heartbeat_ack_miss_count += 1
+            if self._heartbeat_ack_miss_count >= HEARTBEAT_ACK_MISS_LIMIT:
+                self.get_logger().warn(f'No heartbeat ACK for {HEARTBEAT_ACK_MISS_LIMIT} beats, resetting handshake')
+                self._handshake_complete = False
+                self._aes_key = os.urandom(32)
+                self._tx_counter = 0
+                self._rx_expected_counter = 1
+                self._heartbeat_ack_miss_count = 0
+                return
+        self._serial_write('H', str(seq))
 
     def _base_dispatch(self, msg_type, payload):
         if msg_type == 'A':
-            pass
+            with self._state_lock:
+                self._heartbeat_ack_miss_count = 0
         elif msg_type == 'S':
             self._base_handle_telemetry(payload)
         elif msg_type == 'R':
             self._base_handle_relay(payload)
+        elif msg_type == 'EA':
+            self.get_logger().info('Received e-stop acknowledgment from robot')
 
     def _base_handle_telemetry(self, payload):
         parts = payload.split(',')
@@ -532,14 +644,14 @@ class RadioBridge(Node):
             self._robot_handle_cancel()
         elif msg_type == 'E':
             self._robot_handle_estop()
+        elif msg_type == 'X':
+            self._robot_handle_estop_clear()
 
     def _robot_handle_heartbeat(self, payload):
         self._last_heartbeat_time = time.monotonic()
         self._serial_write('A', payload)
 
     def _robot_handle_nav_goal(self, payload):
-        self._estop_active = False
-
         msg = self._parse_nav_payload(payload)
         if msg is None:
             return
@@ -591,6 +703,14 @@ class RadioBridge(Node):
                     if len(parts) >= 6:
                         msg.origin_lat = float(parts[4])
                         msg.origin_lon = float(parts[5])
+                elif coord_type == 'forward':
+                    msg.move_type = parts[1]
+                    msg.move_value = float(parts[2])
+                    msg.move_speed = float(parts[3])
+                elif coord_type == 'turn':
+                    msg.move_type = parts[1]
+                    msg.move_value = float(parts[2])
+                    msg.move_speed = float(parts[3])
                 else:
                     self.get_logger().warn(f'Unknown coord_type: {coord_type}')
                     return None
@@ -616,14 +736,25 @@ class RadioBridge(Node):
             self.get_logger().warn(f'Cancel call failed: {e}')
 
     def _robot_handle_estop(self):
-        self._estop_active = True
+        with self._state_lock:
+            self._estop_active = True
         stop = Twist()
         self._cmd_vel_pub.publish(stop)
         self.get_logger().warn('Remote e-stop activated')
+        self._serial_write('EA', 'activated')
         self._robot_handle_cancel()
 
+    def _robot_handle_estop_clear(self):
+        with self._state_lock:
+            self._estop_active = False
+        self.get_logger().info('Remote e-stop cleared')
+        self._serial_write('EA', 'cleared')
+
     def _robot_watchdog(self):
-        if self._estop_active:
+        with self._state_lock:
+            estop = self._estop_active
+
+        if estop:
             stop = Twist()
             self._cmd_vel_pub.publish(stop)
 
@@ -632,11 +763,15 @@ class RadioBridge(Node):
 
         elapsed = time.monotonic() - self._last_heartbeat_time
         if elapsed > self._heartbeat_timeout:
-            if not self._estop_active:
+            with self._state_lock:
+                already_estopped = self._estop_active
+                if not already_estopped:
+                    self._estop_active = True
+            if not already_estopped:
                 self.get_logger().warn(f'Radio heartbeat lost ({elapsed:.2f}s), e-stop')
-                self._estop_active = True
                 stop = Twist()
                 self._cmd_vel_pub.publish(stop)
+                self._serial_write('EA', 'heartbeat_loss')
                 self._robot_handle_cancel()
 
     def _robot_odom_callback(self, msg):
@@ -653,8 +788,9 @@ class RadioBridge(Node):
         )
 
     def _robot_status_callback(self, msg):
-        if not self._handshake_complete:
-            return
+        with self._state_lock:
+            if not self._handshake_complete:
+                return
         now = time.monotonic()
         if msg.data == self._last_relayed_status and now - self._last_relayed_status_time < 1.0:
             return
@@ -663,9 +799,11 @@ class RadioBridge(Node):
         self._serial_write('R', msg.data)
 
     def _robot_send_telemetry(self):
-        if not self._handshake_complete:
-            return
-        state = 'ESTOP' if self._estop_active else 'OK'
+        with self._state_lock:
+            if not self._handshake_complete:
+                return
+            estop = self._estop_active
+        state = 'ESTOP' if estop else 'OK'
         payload = (
             f'{state},{self._last_odom_x:.2f},{self._last_odom_y:.2f},'
             f'{self._last_odom_heading:.1f},{self._last_odom_speed:.2f}'

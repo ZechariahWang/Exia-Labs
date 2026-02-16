@@ -5,7 +5,7 @@ ARDUINO_PORT="/dev/arduino_control"
 ARDUINO_CLI="/home/exialabsargus/bin/arduino-cli"
 ARDUINO_SKETCH_DIR="/home/exialabsargus/rc_control_pwm"
 WORKSPACE="/home/exialabsargus/exia_ws"
-RADIO_PORT="/dev/ttyUSB0"
+RADIO_PORT="/dev/exia_radio"
 KEY_DIR="/home/exialabsargus/.exia"
 MAX_WAIT=120
 
@@ -125,6 +125,8 @@ PIDS+=($!)
 sleep 5
 
 if [ -e "$RADIO_PORT" ]; then
+    echo "Waiting for RFD900x radio boot..."
+    sleep 3
     echo "Starting radio bridge (robot)..."
     ros2 launch exia_bringup radio.launch.py role:=robot serial_port:="$RADIO_PORT" &
     PIDS+=($!)

@@ -1,6 +1,6 @@
 # Exia Ground Robot Workspace
 # Author: Zechariah Wang (Dec 25, 2025)
-# Updated: February 2026 - Safety Hardening + Runtime Navigation Commands + Radio Bridge + GPS-Referenced Navigation + Foxglove Visualization
+# Updated: February 2026 - Safety Hardening + Runtime Navigation Commands + Radio Bridge (fragmented key exchange, e-stop distinction, status relay) + GPS-Referenced Navigation + Foxglove Visualization
 
 ROS 2 workspace for the Exia Ground robot platform.
 
@@ -53,7 +53,8 @@ exia_ws/
 │   ├── exia_disable_autostart.sh   # Disable systemd autostart
 │   ├── exia_status.sh              # Check robot status
 │   ├── exia-robot.service          # Systemd service unit file
-│   └── generate_radio_keys.sh     # Generate RSA keys for radio encryption
+│   ├── generate_radio_keys.sh     # Generate RSA keys for radio encryption
+│   └── 99-exia-radio.rules        # udev rules for RFD900x radio (/dev/exia_radio)
 ├── arduino/
 │   ├── exia_servo_controller/
 │   │   └── exia_servo_controller.ino  # Jetson-controlled servo bridge
@@ -413,13 +414,19 @@ Custom message definitions.
 | Feature | Description |
 |---------|-------------|
 | RSA + AES-256-GCM encryption | All frames encrypted after handshake |
+| Fragmented key exchange | RSA-encrypted AES key split into $K1/$K2 frames (serial buffer limit), 0.5s fragment timeout |
 | Heartbeat watchdog | 10Hz heartbeat, 0.5s timeout triggers e-stop |
+| Heartbeat ACK miss limit | 15 missed ACKs resets handshake and generates new AES key |
+| E-stop distinction | Heartbeat-loss e-stop auto-clears on next heartbeat; remote e-stop requires explicit clear via `/radio/estop_clear` |
+| E-stop acknowledgment | Robot sends EA frame on e-stop activate/clear/auto-clear |
 | Continuous e-stop Twist | 20Hz zero cmd_vel while e-stop active |
-| Nonce replay protection | Sequential counters prevent frame replay attacks |
+| Nonce replay protection | Sequential counters (even=base, odd=robot), increment by 2 per send |
+| Status relay | Robot relays `/navigation/status` to base via R frame type |
 | Serial reconnect | Auto-reconnects every 1s on USB disconnect |
 | Buffer overflow protection | Serial buffer capped at 4096 bytes |
 | Startup grace | Watchdog only activates after first heartbeat received |
-| Goal dedup | Prevents feedback loops on single-machine testing |
+| Goal dedup | Hash + 2s dedup window prevents feedback loops on single-machine testing |
+| Telemetry throttling | Logs telemetry at info level every 5s, debug otherwise |
 
 ### RC Driver Node Safety
 
@@ -561,6 +568,7 @@ source install/setup.bash
 | `/navigation/cancel` | Trigger (service) | Cancel current navigation |
 | `/radio/cancel` | Trigger (service) | Cancel navigation over radio (laptop) |
 | `/radio/estop` | Trigger (service) | Remote emergency stop over radio (laptop) |
+| `/radio/estop_clear` | Trigger (service) | Clear remote e-stop over radio (laptop) |
 
 ## Sensors
 
@@ -720,22 +728,25 @@ ros2 run exia_driver rc_driver_node
 
 ### Radio Bridge (RFD900x)
 
-Encrypted radio link between home base laptop and Jetson using RFD900x modems. Single node with two roles selected by parameter.
+Encrypted radio link between home base laptop and Jetson using RFD900x modems. Single node with two roles selected by parameter. Uses udev rule (`99-exia-radio.rules`) to create stable `/dev/exia_radio` symlink.
 
 **Setup (one-time):**
 ```bash
 bash ~/exia_ws/scripts/generate_radio_keys.sh
 # Copy ~/.exia/radio_private.pem and ~/.exia/radio_public.pem to both machines
+# Install udev rule for stable device name:
+sudo cp ~/exia_ws/scripts/99-exia-radio.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules
 ```
 
 **Robot (Jetson):**
 ```bash
-ros2 launch exia_bringup radio.launch.py role:=robot serial_port:=/dev/ttyUSB0
+ros2 launch exia_bringup radio.launch.py role:=robot
 ```
 
 **Base (Laptop):**
 ```bash
-ros2 launch exia_bringup radio.launch.py role:=base serial_port:=/dev/ttyUSB0
+ros2 launch exia_bringup radio.launch.py role:=base
 ```
 
 **Send commands from laptop (existing CLI, unchanged):**
@@ -743,11 +754,30 @@ ros2 launch exia_bringup radio.launch.py role:=base serial_port:=/dev/ttyUSB0
 ros2 run exia_control nav_to xy 30.0 15.0
 ros2 service call /radio/cancel std_srvs/srv/Trigger
 ros2 service call /radio/estop std_srvs/srv/Trigger
+ros2 service call /radio/estop_clear std_srvs/srv/Trigger
 ```
 
-**Protocol:** RSA-2048 key exchange + AES-256-GCM frame encryption. 10Hz heartbeat, 0.5s e-stop timeout. 5Hz telemetry. DMS payloads use pipe `|` separator.
+**Protocol:** RSA-2048 key exchange (fragmented $K1/$K2 frames for serial buffer limits) + AES-256-GCM frame encryption. 10Hz heartbeat with ACK, 0.5s e-stop timeout. 5Hz telemetry. DMS payloads use pipe `|` separator. Nonce counters use even (base) / odd (robot) starting values, increment by 2.
 
-**E-stop behavior:** Radio loss or remote e-stop stops movement (zero cmd_vel at 20Hz). Nodes stay alive. Sending a new goal clears e-stop. Navigation does NOT auto-resume after reconnection.
+**Frame types:**
+| Frame | Direction | Description |
+|-------|-----------|-------------|
+| `$K1,` / `$K2,` | base -> robot | Fragmented RSA-encrypted AES key |
+| `$A,` | robot -> base | Key exchange ACK (plaintext hash) |
+| `H` | base -> robot | Heartbeat with sequence number |
+| `A` | robot -> base | Heartbeat ACK |
+| `N` | base -> robot | Navigation goal |
+| `C` | base -> robot | Cancel navigation |
+| `E` | base -> robot | Remote e-stop |
+| `X` | base -> robot | Clear remote e-stop |
+| `EA` | robot -> base | E-stop acknowledgment (activated/cleared/auto_cleared) |
+| `S` | robot -> base | Telemetry (state, position, heading, speed) |
+| `R` | robot -> base | Status relay (/navigation/status forwarded to base) |
+
+**E-stop behavior:** Two distinct e-stop types:
+- **Heartbeat loss**: Triggered after 0.5s without heartbeat. Auto-clears on next heartbeat received (sends `EA,auto_cleared`).
+- **Remote e-stop**: Triggered via `/radio/estop` service. Requires explicit clear via `/radio/estop_clear` service. Sends `EA,activated` on trigger, `EA,cleared` on clear.
+Both types: zero cmd_vel at 20Hz, cancel active navigation. Nodes stay alive. After 15 missed heartbeat ACKs, base resets handshake and generates new AES key. Navigation does NOT auto-resume after reconnection.
 
 **Local testing with socat:**
 ```bash
@@ -760,7 +790,7 @@ ros2 launch exia_bringup radio.launch.py role:=base serial_port:=/tmp/radio1
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `role` | `robot` | Bridge role: `base` or `robot` |
-| `serial_port` | `/dev/ttyUSB0` | Serial port for RFD900x radio |
+| `serial_port` | `/dev/exia_radio` | Serial port for RFD900x radio (udev symlink) |
 | `serial_baud` | `57600` | Serial baud rate |
 | `heartbeat_rate` | `10.0` | Heartbeat frequency (Hz) |
 | `heartbeat_timeout` | `0.5` | Seconds before e-stop on heartbeat loss |

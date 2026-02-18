@@ -128,6 +128,14 @@ class RCDriverControlNode(Node):
         self.watchdog_timer = self.create_timer(0.1, self._watchdog_callback)
 
         self._init_serial()
+        if self.autonomous_mode and self.serial_conn is not None:
+            time.sleep(0.5)
+            self.serial_conn.reset_input_buffer()
+            self._write_serial('AUTO')
+            time.sleep(0.1)
+            self.serial_conn.reset_input_buffer()
+            self.get_logger().info('Sent AUTO to Arduino early (before ODrive connect)')
+        self.autonomous_grace_time = time.monotonic()
         self._transition_state(State.CONNECTING)
 
         self.get_logger().info('RC Driver Control Node started')
@@ -486,16 +494,20 @@ class RCDriverControlNode(Node):
                 self._write_serial('A')
 
             elif cmd['type'] == 'rc_lost':
-                self.rc_lost = True
-                self.get_logger().warn('RC signal lost')
-                self._command_position(0.0)
+                if not self.autonomous_mode:
+                    self.rc_lost = True
+                    self.get_logger().warn('RC signal lost')
+                    self._command_position(0.0)
 
             elif cmd['type'] == 'rc_recovered':
                 self.rc_lost = False
                 self.get_logger().info('RC signal recovered')
 
             elif cmd['type'] == 'estop':
-                self._emergency_stop()
+                if self.autonomous_mode:
+                    pass
+                else:
+                    self._emergency_stop()
 
         if self.state == State.ARMED:
             dt = 1.0 / self.safety_config.control_rate

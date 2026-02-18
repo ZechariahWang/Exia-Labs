@@ -1,3 +1,4 @@
 # ODrive - disable USB autosuspend and create symlink
 # This prevents Linux from suspending the ODrive USB connection when idle
 ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="1209", ATTR{idProduct}=="0d32", ATTR{power/autosuspend}="-1", MODE="0666"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="0d32", MODE="0666", SYMLINK+="odrive"

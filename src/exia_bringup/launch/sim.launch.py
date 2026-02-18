@@ -148,11 +148,17 @@ def generate_launch_description():
             '/imu@sensor_msgs/msg/Imu@gz.msgs.IMU',
             '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock',
             '/navsat@sensor_msgs/msg/NavSatFix@gz.msgs.NavSat',
+            '/depth_camera/points@sensor_msgs/msg/PointCloud2@gz.msgs.PointCloudPacked',
+            '/depth_camera/image@sensor_msgs/msg/Image@gz.msgs.Image',
+            '/depth_camera/depth_image@sensor_msgs/msg/Image@gz.msgs.Image',
         ],
         remappings=[
             ('/lidar_3d/points', '/points'),
             ('/imu', '/imu/data'),
             ('/navsat', '/gps/fix'),
+            ('/depth_camera/points', '/depth/points'),
+            ('/depth_camera/image', '/camera/color/image_raw'),
+            ('/depth_camera/depth_image', '/camera/depth/image_raw'),
         ],
         output='screen',
     )

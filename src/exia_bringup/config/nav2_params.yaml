@@ -60,7 +60,7 @@ global_costmap:
         z_voxels: 10
         unknown_threshold: 15
         mark_threshold: 0
-        observation_sources: pointcloud
+        observation_sources: pointcloud depth_pointcloud
         pointcloud:
           topic: /points
           data_type: "PointCloud2"
@@ -72,6 +72,18 @@ global_costmap:
           obstacle_max_range: 30.0
           obstacle_min_range: 1.0
           raytrace_max_range: 35.0
+          raytrace_min_range: 0.0
+        depth_pointcloud:
+          topic: /depth/points
+          data_type: "PointCloud2"
+          sensor_frame: camera_depth_optical_frame
+          marking: true
+          clearing: false
+          max_obstacle_height: 2.0
+          min_obstacle_height: 0.3
+          obstacle_max_range: 8.0
+          obstacle_min_range: 0.5
+          raytrace_max_range: 10.0
           raytrace_min_range: 0.0
 
       inflation_layer:
@@ -110,7 +122,7 @@ local_costmap:
         z_voxels: 10
         unknown_threshold: 15
         mark_threshold: 0
-        observation_sources: pointcloud
+        observation_sources: pointcloud depth_pointcloud
         pointcloud:
           topic: /points
           data_type: "PointCloud2"
@@ -122,6 +134,18 @@ local_costmap:
           obstacle_max_range: 30.0
           obstacle_min_range: 1.0
           raytrace_max_range: 35.0
+          raytrace_min_range: 0.0
+        depth_pointcloud:
+          topic: /depth/points
+          data_type: "PointCloud2"
+          sensor_frame: camera_depth_optical_frame
+          marking: true
+          clearing: false
+          max_obstacle_height: 2.0
+          min_obstacle_height: 0.3
+          obstacle_max_range: 8.0
+          obstacle_min_range: 0.5
+          raytrace_max_range: 10.0
           raytrace_min_range: 0.0
 
       inflation_layer:

@@ -584,6 +584,7 @@ source install/setup.bash
 | `/radio/cancel` | Trigger (service) | Cancel navigation over radio (laptop) |
 | `/radio/estop` | Trigger (service) | Remote emergency stop over radio (laptop) |
 | `/radio/estop_clear` | Trigger (service) | Clear remote e-stop over radio (laptop) |
+| `/depth/points` | PointCloud2 | Depth camera point cloud (costmap only) |
 
 ## Sensors
 
@@ -595,6 +596,16 @@ source install/setup.bash
 - Vertical FOV: +/-15 degrees (16 channels)
 - Rate: 10Hz
 - Driver: `velodyne_driver` / `velodyne_pointcloud`
+
+### Depth Camera (Orbbec Gemini 435Le)
+- Hardware: Structured-light stereo depth camera
+- Topic: `/depth/points` (PointCloud2)
+- Range: 0.2m - 20m (reliable outdoor range ~8m)
+- Horizontal FOV: 101 degrees
+- Resolution: 640x480
+- Rate: 15Hz
+- Driver: `orbbec_camera` (hardware), Gazebo depth_camera sensor (simulation)
+- Usage: Costmap obstacle marking only (not used for SLAM)
 
 ### IMU (Yahboom 10-axis compatible)
 - Topic: `/imu/data`
@@ -620,6 +631,7 @@ map (from SLAM)
                     +-- rear_left_wheel
                     +-- rear_right_wheel
                     +-- lidar_link
+                    +-- camera_link -> camera_depth_optical_frame
                     +-- imu_link
                     +-- gps_link
 ```
@@ -658,6 +670,7 @@ Enable these topics in the 3D panel sidebar:
 | `/global_costmap/costmap` | Obstacle costmap overlay |
 | `/planned_path` | Navigation path line (only while navigating) |
 | `/nav_markers` | Navigation visualization markers |
+| `/depth/points` | Depth camera point cloud (forward-facing obstacles) |
 
 ### Additional Useful Panels
 
@@ -932,6 +945,9 @@ sudo apt install ros-$ROS_DISTRO-foxglove-bridge
 sudo apt install ros-humble-robot-localization
 sudo apt install ros-humble-septentrio-gnss-driver
 sudo apt install ros-humble-nmea-msgs ros-humble-gps-msgs
+
+# Depth camera driver (hardware only)
+sudo apt install ros-humble-orbbec-camera
 
 # Radio bridge encryption
 pip install cryptography

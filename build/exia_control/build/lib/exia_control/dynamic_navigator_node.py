@@ -47,6 +47,8 @@ ORIGIN_GPS = [49.666400, 11.841100]
 # this is for the foxglove:
 # ros2 launch foxglove_bridge foxglove_bridge_launch.xml
 
+# need this for later on jetson: sudo apt install ros-humble-velodyne
+
 #   Go to local coordinates                                                                                                                                                           
 #   ros2 run exia_control nav_to xy 30.0 15.0
                                                                                                                                                                                       

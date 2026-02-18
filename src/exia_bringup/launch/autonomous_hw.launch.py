@@ -236,6 +236,21 @@ def generate_launch_description():
         condition=IfCondition(use_ekf),
     )
 
+    depth_camera_node = Node(
+        package='orbbec_camera',
+        executable='orbbec_camera_node',
+        name='depth_camera',
+        output='screen',
+        parameters=[{
+            'use_sim_time': False,
+            'enable_point_cloud': True,
+            'enable_colored_point_cloud': False,
+        }],
+        remappings=[
+            ('depth/points', '/depth/points'),
+        ],
+    )
+
     return LaunchDescription([
         use_ekf_arg,
         use_gps_arg,
@@ -258,4 +273,5 @@ def generate_launch_description():
         gps_transform_node,
         ekf_localization_node,
         delayed_navigator,
+        depth_camera_node,
     ])

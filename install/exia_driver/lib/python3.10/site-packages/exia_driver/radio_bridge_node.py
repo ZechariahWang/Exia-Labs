@@ -389,6 +389,13 @@ class RadioBridge(Node):
             callback_group=self._cb_group,
         )
 
+        self._cmd_vel_sub = self.create_subscription(
+            Twist, '/radio/cmd_vel',
+            self._base_cmd_vel_callback, 10,
+            callback_group=self._cb_group,
+        )
+        self._last_cmd_vel_relay_time = 0.0
+
         self._heartbeat_timer = self.create_timer(
             1.0 / self._heartbeat_rate,
             self._base_send_heartbeat,
@@ -557,6 +564,14 @@ class RadioBridge(Node):
             response.message = 'Radio handshake not complete'
         return response
 
+    def _base_cmd_vel_callback(self, msg):
+        now = time.monotonic()
+        if now - self._last_cmd_vel_relay_time < 0.05:
+            return
+        self._last_cmd_vel_relay_time = now
+        payload = f'{msg.linear.x:.4f},{msg.angular.z:.4f}'
+        self._serial_write('V', payload)
+
     def _base_send_heartbeat(self):
         with self._state_lock:
             if not self._handshake_complete:
@@ -658,6 +673,20 @@ class RadioBridge(Node):
             self._robot_handle_estop()
         elif msg_type == 'X':
             self._robot_handle_estop_clear()
+        elif msg_type == 'V':
+            self._robot_handle_cmd_vel(payload)
+
+    def _robot_handle_cmd_vel(self, payload):
+        parts = payload.split(',')
+        if len(parts) < 2:
+            return
+        try:
+            twist = Twist()
+            twist.linear.x = float(parts[0])
+            twist.angular.z = float(parts[1])
+            self._cmd_vel_pub.publish(twist)
+        except ValueError:
+            pass
 
     def _robot_handle_heartbeat(self, payload):
         self._last_heartbeat_time = time.monotonic()

@@ -626,17 +626,30 @@ class RCDriverControlNode(Node):
             throttle = max(0, min(self.HW_THROTTLE_MAX, throttle))
             brake = self.HW_BRAKE_RELEASED
         elif linear_x < -0.05:
-            throttle = 0
-            speed_ratio = min(abs(linear_x) / self.MAX_SPEED, 1.0)
-            brake = int(self.HW_BRAKE_RELEASED - speed_ratio * (self.HW_BRAKE_RELEASED - self.HW_BRAKE_FULL))
+            throttle = int(abs(linear_x) / self.MAX_SPEED * self.HW_THROTTLE_MAX)
+            throttle = max(0, min(self.HW_THROTTLE_MAX, throttle))
+            brake = self.HW_BRAKE_RELEASED
         else:
             throttle = 0
             brake = self.HW_BRAKE_RELEASED
         self._write_serial(f'J{throttle},{brake}')
 
         if linear_x > 0.05 and self.current_gear != 'high':
+            if self.current_gear == 'reverse':
+                self._write_serial('J0,80')
+                time.sleep(0.3)
+                self._write_serial('K1')
+                time.sleep(0.3)
             self._write_serial('K2')
             self.current_gear = 'high'
+        elif linear_x < -0.05 and self.current_gear != 'reverse':
+            self._write_serial('J0,80')
+            time.sleep(0.3)
+            if self.current_gear != 'neutral':
+                self._write_serial('K1')
+                time.sleep(0.3)
+            self._write_serial('K0')
+            self.current_gear = 'reverse'
         elif abs(linear_x) < 0.01 and self.current_gear != 'neutral':
             self._write_serial('K1')
             self.current_gear = 'neutral'

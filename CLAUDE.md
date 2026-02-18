@@ -67,7 +67,8 @@ exia_ws/
 │   │   │   ├── autonomous.launch.py # SLAM + Nav2 + Dynamic navigator
 │   │   │   ├── rc_control.launch.py # Hardware RC driver mode
 │   │   │   ├── gps_navigation.launch.py # GPS + EKF sensor fusion
-│   │   │   └── radio.launch.py      # Radio bridge (RFD900x)
+│   │   │   ├── radio.launch.py      # Radio bridge (RFD900x)
+│   │   │   └── autonomous_hw.launch.py # Hardware autonomous driving
 │   │   ├── config/
 │   │   │   ├── ackermann_controllers.yaml
 │   │   │   ├── nav2_params.yaml
@@ -146,6 +147,13 @@ ros2 run exia_control nav_to xy 30.0 15.0 --direct
 
 # With EKF sensor fusion (GPS + wheel odom + IMU)
 ros2 launch exia_bringup autonomous.launch.py use_ekf:=true
+
+# Hardware autonomous driving (real ATV, no simulation)
+source ~/exia_ws/install/setup.bash
+ros2 launch exia_bringup autonomous_hw.launch.py
+
+# Send goals to hardware (same CLI as simulation)
+ros2 run exia_control nav_to xy 22.0 24.0
 ```
 
 ## Runtime Navigation Commands (nav_to CLI)
@@ -324,6 +332,7 @@ Launch files, configuration, URDF, and world files.
 | `rc_control.launch.py` | Hardware RC driver for physical robot |
 | `gps_navigation.launch.py` | GPS driver + EKF sensor fusion |
 | `radio.launch.py` | RFD900x radio bridge (base or robot role) |
+| `autonomous_hw.launch.py` | Hardware autonomous driving (real ATV) |
 
 ### exia_control (ament_python)
 Navigation and control logic.
@@ -345,7 +354,7 @@ Hardware drivers for physical robot.
 
 | Executable | Purpose |
 |------------|---------|
-| `rc_driver_node` | RC radio receiver + Arduino serial control |
+| `rc_driver_node` | RC radio receiver + Arduino serial control + autonomous cmd_vel bridge |
 | `gps_transform_node` | GPS lat/lon to local XY conversion (RTK-gated origin) |
 | `radio_bridge_node` | RFD900x encrypted radio bridge (base/robot roles) |
 
@@ -397,10 +406,12 @@ Custom message definitions.
 | Feature | Description |
 |---------|-------------|
 | Jetson timeout watchdog | Safe state if Jetson serial lost for 300ms |
-| RC signal loss detection | Brake + neutral on RC timeout (500ms) |
+| RC signal loss detection | Brake + neutral on RC timeout (500ms), skipped in autonomous mode |
 | Median filter | 3-sample median on all RC channels |
-| Rate-limited actuators | Smooth servo transitions with configurable rates |
-| Gear shift interlock | Requires brake engaged before shifting |
+| Rate-limited actuators | Smooth servo transitions with configurable rates (applies to autonomous targets too) |
+| Gear shift interlock | Requires brake engaged before shifting (RC mode only) |
+| Autonomous mode | `AUTO`/`MANUAL` serial commands, `J<throttle>,<brake>` and `K<gear>` from Jetson |
+| Autonomous command timeout | 500ms without J/K command → safe state + exit autonomous mode |
 
 ### GPS Transform Node Safety
 
@@ -433,6 +444,10 @@ Custom message definitions.
 | Feature | Description |
 |---------|-------------|
 | Startup grace period | 15s grace before requiring heartbeat |
+| Autonomous cmd_vel watchdog | Stops throttle/brake if no cmd_vel for 0.5s |
+| Autonomous mode toggle | `/driver/set_mode` service to switch between RC and autonomous |
+| Auto gear management | Shifts HIGH when driving forward, NEUTRAL when stopped |
+| RC steering ignored in autonomous | cmd_vel controls ODrive steering, RC CH1 relay still ACKed |
 
 ## Navigation Architecture
 
@@ -572,11 +587,14 @@ source install/setup.bash
 
 ## Sensors
 
-### Lidar (Slamtec RPlidar S3 compatible)
-- Topic: `/scan`
-- Range: 0.2m - 20m
-- FOV: 360 degrees
+### Lidar (Velodyne VLP-16)
+- Hardware: 16-channel 3D lidar
+- Topic: `/points` (PointCloud2), `/scan` (LaserScan via pointcloud_to_laserscan)
+- Range: 1.0m - 100m
+- Horizontal FOV: 360 degrees
+- Vertical FOV: +/-15 degrees (16 channels)
 - Rate: 10Hz
+- Driver: `velodyne_driver` / `velodyne_pointcloud`
 
 ### IMU (Yahboom 10-axis compatible)
 - Topic: `/imu/data`
@@ -726,6 +744,43 @@ The `rc_driver_node` handles hardware control via serial:
 ros2 run exia_driver rc_driver_node
 ```
 
+### Hardware Autonomous Mode (Jetson + Arduino)
+
+The `autonomous_hw.launch.py` launch file runs the full autonomous stack on the real ATV. The `rc_driver_node` bridges `/cmd_vel` to the physical actuators:
+- ODrive steering via cmd_vel → Ackermann angle → position command
+- Arduino throttle/brake via `J<throttle>,<brake>` serial commands
+- Arduino gear via `K<gear>` serial commands (0=reverse, 1=neutral, 2=high)
+
+```bash
+ros2 launch exia_bringup autonomous_hw.launch.py
+
+ros2 run exia_control nav_to xy 30.0 15.0
+```
+
+**Architecture:**
+- `rc_driver_node` (autonomous_mode=true): subscribes `/cmd_vel`, controls ODrive + Arduino
+- `ackermann_drive_node` (hardware_mode=false): publishes odom + TF only (no actuator control)
+- `dynamic_navigator_node`: publishes `/cmd_vel` goals (unchanged from simulation)
+- SLAM, Nav2, GPS transform: same as simulation autonomous stack
+
+**Arduino serial protocol (autonomous mode):**
+| Command | Direction | Description |
+|---------|-----------|-------------|
+| `AUTO\n` | Jetson → Arduino | Enter autonomous mode, ack with `AUTONOMOUS\n` |
+| `MANUAL\n` | Jetson → Arduino | Exit autonomous mode, ack with `MANUAL\n` |
+| `J<throttle>,<brake>\n` | Jetson → Arduino | Set throttle (0-75) and brake (80-180) |
+| `K<gear>\n` | Jetson → Arduino | Set gear: 0=reverse, 1=neutral, 2=high |
+
+**Parameters (rc_driver_node, autonomous additions):**
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `autonomous_mode` | `false` | Enable autonomous cmd_vel control |
+
+**Services:**
+| Service | Type | Description |
+|---------|------|-------------|
+| `/driver/set_mode` | Trigger | Toggle between autonomous and manual mode |
+
 ### Radio Bridge (RFD900x)
 
 Encrypted radio link between home base laptop and Jetson using RFD900x modems. Single node with two roles selected by parameter. Uses udev rule (`99-exia-radio.rules`) to create stable `/dev/exia_radio` symlink.
@@ -847,7 +902,7 @@ The Arduino Mega runs `exia_servo_controller.ino` as the Jetson-controlled servo
 
 ## Arduino RC Controller (rc_control_pwm.ino)
 
-Handles RC receiver input with gear shifting for manual driving.
+Handles RC receiver input with gear shifting for manual driving. Supports autonomous mode where Jetson controls throttle/brake/gear via serial commands while RC steering relay continues.
 
 **Pin Assignments:**
 | Pin | Function |

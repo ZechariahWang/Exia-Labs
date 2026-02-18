@@ -47,6 +47,7 @@ const int GEAR_SERVO_POSITIONS[NUM_GEARS] = {
 #define SERIAL_TIMEOUT_MS 500
 #define JETSON_TIMEOUT_MS 300
 #define STEERING_CHANGE_THRESHOLD 10
+#define AUTONOMOUS_CMD_TIMEOUT_MS 500
 
 // median filter constants
 #define OUTPUT_HYSTERESIS 1
@@ -68,6 +69,7 @@ SwitchLatchState switchLatch = LATCH_READY;
 float currentGearPos = GEAR_NEUTRAL_POS;
 int lastGearOutput = GEAR_NEUTRAL_POS;
 int ch3Buffer[MEDIAN_FILTER_SIZE];
+GearState jetsonTargetGear = GEAR_NEUTRAL;
 #endif
 
 unsigned long lastHeartbeatTime = 0;
@@ -77,6 +79,10 @@ unsigned long lastLoopTime = 0;
 int lastSteeringValue = 0;
 bool rcLost = false;
 bool jetsonConnected = false;
+bool autonomousMode = false;
+unsigned long lastJetsonCmdTime = 0;
+float jetsonTargetThrottle = THROTTLE_NEUTRAL;
+float jetsonTargetBrake = BRAKE_NEUTRAL;
 
 int currentState = 0;
 int odriveError = 0;
@@ -198,11 +204,48 @@ void processSerialInput() {
 }
 
 void parseJetsonMessage(const char* msg) {
-    if (msg[0] == 'F') {
+    if (strcmp(msg, "AUTO") == 0) {
+        autonomousMode = true;
+        lastJetsonCmdTime = millis();
+        jetsonTargetThrottle = THROTTLE_NEUTRAL;
+        jetsonTargetBrake = BRAKE_NEUTRAL;
+        Serial.println("AUTONOMOUS");
+        jetsonConnected = true;
+    }
+    else if (strcmp(msg, "MANUAL") == 0) {
+        autonomousMode = false;
+        jetsonTargetThrottle = THROTTLE_NEUTRAL;
+        jetsonTargetBrake = BRAKE_NEUTRAL;
+#if ENABLE_GEARSHIFT
+        jetsonTargetGear = GEAR_NEUTRAL;
+#endif
+        Serial.println("MANUAL");
+        jetsonConnected = true;
+    }
+    else if (msg[0] == 'J' && autonomousMode) {
+        int t, b;
+        if (sscanf(msg + 1, "%d,%d", &t, &b) == 2) {
+            jetsonTargetThrottle = constrain(t, THROTTLE_NEUTRAL, THROTTLE_MAX);
+            jetsonTargetBrake = constrain(b, BRAKE_MAX, BRAKE_NEUTRAL);
+            lastJetsonCmdTime = millis();
+        }
+        jetsonConnected = true;
+    }
+    else if (msg[0] == 'K' && autonomousMode) {
+        int g = atoi(msg + 1);
+        if (g >= 0 && g <= 2) {
+#if ENABLE_GEARSHIFT
+            jetsonTargetGear = (GearState)g;
+#endif
+            lastJetsonCmdTime = millis();
+        }
+        jetsonConnected = true;
+    }
+    else if (msg[0] == 'F') {
         jetsonConnected = true;
     }
     else if (msg[0] == 'Z') {
-        currentState = atoi(msg + 1); // turns string into integer (ascii to int)
+        currentState = atoi(msg + 1);
         jetsonConnected = true;
         if (currentState == 3) {
             digitalWrite(LED_PIN, HIGH);
@@ -409,6 +452,9 @@ void handleThrottleBrake(float smoothedCh2Val, float dt) {
 }
 
 void safeState() {
+    autonomousMode = false;
+    jetsonTargetThrottle = THROTTLE_NEUTRAL;
+    jetsonTargetBrake = BRAKE_NEUTRAL;
     currentThrottlePos = THROTTLE_NEUTRAL;
     currentBrakePos = BRAKE_MAX;
     throttle.write(THROTTLE_NEUTRAL);
@@ -438,6 +484,13 @@ void loop() {
         jetsonConnected = false;
         sendEmergencyStop();
         safeState();
+        return;
+    }
+
+    if (autonomousMode && (now - lastJetsonCmdTime > AUTONOMOUS_CMD_TIMEOUT_MS)) {
+        autonomousMode = false;
+        safeState();
+        Serial.println("MANUAL");
         return;
     }
 
@@ -485,7 +538,7 @@ void loop() {
         }
     }
 
-    if (now - lastValidRCTime > RC_TIMEOUT_MS) {
+    if (!autonomousMode && (now - lastValidRCTime > RC_TIMEOUT_MS)) {
         if (!rcLost) {
             rcLost = true;
             sendRCLost();
@@ -509,10 +562,19 @@ void loop() {
         sendHeartbeat();
     }
 
-    handleThrottleBrake((float)ch2Filtered, dt);
+    if (autonomousMode) {
+        currentThrottlePos = applyRateLimit(currentThrottlePos, jetsonTargetThrottle, MAX_THROTTLE_RATE, dt);
+        currentBrakePos = applyRateLimit(currentBrakePos, jetsonTargetBrake, MAX_BRAKE_RATE, dt);
+        writeServoWithHysteresis(throttle, currentThrottlePos, lastThrottleOutput);
+        writeServoWithHysteresis(brake, currentBrakePos, lastBrakeOutput);
+    } else {
+        handleThrottleBrake((float)ch2Filtered, dt);
+    }
 
 #if ENABLE_GEARSHIFT
-    if (!rcLost) {
+    if (autonomousMode) {
+        currentGear = jetsonTargetGear;
+    } else if (!rcLost) {
         processGearShift(ch3Filtered, rcLost);
     }
     updateGearServo(dt);

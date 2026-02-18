@@ -7,8 +7,8 @@
   <xacro:arg name="lidar_vertical_samples" default="16"/>
   <xacro:arg name="lidar_vertical_fov_min" default="-0.261799"/>
   <xacro:arg name="lidar_vertical_fov_max" default="0.261799"/>
-  <xacro:arg name="lidar_range_min" default="1.5"/>
-  <xacro:arg name="lidar_range_max" default="20.0"/>
+  <xacro:arg name="lidar_range_min" default="1.0"/>
+  <xacro:arg name="lidar_range_max" default="100.0"/>
   <xacro:arg name="lidar_update_rate" default="10"/>
 
   <link name="base_footprint"/>

@@ -2,7 +2,7 @@
 # Exia Ground Robot - SLAM Toolbox Configuration
 #
 # SLAM Mode: online_async (recommended for Ackermann vehicles)
-# Optimized for: RPlidar S3 compatible sensor (10Hz, 360 degrees, 0.2-20m)
+# Optimized for: Velodyne VLP-16 (10Hz, 360 degrees, 16 channels, 1-100m)
 #
 # Author: Zechariah Wang
 # Date: December 2025
@@ -31,8 +31,8 @@ slam_toolbox:
     mode: mapping
 
     # ===================== LIDAR PARAMS =====================
-    # Matched to RPlidar S3 / Gazebo simulation specs
-    max_laser_range: 20.0
+    # Matched to Velodyne VLP-16 / Gazebo simulation specs
+    max_laser_range: 50.0
     minimum_time_interval: 0.1
     transform_timeout: 0.2
     tf_buffer_duration: 30.0

@@ -3,8 +3,10 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float64, String
 from std_srvs.srv import Trigger
+from geometry_msgs.msg import Twist
 import serial
 import time
+import math
 import threading
 from enum import IntEnum
 from dataclasses import dataclass
@@ -101,6 +103,23 @@ class RCDriverControlNode(Node):
         self.estop_srv = self.create_service(Trigger, '/odrive/emergency_stop', self._estop_callback)
         self.clear_srv = self.create_service(Trigger, '/odrive/clear_estop', self._clear_estop_callback)
         self.arm_srv = self.create_service(Trigger, '/odrive/arm', self._arm_callback)
+        self.set_mode_srv = self.create_service(Trigger, '/driver/set_mode', self._set_mode_callback)
+
+        self.autonomous_mode = self.get_parameter('autonomous_mode').value
+        self.WHEELBASE = 1.3
+        self.MAX_STEERING_ANGLE = 0.6
+        self.MAX_SPEED = 5.0
+        self.HW_THROTTLE_MAX = 75
+        self.HW_BRAKE_FULL = 80
+        self.HW_BRAKE_RELEASED = 180
+        self.last_cmd_vel = Twist()
+        self.last_cmd_vel_time = time.monotonic()
+        self.current_gear = 'neutral'
+        self.autonomous_started = False
+
+        if self.autonomous_mode:
+            self.cmd_vel_sub = self.create_subscription(Twist, '/cmd_vel', self._cmd_vel_callback, 10)
+            self.auto_timer = self.create_timer(1.0 / 50.0, self._autonomous_control_loop)
 
         control_period = 1.0 / self.safety_config.control_rate
         feedback_period = 1.0 / self.safety_config.feedback_rate
@@ -132,6 +151,7 @@ class RCDriverControlNode(Node):
         self.declare_parameter('smoothing_alpha', 0.1)
         self.declare_parameter('scurve_sharpness', 3.0)
         self.declare_parameter('turns_per_steering_rad', 1.0)
+        self.declare_parameter('autonomous_mode', False)
 
     def _init_serial(self) -> bool:
         try:
@@ -455,11 +475,11 @@ class RCDriverControlNode(Node):
             self.last_command_time = time.monotonic()
 
             if cmd['type'] == 'steering':
-                if self.state == State.ARMED:
+                if self.state == State.ARMED and not self.autonomous_mode:
                     normalized = cmd['value'] / 1000.0
                     normalized = max(-1.0, min(1.0, normalized))
                     self._command_position(normalized)
-                    self._write_serial('A')
+                self._write_serial('A')
 
             elif cmd['type'] == 'heartbeat':
                 self.last_command_time = time.monotonic()
@@ -559,8 +579,81 @@ class RCDriverControlNode(Node):
         response.message = 'Armed' if success else 'Failed to arm'
         return response
 
+    def _cmd_vel_callback(self, msg):
+        self.last_cmd_vel = msg
+        self.last_cmd_vel_time = time.monotonic()
+
+    def _autonomous_control_loop(self):
+        if self.state != State.ARMED or not self.autonomous_mode:
+            return
+
+        if not self.autonomous_started:
+            self._write_serial('AUTO')
+            self._write_serial('K1')
+            self.autonomous_started = True
+            self.get_logger().info('Autonomous mode active, sent AUTO to Arduino')
+
+        now = time.monotonic()
+        if now - self.last_cmd_vel_time > 0.5:
+            self._write_serial('J0,180')
+            return
+
+        linear_x = self.last_cmd_vel.linear.x
+        angular_z = self.last_cmd_vel.angular.z
+
+        if abs(linear_x) > 0.01 and abs(angular_z) > 0.001:
+            steering_angle = math.atan(self.WHEELBASE * angular_z / linear_x)
+            steering_angle = max(-self.MAX_STEERING_ANGLE, min(self.MAX_STEERING_ANGLE, steering_angle))
+            normalized = steering_angle / self.MAX_STEERING_ANGLE
+        else:
+            normalized = 0.0
+        self._command_position(normalized)
+
+        if linear_x > 0.05:
+            throttle = int(linear_x / self.MAX_SPEED * self.HW_THROTTLE_MAX)
+            throttle = max(0, min(self.HW_THROTTLE_MAX, throttle))
+            brake = self.HW_BRAKE_RELEASED
+        elif linear_x < -0.05:
+            throttle = 0
+            speed_ratio = min(abs(linear_x) / self.MAX_SPEED, 1.0)
+            brake = int(self.HW_BRAKE_RELEASED - speed_ratio * (self.HW_BRAKE_RELEASED - self.HW_BRAKE_FULL))
+        else:
+            throttle = 0
+            brake = self.HW_BRAKE_RELEASED
+        self._write_serial(f'J{throttle},{brake}')
+
+        if linear_x > 0.05 and self.current_gear != 'high':
+            self._write_serial('K2')
+            self.current_gear = 'high'
+        elif abs(linear_x) < 0.01 and self.current_gear != 'neutral':
+            self._write_serial('K1')
+            self.current_gear = 'neutral'
+
+    def _set_mode_callback(self, _request, response):
+        self.autonomous_mode = not self.autonomous_mode
+        if self.autonomous_mode:
+            if not hasattr(self, 'cmd_vel_sub'):
+                self.cmd_vel_sub = self.create_subscription(Twist, '/cmd_vel', self._cmd_vel_callback, 10)
+                self.auto_timer = self.create_timer(1.0 / 50.0, self._autonomous_control_loop)
+            self._write_serial('AUTO')
+            self.autonomous_started = True
+            self.current_gear = 'neutral'
+            response.message = 'Switched to autonomous mode'
+        else:
+            self._write_serial('MANUAL')
+            self._command_position(0.0)
+            self.autonomous_started = False
+            self.current_gear = 'neutral'
+            response.message = 'Switched to manual mode'
+        response.success = True
+        self.get_logger().info(response.message)
+        return response
+
     def destroy_node(self):
         self.get_logger().info('Shutting down...')
+
+        if self.autonomous_mode:
+            self._write_serial('MANUAL')
 
         if self.axis is not None:
             try:

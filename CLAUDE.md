@@ -588,14 +588,16 @@ source install/setup.bash
 
 ## Sensors
 
-### Lidar (Velodyne VLP-16)
-- Hardware: 16-channel 3D lidar
-- Topic: `/points` (PointCloud2), `/scan` (LaserScan via pointcloud_to_laserscan)
-- Range: 1.0m - 100m
+### Lidar (Velodyne VLP-32C)
+- Hardware: 32-channel 3D lidar
+- Topic: `/velodyne_points` (PointCloud2), `/scan` (LaserScan via velodyne_laserscan)
+- Range: 1.0m - 200m
 - Horizontal FOV: 360 degrees
-- Vertical FOV: +/-15 degrees (16 channels)
-- Rate: 10Hz
+- Vertical FOV: +/-20 degrees (32 channels)
+- Rate: ~10Hz (600 RPM default)
 - Driver: `velodyne_driver` / `velodyne_pointcloud`
+- Default sensor IP: 192.168.1.201 (Ethernet, UDP port 2368)
+- Web interface: http://192.168.1.201
 
 ### Depth Camera (Orbbec Gemini 435Le)
 - Hardware: Structured-light stereo depth camera
@@ -935,6 +937,75 @@ Handles RC receiver input with gear shifting for manual driving. Supports autono
 | Neutral | 80 | Default on startup/safe state |
 | High | 110 | Requires brake + CH3 up |
 
+## Standalone Lidar Testing (VLP-32C)
+
+Test the Velodyne VLP-32C lidar independently (laptop or Jetson).
+
+### Network Setup
+
+The VLP-32C connects via Ethernet. The host must be on the same subnet as the sensor (default 192.168.1.201).
+
+```bash
+# Find ethernet interface name
+ip link show
+
+# Laptop: typically enp108s0 or similar
+# Jetson: typically eth0
+sudo ip addr add 192.168.1.100/24 dev <ethernet-interface>
+sudo ip link set <ethernet-interface> up
+
+# Verify connectivity
+ping 192.168.1.201
+```
+
+### Launch Driver
+
+```bash
+source /opt/ros/humble/setup.bash
+sudo apt install ros-humble-velodyne  # one-time
+
+# Terminal 1: Velodyne driver
+ros2 launch velodyne velodyne-all-nodes-VLP32C-launch.py
+
+# Terminal 2: Verify data
+ros2 topic hz /velodyne_points
+
+# Terminal 3: Foxglove bridge for visualization
+ros2 run foxglove_bridge foxglove_bridge --ros-args -p port:=8765
+```
+
+### Foxglove Visualization
+
+Connect Foxglove to `ws://localhost:8765`. Add a 3D panel, enable `/velodyne_points`, set frame to `velodyne`. Set Color by to `intensity` or `z` with Turbo colormap.
+
+### Jetson Deployment
+
+Same commands as laptop. The only difference is the Ethernet interface name (typically `eth0` on Jetson). If the Jetson ethernet is already used for another device, use a USB-to-Ethernet adapter and configure the new interface. For remote visualization, run Foxglove bridge on the Jetson and connect from your laptop at `ws://<jetson-ip>:8765`.
+
+```bash
+# Jetson network setup (eth0 is typical)
+sudo ip addr add 192.168.1.100/24 dev eth0
+sudo ip link set eth0 up
+ping 192.168.1.201
+```
+
+To make the network config persist across reboots on the Jetson, add a netplan config:
+```bash
+sudo tee /etc/netplan/99-velodyne.yaml <<EOF
+network:
+  version: 2
+  ethernets:
+    eth0:
+      addresses:
+        - 192.168.1.100/24
+EOF
+sudo netplan apply
+```
+
+### Shutdown
+
+Ctrl+C each terminal (Foxglove bridge, then driver). The sensor has no software shutdown; disconnect power/ethernet in any order.
+
 ## Dependencies
 
 ```bash
@@ -945,6 +1016,9 @@ sudo apt install ros-$ROS_DISTRO-foxglove-bridge
 sudo apt install ros-humble-robot-localization
 sudo apt install ros-humble-septentrio-gnss-driver
 sudo apt install ros-humble-nmea-msgs ros-humble-gps-msgs
+
+# Lidar driver
+sudo apt install ros-humble-velodyne
 
 # Depth camera driver (hardware only)
 sudo apt install ros-humble-orbbec-camera

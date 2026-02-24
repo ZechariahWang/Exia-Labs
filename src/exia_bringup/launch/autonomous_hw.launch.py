@@ -106,7 +106,7 @@ def generate_launch_description():
         name='velodyne_driver_node',
         output='screen',
         parameters=[{
-            'model': 'VLP16',
+            'model': '32C',
             'rpm': 600.0,
         }],
     )
@@ -117,7 +117,7 @@ def generate_launch_description():
         name='velodyne_transform_node',
         output='screen',
         parameters=[{
-            'model': 'VLP16',
+            'model': '32C',
             'fixed_frame': 'lidar_link',
             'target_frame': 'lidar_link',
         }],

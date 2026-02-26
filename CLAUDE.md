@@ -103,6 +103,67 @@ ros2 run exia_control nav_to turn 3s 0.5        # time + angular vel
 - EKF fusion: `ros2 launch exia_bringup autonomous.launch.py use_ekf:=true`
 - When moving locations, update `gps_params.yaml` + `exia_world.sdf` (sim) or just use `nav_to latlon` (hw)
 
+## Coordinate Input System
+
+Goals are sent via `/navigation/goal` using `NavigationGoal.msg`. The `coord_type` field determines interpretation:
+
+| coord_type | Fields Used | Description |
+|------------|-------------|-------------|
+| `xy` | `x`, `y` | Local map-frame coordinates (meters) |
+| `latlon` | `lat`, `lon`, optional `origin_lat`/`origin_lon` | Decimal GPS, converted to local XY via equirectangular projection |
+| `dms` | `lat_dms`, `lon_dms`, optional `origin_lat`/`origin_lon` | Degrees-Minutes-Seconds strings (e.g. `49D40'00"N`), parsed then converted like latlon |
+| `forward` | `move_type` (`time`/`distance`), `move_value`, `move_speed` | Open-loop forward by duration (`3s`) or distance (`50m`) |
+| `turn` | `move_type` (`time`/`heading`), `move_value`, `move_speed` | Turn by duration or heading degrees (positive=left) |
+
+- GPS->local: `x = (lon - origin_lon) * cos(origin_lat) * 111320`, `y = (lat - origin_lat) * 111320`
+- DMS formats: `49°40'00"N`, `49D40'00"N`, `49°40.5'N`
+- If `origin_lat`/`origin_lon` are 0 in msg, falls back to node's `ORIGIN_GPS` params
+- `--direct` flag (xy/latlon/dms): straight-line nav, stops on obstacle, reverses 1.5m, CLI blocks
+- `forward`/`turn` always block CLI until terminal status on `/navigation/status`
+- Terminal statuses: `GOAL_REACHED`, `OBSTACLE_STOPPED`, `PATH_ENDED`, `PATH_BLOCKED`, `MOVE_COMPLETE`, `TURN_COMPLETE`
+- Cancel: `nav_to cancel` or `/navigation/cancel` service (std_srvs/Trigger)
+
+## Radio Bridge
+
+Encrypted wireless link between a base station laptop and the robot via RFD900x radios + FTDI USB serial (`/dev/exia_radio`, 57600 baud). The `radio_bridge_node` runs on both sides with different roles.
+
+```bash
+# Robot side
+ros2 launch exia_bringup radio.launch.py role:=robot
+# Base station
+ros2 launch exia_bringup radio.launch.py role:=base
+```
+
+**Encryption**: RSA-2048 handshake + AES-256-GCM session. Base generates a random AES key each connection, encrypts it with the robot's RSA public key, sends in two fragments (`$K1`/`$K2`). Robot decrypts with private key, ACKs with SHA-256 hash. All subsequent frames are AES-GCM encrypted with monotonic nonce counters (even=base, odd=robot).
+
+**Key setup**: `scripts/generate_radio_keys.sh` creates RSA key pair in `~/.exia/`. Copy both `radio_private.pem` and `radio_public.pem` to `~/.exia/` on both machines.
+
+**Message types** (encrypted frame payload):
+
+| Type | Direction | Purpose |
+|------|-----------|---------|
+| `H` | base->robot | Heartbeat (10Hz), carries sequence number |
+| `A` | robot->base | Heartbeat ACK |
+| `N` | base->robot | Navigation goal (all coord_types supported) |
+| `C` | base->robot | Cancel navigation |
+| `E` | base->robot | E-stop activate |
+| `X` | base->robot | E-stop clear |
+| `V` | base->robot | cmd_vel relay (linear.x, angular.z) |
+| `S` | robot->base | Telemetry (state, x, y, heading, speed) at 5Hz |
+| `R` | robot->base | Relay `/navigation/status` messages |
+| `EA` | robot->base | E-stop acknowledgment |
+
+**Safety**: Robot triggers e-stop if no heartbeat ACK for 0.5s. Base resets handshake after 15 missed ACKs. E-stop publishes zero cmd_vel at 20Hz and cancels active navigation. Heartbeat-loss e-stop auto-clears when heartbeats resume.
+
+**Base station topics/services**:
+- Sub: `/navigation/goal` -> sends over radio
+- Sub: `/radio/cmd_vel` -> relays to robot
+- Pub: `/navigation/status` (relayed from robot)
+- Srv: `/radio/cancel`, `/radio/estop`, `/radio/estop_clear`
+
+**Config**: `src/exia_bringup/config/radio_params.yaml`
+**Udev rule**: `scripts/99-exia-radio.rules` (FTDI 0403:6001 -> `/dev/exia_radio`)
+
 ## Key Design Decisions
 
 - Ackermann steering: cannot rotate in place, must have forward velocity to turn

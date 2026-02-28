@@ -3,6 +3,6 @@ radio_bridge:
     serial_port: "/dev/exia_radio"
     serial_baud: 57600
     heartbeat_rate: 10.0
-    heartbeat_timeout: 0.5
+    heartbeat_timeout: 1.5
     status_rate: 5.0
     key_dir: "~/.exia"

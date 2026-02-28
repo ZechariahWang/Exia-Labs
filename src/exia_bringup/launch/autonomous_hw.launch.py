@@ -15,7 +15,7 @@ def generate_launch_description():
 
     use_ekf_arg = DeclareLaunchArgument(
         'use_ekf',
-        default_value='false',
+        default_value='true',
         description='Use EKF sensor fusion with GPS'
     )
 
@@ -29,6 +29,12 @@ def generate_launch_description():
         'serial_port',
         default_value='/dev/arduino_control',
         description='Serial port for Arduino communication'
+    )
+
+    use_rtk_arg = DeclareLaunchArgument(
+        'use_rtk',
+        default_value='true',
+        description='Require RTK fix for GPS origin (false accepts standard GPS)'
     )
 
     target_x_arg = DeclareLaunchArgument(
@@ -59,6 +65,7 @@ def generate_launch_description():
     use_ekf = LaunchConfiguration('use_ekf')
     use_gps = LaunchConfiguration('use_gps')
     serial_port = LaunchConfiguration('serial_port')
+    use_rtk = LaunchConfiguration('use_rtk')
     target_x = LaunchConfiguration('target_x')
     target_y = LaunchConfiguration('target_y')
     target_lat = LaunchConfiguration('target_lat')
@@ -70,6 +77,8 @@ def generate_launch_description():
     slam_params_file = os.path.join(bringup_dir, 'config', 'slam_toolbox_params.yaml')
     gps_params_file = os.path.join(bringup_dir, 'config', 'gps_params.yaml')
     ekf_params_file = os.path.join(bringup_dir, 'config', 'ekf_params.yaml')
+    septentrio_params_file = os.path.join(bringup_dir, 'config', 'septentrio_rover.yaml')
+    imu_params_file = os.path.join(bringup_dir, 'config', 'imu_params.yaml')
     pointcloud_to_laserscan_config = os.path.join(
         bringup_dir, 'config', 'pointcloud_to_laserscan.yaml'
     )
@@ -126,18 +135,6 @@ def generate_launch_description():
         ],
     )
 
-    rc_driver_node = Node(
-        package='exia_driver',
-        executable='rc_driver_node',
-        name='rc_driver_control_node',
-        output='screen',
-        parameters=[{
-            'use_sim_time': False,
-            'serial_port': serial_port,
-            'autonomous_mode': True,
-        }],
-    )
-
     ackermann_drive_node = Node(
         package='exia_control',
         executable='ackermann_drive_node',
@@ -146,7 +143,9 @@ def generate_launch_description():
         parameters=[{
             'use_sim_time': False,
             'publish_tf': True,
-            'hardware_mode': False,
+            'hardware_mode': True,
+            'serial_port': serial_port,
+            'use_odrive': True,
         }],
     )
 
@@ -224,7 +223,7 @@ def generate_launch_description():
         executable='gps_transform_node',
         name='gps_transform_node',
         output='screen',
-        parameters=[gps_params_file, {'use_sim_time': False}],
+        parameters=[gps_params_file, {'use_sim_time': False, 'require_rtk': use_rtk}],
     )
 
     ekf_localization_node = Node(
@@ -251,10 +250,33 @@ def generate_launch_description():
         ],
     )
 
+    septentrio_gnss_node = Node(
+        package='septentrio_gnss_driver',
+        executable='septentrio_gnss_driver_node',
+        name='septentrio_gnss_driver',
+        output='screen',
+        parameters=[septentrio_params_file, {'use_sim_time': False}],
+        remappings=[
+            ('navsatfix', '/gps/fix'),
+        ],
+    )
+
+    imu_node = Node(
+        package='tuw_sensor_transducer',
+        executable='transducer_node',
+        name='imu_node',
+        output='screen',
+        parameters=[imu_params_file, {'use_sim_time': False}],
+        remappings=[
+            ('imu', '/imu/data'),
+        ],
+    )
+
     return LaunchDescription([
         use_ekf_arg,
         use_gps_arg,
         serial_port_arg,
+        use_rtk_arg,
         target_x_arg,
         target_y_arg,
         target_lat_arg,
@@ -264,7 +286,6 @@ def generate_launch_description():
         robot_state_publisher,
         velodyne_driver_node,
         velodyne_transform_node,
-        rc_driver_node,
         ackermann_drive_node,
         pointcloud_to_laserscan,
         slam_toolbox_node,
@@ -274,4 +295,6 @@ def generate_launch_description():
         ekf_localization_node,
         delayed_navigator,
         depth_camera_node,
+        septentrio_gnss_node,
+        imu_node,
     ])

@@ -130,13 +130,12 @@ void setup() {
     Serial.begin(115200);
     delay(1000);
     Serial.println("READY");
-    // Handshake bypassed for testing
-    // while (true) {
-    //     if (Serial.available() && Serial.read() == 'C') {
-    //         break;
-    //     }
-    //     delay(100);
-    // }
+    while (true) {
+        if (Serial.available() && Serial.read() == 'C') {
+            break;
+        }
+        delay(100);
+    }
 
     // prefill buffer values
     for (int i = 0; i < MEDIAN_FILTER_SIZE; i++) {

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import math
+import time
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
@@ -7,6 +8,13 @@ from geometry_msgs.msg import Twist, TransformStamped
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Float64MultiArray
 from tf2_ros import TransformBroadcaster
+
+try:
+    import odrive
+    from odrive.enums import AxisState, ControlMode, InputMode
+    ODRIVE_AVAILABLE = True
+except ImportError:
+    ODRIVE_AVAILABLE = False
 
 
 class AckermannDriveNode(Node):
@@ -18,6 +26,11 @@ class AckermannDriveNode(Node):
     MAX_ACCEL = 2.0
     MAX_DECEL = 4.0
 
+    GEAR_REVERSE = 0
+    GEAR_NEUTRAL = 1
+    GEAR_HIGH = 2
+    GEAR_SHIFT_DELAY = 0.3
+
     def __init__(self):
         super().__init__('ackermann_drive_node')
 
@@ -25,6 +38,7 @@ class AckermannDriveNode(Node):
         self.declare_parameter('hardware_mode', False)
         self.declare_parameter('serial_port', '/dev/arduino_control')
         self.declare_parameter('serial_baud', 115200)
+        self.declare_parameter('use_odrive', True)
 
         self.publish_tf = self.get_parameter('publish_tf').value
         self.hardware_mode = self.get_parameter('hardware_mode').value
@@ -38,9 +52,27 @@ class AckermannDriveNode(Node):
         self.last_cmd_time = None
         self.cmd_timeout = 0.2
 
+        self._current_gear = self.GEAR_NEUTRAL
+        self._target_gear = self.GEAR_NEUTRAL
+        self._gear_shift_time = 0.0
+
         self.serial_conn = None
+        self._serial_buffer = ""
+        self._last_heartbeat_time = time.monotonic()
+        self._estop_active = False
+
+        self._odrive = None
+        self._odrive_axis = None
+        self._odrive_anchor = 0.0
+        self._odrive_connected = False
+        self._odrive_last_attempt = 0.0
+        self._odrive_retry_interval = 5.0
+
         if self.hardware_mode:
             self._init_serial()
+            use_odrive = self.get_parameter('use_odrive').value
+            if use_odrive:
+                self._init_odrive()
 
         self.last_time = self.get_clock().now()
 
@@ -89,26 +121,150 @@ class AckermannDriveNode(Node):
             port = self.get_parameter('serial_port').value
             baud = self.get_parameter('serial_baud').value
             self.serial_conn = serial.Serial(port=port, baudrate=baud, timeout=0.1)
-            import time
             time.sleep(1.0)
             self.serial_conn.reset_input_buffer()
-            self.serial_conn.write(b'ARM\n')
-            self.get_logger().info(f'Serial connected: {port}')
+            self.serial_conn.write(b'AUTO\n')
+            self._last_heartbeat_time = time.monotonic()
+            self.get_logger().info(f'Serial connected: {port} — sent AUTO')
         except Exception as e:
             self.get_logger().error(f'Serial init failed: {e}')
             self.serial_conn = None
 
-    def _send_serial(self, steer_deg, throttle_val, brake_val):
+    def _init_odrive(self):
+        if not ODRIVE_AVAILABLE:
+            self.get_logger().warn('ODrive library not installed, steering will not be controlled')
+            return
+        self._connect_odrive()
+
+    def _connect_odrive(self):
+        self._odrive_last_attempt = time.monotonic()
+        try:
+            self.get_logger().info('Searching for ODrive...')
+            self._odrive = odrive.find_any(timeout=10)
+            if self._odrive is None:
+                self.get_logger().error('ODrive not found')
+                return
+            self._odrive_axis = self._odrive.axis0
+            self._odrive_axis.config.motor.current_soft_max = 20.0
+            self._odrive_axis.config.motor.current_hard_max = 30.0
+            ctrl = self._odrive_axis.controller
+            ctrl.config.control_mode = ControlMode.POSITION_CONTROL
+            ctrl.config.input_mode = InputMode.PASSTHROUGH
+            ctrl.config.vel_limit = 15.0
+            if self._odrive_axis.current_state != AxisState.CLOSED_LOOP_CONTROL:
+                self._odrive_axis.requested_state = AxisState.CLOSED_LOOP_CONTROL
+                deadline = time.monotonic() + 2.0
+                while self._odrive_axis.current_state != AxisState.CLOSED_LOOP_CONTROL:
+                    if time.monotonic() > deadline:
+                        self.get_logger().error('ODrive closed-loop timeout')
+                        return
+                    time.sleep(0.05)
+            self._odrive_anchor = self._odrive_axis.pos_estimate
+            self._odrive_connected = True
+            self.get_logger().info(f'ODrive connected, anchor={self._odrive_anchor:.3f}')
+        except Exception as e:
+            self.get_logger().error(f'ODrive connection failed: {e}')
+            self._odrive_connected = False
+
+    def _command_odrive_steering(self, steering_angle):
+        if not self._odrive_connected:
+            now = time.monotonic()
+            if now - self._odrive_last_attempt > self._odrive_retry_interval:
+                self._connect_odrive()
+            return
+        try:
+            max_pos = 6.0
+            normalized = steering_angle / self.MAX_STEERING_ANGLE
+            target_turns = normalized * max_pos
+            absolute_pos = self._odrive_anchor + target_turns
+            self._odrive_axis.controller.input_pos = absolute_pos
+        except Exception as e:
+            self.get_logger().error(f'ODrive command failed: {e}')
+            self._odrive_connected = False
+
+    def _send_serial(self, msg):
         if self.serial_conn is None:
             return
         try:
-            cmd = f'S{steer_deg},T{throttle_val},B{brake_val}\n'
-            self.serial_conn.write(cmd.encode('utf-8'))
+            self.serial_conn.write((msg + '\n').encode('utf-8'))
             self.serial_conn.flush()
         except Exception as e:
             self.get_logger().warn(f'Serial write error: {e}')
 
+    def _read_serial_responses(self):
+        if self.serial_conn is None:
+            return
+        try:
+            waiting = self.serial_conn.in_waiting
+            if waiting > 0:
+                data = self.serial_conn.read(waiting).decode('utf-8', errors='ignore')
+                self._serial_buffer += data
+            while '\n' in self._serial_buffer:
+                line, self._serial_buffer = self._serial_buffer.split('\n', 1)
+                line = line.strip()
+                if not line:
+                    continue
+                self._parse_arduino_response(line)
+        except Exception as e:
+            self.get_logger().warn(f'Serial read error: {e}')
+
+    def _parse_arduino_response(self, line):
+        cmd = line[0]
+        payload = line[1:] if len(line) > 1 else ""
+
+        if cmd == 'H':
+            self._last_heartbeat_time = time.monotonic()
+        elif cmd == 'S':
+            pass
+        elif cmd == 'L':
+            self.get_logger().warn('RC signal lost (Arduino)')
+        elif cmd == 'R':
+            self.get_logger().info('RC signal recovered (Arduino)')
+        elif cmd == 'E':
+            self.get_logger().error('Emergency stop from Arduino')
+            self._estop_active = True
+            self.linear_vel = 0.0
+            self.angular_vel = 0.0
+        elif cmd == 'G':
+            try:
+                self._current_gear = int(payload)
+            except ValueError:
+                pass
+
+    def _process_gear(self, ramped_speed):
+        if ramped_speed > 0.05:
+            self._target_gear = self.GEAR_HIGH
+        elif ramped_speed < -0.05:
+            self._target_gear = self.GEAR_REVERSE
+        else:
+            self._target_gear = self.GEAR_NEUTRAL
+
+        if self._target_gear == self._current_gear:
+            return
+
+        now = time.monotonic()
+        if now - self._gear_shift_time < self.GEAR_SHIFT_DELAY:
+            return
+
+        if self._current_gear == self.GEAR_HIGH and self._target_gear == self.GEAR_REVERSE:
+            self._send_serial(f'K{self.GEAR_NEUTRAL}')
+            self._current_gear = self.GEAR_NEUTRAL
+            self._gear_shift_time = now
+            return
+
+        if self._current_gear == self.GEAR_REVERSE and self._target_gear == self.GEAR_HIGH:
+            self._send_serial(f'K{self.GEAR_NEUTRAL}')
+            self._current_gear = self.GEAR_NEUTRAL
+            self._gear_shift_time = now
+            return
+
+        self._send_serial(f'K{self._target_gear}')
+        self._current_gear = self._target_gear
+        self._gear_shift_time = now
+
     def cmd_vel_callback(self, msg: Twist):
+        if self._estop_active:
+            return
         self.linear_vel = max(-self.MAX_SPEED, min(self.MAX_SPEED, msg.linear.x))
         self.angular_vel = msg.angular.z
         self.last_cmd_time = self.get_clock().now()
@@ -160,31 +316,43 @@ class AckermannDriveNode(Node):
             wheel_speed = ramped_speed / self.WHEEL_RADIUS
 
         if self.hardware_mode:
-            steer_deg = int(90 + (steering_angle / self.MAX_STEERING_ANGLE) * 45)
-            steer_deg = max(45, min(135, steer_deg))
+            self._read_serial_responses()
+
+            now = time.monotonic()
+            if now - self._last_heartbeat_time > 2.0:
+                if not hasattr(self, '_heartbeat_warned') or not self._heartbeat_warned:
+                    self.get_logger().warn('Arduino heartbeat timeout (>2s)')
+                    self._heartbeat_warned = True
+            else:
+                self._heartbeat_warned = False
 
             if ramped_speed > 0.01:
-                throttle_val = int(90 + (ramped_speed / self.MAX_SPEED) * 30)
-                throttle_val = min(throttle_val, 120)
-                brake_val = 0
+                throttle = int(abs(ramped_speed) / self.MAX_SPEED * 75)
+                throttle = max(0, min(75, throttle))
+                brake = 180
             elif ramped_speed < -0.01:
-                throttle_val = 90
-                brake_val = int(min(abs(ramped_speed) / self.MAX_SPEED, 1.0) * 180)
+                throttle = int(abs(ramped_speed) / self.MAX_SPEED * 75)
+                throttle = max(0, min(75, throttle))
+                brake = 180
             else:
-                throttle_val = 90
-                brake_val = 0
+                throttle = 0
+                brake = 180
 
-            self._send_serial(steer_deg, throttle_val, brake_val)
-        else:
-            left_steer, right_steer = self.compute_ackermann_angles(steering_angle)
+            self._send_serial(f'J{throttle},{brake}')
+            self._process_gear(ramped_speed)
 
-            steering_msg = Float64MultiArray()
-            steering_msg.data = [left_steer, right_steer]
-            self.steering_pub.publish(steering_msg)
+            if self._odrive_connected:
+                self._command_odrive_steering(steering_angle)
 
-            throttle_msg = Float64MultiArray()
-            throttle_msg.data = [wheel_speed, wheel_speed]
-            self.throttle_pub.publish(throttle_msg)
+        left_steer, right_steer = self.compute_ackermann_angles(steering_angle)
+
+        steering_msg = Float64MultiArray()
+        steering_msg.data = [left_steer, right_steer]
+        self.steering_pub.publish(steering_msg)
+
+        throttle_msg = Float64MultiArray()
+        throttle_msg.data = [wheel_speed, wheel_speed]
+        self.throttle_pub.publish(throttle_msg)
 
         self.update_odometry(dt, steering_angle, ramped_speed)
 
@@ -250,12 +418,19 @@ class AckermannDriveNode(Node):
             self.tf_broadcaster.sendTransform(t)
 
     def destroy_node(self):
-        if self.serial_conn is not None:
-            try:
-                self.serial_conn.write(b'DISARM\n')
-                self.serial_conn.close()
-            except Exception:
-                pass
+        if self.hardware_mode:
+            if self._odrive_connected and self._odrive_axis is not None:
+                try:
+                    self._odrive_axis.controller.input_pos = self._odrive_axis.pos_estimate
+                    self._odrive_axis.requested_state = AxisState.IDLE
+                except Exception:
+                    pass
+            if self.serial_conn is not None:
+                try:
+                    self.serial_conn.write(b'MANUAL\n')
+                    self.serial_conn.close()
+                except Exception:
+                    pass
         super().destroy_node()
 
 

@@ -86,7 +86,7 @@ ros2 run exia_control nav_to turn 3s 0.5        # time + angular vel
 
 - **Lidar**: Velodyne VLP-32C, `/scan` (LaserScan), IP 192.168.1.201
 - **Depth Camera**: Orbbec Gemini 435Le, `/depth/points` (costmap only, not SLAM)
-- **IMU**: Yahboom 10-axis, `/imu/data`, 200Hz
+- **IMU**: SYD Dynamics TransducerM TM171, `/imu/data`, 200Hz, USB Type-C (`/dev/exia_imu`)
 - **GPS**: ARK MOSAIC-X5 RTK, `/gnss/fix` (hw) or `/gps/fix` (sim), septentrio_gnss_driver
 
 ## Hardware Deployment

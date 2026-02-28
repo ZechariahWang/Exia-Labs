@@ -6,3 +6,4 @@ gps_transform_node:
     publish_tf: false
     gps_frame_id: gps_link
     odom_frame_id: odom
+    require_rtk: true

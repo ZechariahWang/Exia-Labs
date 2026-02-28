@@ -1,0 +1,4 @@
+# SYD Dynamics TransducerM TM171 IMU
+# VID:PID 1a86:55d3 is a placeholder for CH340 generic USB-serial
+# Must verify actual TM171 USB VID:PID with `lsusb` when hardware is connected
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d3", SYMLINK+="exia_imu", MODE="0666"

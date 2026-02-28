@@ -25,6 +25,7 @@ class GpsTransformNode(Node):
         self.declare_parameter('publish_tf', False)
         self.declare_parameter('gps_frame_id', 'gps_link')
         self.declare_parameter('odom_frame_id', 'odom')
+        self.declare_parameter('require_rtk', True)
 
         self.origin_lat = self.get_parameter('origin_lat').value
         self.origin_lon = self.get_parameter('origin_lon').value
@@ -32,6 +33,7 @@ class GpsTransformNode(Node):
         self.publish_tf = self.get_parameter('publish_tf').value
         self.gps_frame_id = self.get_parameter('gps_frame_id').value
         self.odom_frame_id = self.get_parameter('odom_frame_id').value
+        self.require_rtk = self.get_parameter('require_rtk').value
 
         self.origin_set = False
         if self.origin_lat != 0.0 or self.origin_lon != 0.0:
@@ -55,7 +57,8 @@ class GpsTransformNode(Node):
         if self.publish_tf:
             self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
 
-        self.get_logger().info('GPS Transform Node initialized')
+        mode_str = 'RTK required' if self.require_rtk else 'Standard GPS accepted (covariance inflated 10x)'
+        self.get_logger().info(f'GPS Transform Node initialized — {mode_str}')
 
     def _gps_callback(self, msg: NavSatFix):
         if msg.status.status < NavSatStatus.STATUS_FIX:
@@ -63,19 +66,23 @@ class GpsTransformNode(Node):
 
         if not self.origin_set:
             if self.auto_set_origin:
-                if msg.status.status < NavSatStatus.STATUS_GBAS_FIX:
-                    if not hasattr(self, '_origin_wait_logged'):
-                        self.get_logger().info(
-                            f'Waiting for RTK fix before setting origin (current status: {msg.status.status})')
-                        self._origin_wait_logged = True
-                    return
+                if self.require_rtk:
+                    if msg.status.status < NavSatStatus.STATUS_GBAS_FIX:
+                        if not hasattr(self, '_origin_wait_logged'):
+                            self.get_logger().info(
+                                f'Waiting for RTK fix before setting origin (current status: {msg.status.status})')
+                            self._origin_wait_logged = True
+                        return
                 self.origin_lat = msg.latitude
                 self.origin_lon = msg.longitude
                 self.origin_set = True
+                fix_type = 'RTK' if msg.status.status >= NavSatStatus.STATUS_GBAS_FIX else 'standard GPS'
                 self.get_logger().info(
-                    f'GPS origin auto-set (RTK fix): lat={self.origin_lat:.6f}, lon={self.origin_lon:.6f}')
+                    f'GPS origin auto-set ({fix_type}): lat={self.origin_lat:.6f}, lon={self.origin_lon:.6f}')
             else:
                 return
+
+        is_rtk = msg.status.status >= NavSatStatus.STATUS_GBAS_FIX
 
         x, y = self._gps_to_local(msg.latitude, msg.longitude)
 
@@ -91,6 +98,8 @@ class GpsTransformNode(Node):
         odom.pose.pose.orientation = Quaternion(x=0.0, y=0.0, z=0.0, w=1.0)
 
         position_cov = max(msg.position_covariance[0], 0.1)
+        if not is_rtk:
+            position_cov *= 10.0
         odom.pose.covariance = [
             position_cov, 0.0, 0.0, 0.0, 0.0, 0.0,
             0.0, position_cov, 0.0, 0.0, 0.0, 0.0,

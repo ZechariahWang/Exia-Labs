@@ -1,4 +1,6 @@
 #!/bin/bash
+# Exia Ground Robot — Startup Script
+# Paths are hardcoded for user `exialabsargus` on Jetson Orin
 
 LOGFILE="/home/exialabsargus/exia_startup.log"
 ARDUINO_PORT="/dev/arduino_control"
@@ -44,21 +46,6 @@ wait_for_device() {
     fi
 }
 
-wait_for_odrive() {
-    local waited=0
-    echo "Waiting for ODrive USB device..."
-    while [ $waited -lt $MAX_WAIT ]; do
-        if lsusb | grep -q "1209:0d32"; then
-            echo "ODrive USB found after ${waited}s"
-            return 0
-        fi
-        sleep 1
-        waited=$((waited + 1))
-    done
-    echo "WARNING: ODrive USB not found after ${MAX_WAIT}s (will retry in node)"
-    return 1
-}
-
 reset_arduino() {
     echo "Resetting Arduino via DTR..."
     stty -F "$ARDUINO_PORT" 115200 hupcl -echo
@@ -77,6 +64,8 @@ wait_for_arduino_ready() {
     while [ $waited -lt $max_wait ]; do
         if timeout 2 cat "$ARDUINO_PORT" 2>/dev/null | head -c 50 | grep -q "READY"; then
             echo "Arduino READY after ${waited}s"
+            echo -n "C" > "$ARDUINO_PORT"
+            echo "Sent handshake confirmation to Arduino"
             return 0
         fi
         sleep 1
@@ -86,6 +75,7 @@ wait_for_arduino_ready() {
     return 1
 }
 
+# --- Wait for Arduino USB device ---
 if ! wait_for_device "$ARDUINO_PORT"; then
     echo "Arduino not detected. Exiting."
     exit 1
@@ -93,10 +83,11 @@ fi
 
 sleep 2
 
+# --- Reset Arduino and complete handshake ---
 reset_arduino
 wait_for_arduino_ready
 
-wait_for_odrive
+# --- ODrive connection is handled by ackermann_drive_node (use_odrive param) ---
 
 sleep 2
 echo "Sourcing ROS2 environment..."
@@ -105,6 +96,7 @@ source "$WORKSPACE/install/setup.bash"
 
 export ROS_DOMAIN_ID=0
 
+# --- Verify radio encryption keys ---
 if [ ! -f "$KEY_DIR/radio_private.pem" ] || [ ! -f "$KEY_DIR/radio_public.pem" ]; then
     echo "ERROR: Radio encryption keys not found in $KEY_DIR"
     echo "Run: bash $WORKSPACE/scripts/generate_radio_keys.sh"
@@ -112,18 +104,14 @@ if [ ! -f "$KEY_DIR/radio_private.pem" ] || [ ! -f "$KEY_DIR/radio_public.pem" ]
 fi
 echo "Radio encryption keys found"
 
-echo "Starting rc_driver_node..."
-ros2 run exia_driver rc_driver_node &
-PIDS+=($!)
-
-sleep 3
-
+# --- Launch autonomous stack (ackermann_drive_node handles Arduino + ODrive) ---
 echo "Starting autonomous stack..."
-ros2 launch exia_bringup autonomous.launch.py use_sim_time:=false &
+ros2 launch exia_bringup autonomous_hw.launch.py &
 PIDS+=($!)
 
 sleep 5
 
+# --- Launch radio bridge if RFD900x is connected ---
 if [ -e "$RADIO_PORT" ]; then
     echo "Waiting for RFD900x radio boot..."
     sleep 3

@@ -1,0 +1,3 @@
+# Septentrio MOSAIC-X5 RTK GPS
+# VID:PID below is a placeholder — verify with `lsusb` when hardware is connected
+SUBSYSTEM=="tty", ATTRS{idVendor}=="152a", ATTRS{idProduct}=="80a2", SYMLINK+="exia_gps", MODE="0666"

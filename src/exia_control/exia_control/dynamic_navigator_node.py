@@ -161,6 +161,7 @@ class DynamicNavigator(Node):
         control_rate = self.get_parameter('control_rate').value
 
         self._nav_lock = threading.Lock()
+        self._pose_lock = threading.Lock()
 
         self.state = NavigatorState.IDLE
         self.robot_x = 0.0
@@ -175,6 +176,15 @@ class DynamicNavigator(Node):
         self.last_replan_time = 0.0
         self.replan_pending = False
         self._direct_mode = False
+
+        self._waypoint_queue = []
+        self._final_goal = None
+        self._final_goal_gps_x = 0.0
+        self._final_goal_gps_y = 0.0
+        self._final_goal_uses_gps = False
+        self._waypoint_segment_distance = 35.0
+        self._waypoint_tolerance = 5.0
+        self._waypoint_index = 0
 
         self._last_scan_time = time.time()
         self._last_odom_time = time.time()
@@ -343,33 +353,39 @@ class DynamicNavigator(Node):
 
     def _scan_callback(self, msg: LaserScan):
         self._last_scan_time = time.time()
-        self._latest_scan = msg
+        with self._pose_lock:
+            self._latest_scan = msg
 
     def _gps_odom_callback(self, msg: Odometry):
-        self._gps_x = msg.pose.pose.position.x
-        self._gps_y = msg.pose.pose.position.y
-        if not self._gps_available:
-            self._gps_available = True
-            self.get_logger().info(
-                f'GPS reference active: ({self._gps_x:.2f}, {self._gps_y:.2f})')
-        self._gps_to_map_offset_x = self.robot_x - self._gps_x
-        self._gps_to_map_offset_y = self.robot_y - self._gps_y
+        with self._pose_lock:
+            self._gps_x = msg.pose.pose.position.x
+            self._gps_y = msg.pose.pose.position.y
+            if not self._gps_available:
+                self._gps_available = True
+                self.get_logger().info(
+                    f'GPS reference active: ({self._gps_x:.2f}, {self._gps_y:.2f})')
+            self._gps_to_map_offset_x = self.robot_x - self._gps_x
+            self._gps_to_map_offset_y = self.robot_y - self._gps_y
 
     def _odom_callback(self, msg: Odometry):
         self._last_odom_time = time.time()
-        self.robot_speed = msg.twist.twist.linear.x
 
         try:
             transform = self.tf_buffer.lookup_transform(
                 'map', 'base_footprint', rclpy.time.Time())
-            self.robot_x = transform.transform.translation.x
-            self.robot_y = transform.transform.translation.y
-            q = transform.transform.rotation
-            self.robot_yaw = self._quaternion_to_yaw(q)
+            rx = transform.transform.translation.x
+            ry = transform.transform.translation.y
+            ryaw = self._quaternion_to_yaw(transform.transform.rotation)
         except TransformException:
-            self.robot_x = msg.pose.pose.position.x 
-            self.robot_y = msg.pose.pose.position.y
-            self.robot_yaw = self._quaternion_to_yaw(msg.pose.pose.orientation)
+            rx = msg.pose.pose.position.x
+            ry = msg.pose.pose.position.y
+            ryaw = self._quaternion_to_yaw(msg.pose.pose.orientation)
+
+        with self._pose_lock:
+            self.robot_x = rx
+            self.robot_y = ry
+            self.robot_yaw = ryaw
+            self.robot_speed = msg.twist.twist.linear.x
 
     def _goal_callback(self, msg: PoseStamped):
         with self._nav_lock:
@@ -484,6 +500,26 @@ class DynamicNavigator(Node):
         goal.pose.position.x = map_x
         goal.pose.position.y = map_y
         goal.pose.orientation.w = 1.0
+
+        self._final_goal = goal
+        self._final_goal_gps_x = target_x
+        self._final_goal_gps_y = target_y
+        self._final_goal_uses_gps = self._goal_uses_gps
+
+        if not self._direct_mode:
+            self._waypoint_queue = self._generate_waypoints(map_x, map_y)
+            self._waypoint_index = 0
+            if self._waypoint_queue:
+                total_dist = math.sqrt((map_x - self.robot_x)**2 + (map_y - self.robot_y)**2)
+                self.get_logger().info(
+                    f'Waypoint queue: {len(self._waypoint_queue)} intermediates, '
+                    f'total {total_dist:.1f}m')
+                self._goal_callback(self._waypoint_queue[0])
+                return
+        else:
+            self._waypoint_queue = []
+            self._waypoint_index = 0
+
         self._goal_callback(goal)
 
     def _costmap_callback(self, msg: OccupancyGrid):
@@ -503,6 +539,9 @@ class DynamicNavigator(Node):
         self.current_path = None
         self._direct_mode = False
         self._move_type = ''
+        self._waypoint_queue = []
+        self._waypoint_index = 0
+        self._final_goal = None
         self._publish_stop()
         response.success = True
         response.message = 'Navigation cancelled'
@@ -531,7 +570,30 @@ class DynamicNavigator(Node):
         return True
 
     def _control_loop(self):
+        with self._pose_lock:
+            robot_x = self.robot_x
+            robot_y = self.robot_y
+            robot_yaw = self.robot_yaw
+            robot_speed = self.robot_speed
+            gps_x = self._gps_x
+            gps_y = self._gps_y
+            gps_available = self._gps_available
+            gps_offset_x = self._gps_to_map_offset_x
+            gps_offset_y = self._gps_to_map_offset_y
+            latest_scan = self._latest_scan
+
         with self._nav_lock:
+            self.robot_x = robot_x
+            self.robot_y = robot_y
+            self.robot_yaw = robot_yaw
+            self.robot_speed = robot_speed
+            self._gps_x = gps_x
+            self._gps_y = gps_y
+            self._gps_available = gps_available
+            self._gps_to_map_offset_x = gps_offset_x
+            self._gps_to_map_offset_y = gps_offset_y
+            self._latest_scan = latest_scan
+
             if not self._check_sensor_health():
                 self._publish_stop()
                 return
@@ -732,27 +794,80 @@ class DynamicNavigator(Node):
             dist_to_goal = math.sqrt(
                 (goal_x - self.robot_x)**2 + (goal_y - self.robot_y)**2)
 
-        if dist_to_goal < self.goal_tolerance:
-            self.get_logger().info(f'Goal reached! Distance: {dist_to_goal:.2f}m')
-            if self._direct_mode:
-                self.get_logger().info(
-                    f'Final position: ({self.robot_x:.2f}, {self.robot_y:.2f}), '
-                    f'heading: {math.degrees(self.robot_yaw):.1f} deg')
-                self._publish_status('GOAL_REACHED')
-                self._direct_mode = False
+        if self._final_goal_uses_gps and self._gps_available and self._final_goal is not None:
+            dist_to_final = math.sqrt(
+                (self._final_goal_gps_x - self._gps_x)**2 +
+                (self._final_goal_gps_y - self._gps_y)**2)
+        elif self._final_goal is not None:
+            dist_to_final = math.sqrt(
+                (self._final_goal.pose.position.x - self.robot_x)**2 +
+                (self._final_goal.pose.position.y - self.robot_y)**2)
+        else:
+            dist_to_final = dist_to_goal
+
+        is_intermediate = self._waypoint_index < len(self._waypoint_queue)
+        current_tolerance = self._waypoint_tolerance if is_intermediate else self.goal_tolerance
+
+        if dist_to_final < self.goal_tolerance:
+            self.get_logger().info(f'Final goal reached! Distance: {dist_to_final:.2f}m')
+            self._publish_status('GOAL_REACHED')
+            self._waypoint_queue = []
+            self._waypoint_index = 0
+            self._final_goal = None
+            self._direct_mode = False
             self.state = NavigatorState.IDLE
             self.current_goal = None
             self.current_path = None
             self._publish_stop()
             return
 
-        # compute pp
+        if dist_to_goal < current_tolerance:
+            if is_intermediate:
+                self.get_logger().info(
+                    f'Waypoint {self._waypoint_index + 1}/{len(self._waypoint_queue)} reached '
+                    f'(dist {dist_to_goal:.2f}m)')
+                self._waypoint_index += 1
+                if self._waypoint_index < len(self._waypoint_queue):
+                    self._advance_to_waypoint(self._waypoint_queue[self._waypoint_index])
+                else:
+                    self._advance_to_final_goal()
+                return
+            else:
+                self.get_logger().info(f'Goal reached! Distance: {dist_to_goal:.2f}m')
+                if self._direct_mode:
+                    self.get_logger().info(
+                        f'Final position: ({self.robot_x:.2f}, {self.robot_y:.2f}), '
+                        f'heading: {math.degrees(self.robot_yaw):.1f} deg')
+                    self._direct_mode = False
+                self._publish_status('GOAL_REACHED')
+                self._waypoint_queue = []
+                self._waypoint_index = 0
+                self._final_goal = None
+                self.state = NavigatorState.IDLE
+                self.current_goal = None
+                self.current_path = None
+                self._publish_stop()
+                return
+
         cmd, goal_reached = self.pure_pursuit.compute_velocity(
             self.robot_x, self.robot_y, self.robot_yaw, self.robot_speed)
 
         if goal_reached:
-            if dist_to_goal < self.goal_tolerance * 2.0:
+            if dist_to_goal < current_tolerance * 2.0:
+                if is_intermediate:
+                    self.get_logger().info(
+                        f'Waypoint {self._waypoint_index + 1}/{len(self._waypoint_queue)} reached via path end')
+                    self._waypoint_index += 1
+                    if self._waypoint_index < len(self._waypoint_queue):
+                        self._advance_to_waypoint(self._waypoint_queue[self._waypoint_index])
+                    else:
+                        self._advance_to_final_goal()
+                    return
                 self.get_logger().info('Path complete, goal reached!')
+                self._publish_status('GOAL_REACHED')
+                self._waypoint_queue = []
+                self._waypoint_index = 0
+                self._final_goal = None
                 self.state = NavigatorState.IDLE
                 self.current_goal = None
                 self._publish_stop()
@@ -768,6 +883,9 @@ class DynamicNavigator(Node):
                     self.current_goal = None
                     self.current_path = None
                     self._direct_mode = False
+                    self._waypoint_queue = []
+                    self._waypoint_index = 0
+                    self._final_goal = None
                     self._publish_stop()
                     return
                 self.get_logger().info('Path ended but goal not reached, replanning...')
@@ -828,6 +946,75 @@ class DynamicNavigator(Node):
         if self._goal_uses_gps and self._gps_available and self.current_goal is not None:
             self.current_goal.pose.position.x = self._goal_gps_x + self._gps_to_map_offset_x
             self.current_goal.pose.position.y = self._goal_gps_y + self._gps_to_map_offset_y
+
+    def _generate_waypoints(self, goal_x, goal_y):
+        dx = goal_x - self.robot_x
+        dy = goal_y - self.robot_y
+        dist = math.sqrt(dx * dx + dy * dy)
+        if dist <= self._waypoint_segment_distance:
+            return []
+        num_segments = int(dist / self._waypoint_segment_distance)
+        waypoints = []
+        for i in range(1, num_segments + 1):
+            t = (i * self._waypoint_segment_distance) / dist
+            if t >= 1.0:
+                break
+            wp = PoseStamped()
+            wp.header.frame_id = 'map'
+            wp.header.stamp = self.get_clock().now().to_msg()
+            wp.pose.position.x = self.robot_x + t * dx
+            wp.pose.position.y = self.robot_y + t * dy
+            wp.pose.orientation.w = 1.0
+            waypoints.append(wp)
+        return waypoints
+
+    def _advance_to_waypoint(self, wp):
+        if self._final_goal_uses_gps and self._gps_available and self._final_goal is not None:
+            final_map_x = self._final_goal_gps_x + self._gps_to_map_offset_x
+            final_map_y = self._final_goal_gps_y + self._gps_to_map_offset_y
+            self._final_goal.pose.position.x = final_map_x
+            self._final_goal.pose.position.y = final_map_y
+            remaining_wps = self._generate_waypoints(final_map_x, final_map_y)
+            self._waypoint_queue = remaining_wps
+            self._waypoint_index = 0
+            if self._waypoint_queue:
+                wp = self._waypoint_queue[0]
+            else:
+                self._advance_to_final_goal()
+                return
+        self._goal_gps_x = 0.0
+        self._goal_gps_y = 0.0
+        self._goal_uses_gps = False
+        self.current_goal = wp
+        self.current_path = None
+        self.current_nav_path = None
+        self._consecutive_replan_failures = 0
+        self.state = NavigatorState.PLANNING
+        self.get_logger().info(
+            f'Advancing to waypoint ({wp.pose.position.x:.2f}, {wp.pose.position.y:.2f})')
+        self._publish_status('NAVIGATING')
+        self._request_initial_plan()
+
+    def _advance_to_final_goal(self):
+        if self._final_goal is None:
+            self.state = NavigatorState.IDLE
+            return
+        if self._final_goal_uses_gps and self._gps_available:
+            self._final_goal.pose.position.x = self._final_goal_gps_x + self._gps_to_map_offset_x
+            self._final_goal.pose.position.y = self._final_goal_gps_y + self._gps_to_map_offset_y
+        self.current_goal = self._final_goal
+        self._goal_gps_x = self._final_goal_gps_x
+        self._goal_gps_y = self._final_goal_gps_y
+        self._goal_uses_gps = self._final_goal_uses_gps
+        self.current_path = None
+        self.current_nav_path = None
+        self._consecutive_replan_failures = 0
+        self.state = NavigatorState.PLANNING
+        self.get_logger().info(
+            f'Advancing to final goal ({self.current_goal.pose.position.x:.2f}, '
+            f'{self.current_goal.pose.position.y:.2f})')
+        self._publish_status('NAVIGATING')
+        self._request_initial_plan()
 
     def _get_report_position(self):
         if self._gps_available:

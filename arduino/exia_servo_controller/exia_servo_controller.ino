@@ -1,3 +1,7 @@
+// LEGACY / REFERENCE ONLY — Do not upload to Arduino.
+// Active firmware is rc_control_pwm.ino (AUTO/MANUAL + J,K protocol).
+// This sketch used the old ARM/DISARM + S,T,B protocol for exia_servo_controller.
+//
 // JAN 3 2026: THIS CODEE IS WORKING, PLS DONT TOUCH
 
 

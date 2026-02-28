@@ -42,9 +42,9 @@ global_costmap:
       global_frame: map
       robot_base_frame: base_footprint
       rolling_window: true
-      width: 100
-      height: 100
-      resolution: 0.1
+      width: 200
+      height: 200
+      resolution: 0.5
       track_unknown_space: false
       footprint: "[[1.05, 0.60], [1.05, -0.60], [-1.05, -0.60], [-1.05, 0.60]]"
       footprint_padding: 0.1
@@ -89,7 +89,7 @@ global_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 1.5
-        inflation_radius: 2.5
+        inflation_radius: 1.5
 
       always_send_full_costmap: true
 
@@ -151,7 +151,7 @@ local_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 1.5
-        inflation_radius: 2.5
+        inflation_radius: 1.5
 
       always_send_full_costmap: true
 

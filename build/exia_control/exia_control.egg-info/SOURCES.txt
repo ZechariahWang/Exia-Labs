@@ -12,6 +12,7 @@ exia_control/__init__.py
 exia_control/ackermann_drive_node.py
 exia_control/dynamic_navigator_node.py
 exia_control/nav_to_cmd.py
+exia_control/teleop_node.py
 exia_control/navigation/__init__.py
 exia_control/navigation/path_smoother.py
 exia_control/navigation/path_validator.py

@@ -27,8 +27,8 @@ def generate_launch_description():
 
     serial_port_arg = DeclareLaunchArgument(
         'serial_port',
-        default_value='/dev/arduino_control',
-        description='Serial port for Arduino communication'
+        default_value='/dev/lss_controller',
+        description='Serial port for LSS servo controller'
     )
 
     use_rtk_arg = DeclareLaunchArgument(
@@ -262,14 +262,11 @@ def generate_launch_description():
     )
 
     imu_node = Node(
-        package='tuw_sensor_transducer',
-        executable='transducer_node',
+        package='exia_driver',
+        executable='imu_node',
         name='imu_node',
         output='screen',
         parameters=[imu_params_file, {'use_sim_time': False}],
-        remappings=[
-            ('imu', '/imu/data'),
-        ],
     )
 
     return LaunchDescription([

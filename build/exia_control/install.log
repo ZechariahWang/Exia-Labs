@@ -2,6 +2,7 @@
 /home/zech/exia_ws/install/exia_control/lib/python3.10/site-packages/exia_control/ackermann_drive_node.py
 /home/zech/exia_ws/install/exia_control/lib/python3.10/site-packages/exia_control/__init__.py
 /home/zech/exia_ws/install/exia_control/lib/python3.10/site-packages/exia_control/dynamic_navigator_node.py
+/home/zech/exia_ws/install/exia_control/lib/python3.10/site-packages/exia_control/teleop_node.py
 /home/zech/exia_ws/install/exia_control/lib/python3.10/site-packages/exia_control/navigation/planner_interface.py
 /home/zech/exia_ws/install/exia_control/lib/python3.10/site-packages/exia_control/navigation/path_smoother.py
 /home/zech/exia_ws/install/exia_control/lib/python3.10/site-packages/exia_control/navigation/__init__.py
@@ -12,6 +13,7 @@
 /home/zech/exia_ws/install/exia_control/lib/python3.10/site-packages/exia_control/__pycache__/ackermann_drive_node.cpython-310.pyc
 /home/zech/exia_ws/install/exia_control/lib/python3.10/site-packages/exia_control/__pycache__/__init__.cpython-310.pyc
 /home/zech/exia_ws/install/exia_control/lib/python3.10/site-packages/exia_control/__pycache__/dynamic_navigator_node.cpython-310.pyc
+/home/zech/exia_ws/install/exia_control/lib/python3.10/site-packages/exia_control/__pycache__/teleop_node.cpython-310.pyc
 /home/zech/exia_ws/install/exia_control/lib/python3.10/site-packages/exia_control/navigation/__pycache__/planner_interface.cpython-310.pyc
 /home/zech/exia_ws/install/exia_control/lib/python3.10/site-packages/exia_control/navigation/__pycache__/path_smoother.cpython-310.pyc
 /home/zech/exia_ws/install/exia_control/lib/python3.10/site-packages/exia_control/navigation/__pycache__/__init__.cpython-310.pyc
@@ -30,3 +32,4 @@
 /home/zech/exia_ws/install/exia_control/lib/exia_control/ackermann_drive_node
 /home/zech/exia_ws/install/exia_control/lib/exia_control/dynamic_navigator_node
 /home/zech/exia_ws/install/exia_control/lib/exia_control/nav_to
+/home/zech/exia_ws/install/exia_control/lib/exia_control/teleop

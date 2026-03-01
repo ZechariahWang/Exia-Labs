@@ -669,7 +669,7 @@ class DynamicNavigator(Node):
                 return
 
             if self.state == NavigatorState.IDLE:
-                self._publish_stop()
+                pass
             elif self.state == NavigatorState.PLANNING:
                 self._publish_stop()
             elif self.state == NavigatorState.EXECUTING:

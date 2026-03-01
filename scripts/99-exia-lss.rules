@@ -1,0 +1,3 @@
+# Lynxmotion LSS-ADA v1.2 (FTDI FT232RL)
+# Replace CHANGE_ME with the actual serial number from: udevadm info -a /dev/ttyUSBx | grep serial
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", ATTRS{serial}=="CHANGE_ME", SYMLINK+="lss_controller", MODE="0666"

@@ -16,6 +16,18 @@ try:
 except ImportError:
     ODRIVE_AVAILABLE = False
 
+LSS_THROTTLE_ID = 1
+LSS_BRAKE_ID = 2
+LSS_GEAR_ID = 3
+
+LSS_THROTTLE_NEUTRAL = -900
+LSS_THROTTLE_MAX = -150
+LSS_BRAKE_RELEASED = 900
+LSS_BRAKE_ENGAGED = -100
+LSS_GEAR_REVERSE = -330
+LSS_GEAR_NEUTRAL = -100
+LSS_GEAR_HIGH = 200
+
 
 class AckermannDriveNode(Node):
     WHEELBASE = 1.3
@@ -31,12 +43,14 @@ class AckermannDriveNode(Node):
     GEAR_HIGH = 2
     GEAR_SHIFT_DELAY = 0.3
 
+    GEAR_LSS_POSITIONS = {0: LSS_GEAR_REVERSE, 1: LSS_GEAR_NEUTRAL, 2: LSS_GEAR_HIGH}
+
     def __init__(self):
         super().__init__('ackermann_drive_node')
 
         self.declare_parameter('publish_tf', True)
         self.declare_parameter('hardware_mode', False)
-        self.declare_parameter('serial_port', '/dev/arduino_control')
+        self.declare_parameter('serial_port', '/dev/lss_controller')
         self.declare_parameter('serial_baud', 115200)
         self.declare_parameter('use_odrive', True)
 
@@ -50,16 +64,17 @@ class AckermannDriveNode(Node):
         self.angular_vel = 0.0
         self.current_speed = 0.0
         self.last_cmd_time = None
-        self.cmd_timeout = 0.2
+        self.cmd_timeout = 0.5
 
         self._current_gear = self.GEAR_NEUTRAL
         self._target_gear = self.GEAR_NEUTRAL
         self._gear_shift_time = 0.0
 
         self.serial_conn = None
-        self._serial_buffer = ""
-        self._last_heartbeat_time = time.monotonic()
-        self._estop_active = False
+        self._lss_connected = False
+        self._last_throttle_lss = None
+        self._last_brake_lss = None
+        self._last_gear_lss = None
 
         self._odrive = None
         self._odrive_axis = None
@@ -69,24 +84,24 @@ class AckermannDriveNode(Node):
         self._odrive_retry_interval = 5.0
 
         if self.hardware_mode:
-            self._init_serial()
+            self._init_lss()
             use_odrive = self.get_parameter('use_odrive').value
             if use_odrive:
                 self._init_odrive()
 
         self.last_time = self.get_clock().now()
 
-        qos = QoSProfile(
-            reliability=ReliabilityPolicy.RELIABLE,
-            durability=DurabilityPolicy.VOLATILE,
-            depth=10
-        )
-
         self.cmd_vel_sub = self.create_subscription(
             Twist,
             '/cmd_vel',
             self.cmd_vel_callback,
-            qos
+            10
+        )
+
+        qos = QoSProfile(
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.VOLATILE,
+            depth=10
         )
 
         self.steering_pub = self.create_publisher(
@@ -115,20 +130,73 @@ class AckermannDriveNode(Node):
         mode_str = 'HARDWARE' if self.hardware_mode else 'SIMULATION'
         self.get_logger().info(f'Ackermann drive node started ({mode_str})')
 
-    def _init_serial(self):
+    def _init_lss(self):
         try:
             import serial
             port = self.get_parameter('serial_port').value
             baud = self.get_parameter('serial_baud').value
             self.serial_conn = serial.Serial(port=port, baudrate=baud, timeout=0.1)
-            time.sleep(1.0)
+            time.sleep(0.5)
             self.serial_conn.reset_input_buffer()
-            self.serial_conn.write(b'AUTO\n')
-            self._last_heartbeat_time = time.monotonic()
-            self.get_logger().info(f'Serial connected: {port} — sent AUTO')
         except Exception as e:
-            self.get_logger().error(f'Serial init failed: {e}')
+            self.get_logger().error(f'LSS serial init failed: {e}')
             self.serial_conn = None
+            return
+
+        detected = []
+        for servo_id in [LSS_THROTTLE_ID, LSS_BRAKE_ID, LSS_GEAR_ID]:
+            if self._query_lss_servo(servo_id):
+                detected.append(servo_id)
+                self.get_logger().info(f'LSS servo {servo_id} detected')
+            else:
+                self.get_logger().warn(f'LSS servo {servo_id} not responding')
+
+        if LSS_BRAKE_ID not in detected:
+            self.get_logger().error('Brake servo not detected — LSS control disabled')
+            self._lss_connected = False
+            return
+
+        self._send_lss(f'#{LSS_THROTTLE_ID}D{LSS_THROTTLE_NEUTRAL}\r')
+        self._send_lss(f'#{LSS_BRAKE_ID}D{LSS_BRAKE_RELEASED}\r')
+        self._send_lss(f'#{LSS_GEAR_ID}D{LSS_GEAR_NEUTRAL}\r')
+
+        self._last_throttle_lss = LSS_THROTTLE_NEUTRAL
+        self._last_brake_lss = LSS_BRAKE_RELEASED
+        self._last_gear_lss = LSS_GEAR_NEUTRAL
+
+        self._lss_connected = True
+        self.get_logger().info(f'LSS bus ready — {len(detected)}/3 servos detected')
+
+    def _query_lss_servo(self, servo_id):
+        if self.serial_conn is None:
+            return False
+        try:
+            self.serial_conn.reset_input_buffer()
+            cmd = f'#{servo_id}QS\r'
+            self.serial_conn.write(cmd.encode('utf-8'))
+            self.serial_conn.flush()
+            time.sleep(0.05)
+            response = b''
+            deadline = time.monotonic() + 0.2
+            while time.monotonic() < deadline:
+                if self.serial_conn.in_waiting > 0:
+                    response += self.serial_conn.read(self.serial_conn.in_waiting)
+                    if b'\r' in response:
+                        break
+                time.sleep(0.01)
+            return f'*{servo_id}'.encode() in response
+        except Exception:
+            return False
+
+    def _send_lss(self, cmd):
+        if self.serial_conn is None:
+            return
+        try:
+            self.serial_conn.write(cmd.encode('utf-8'))
+            self.serial_conn.flush()
+        except Exception as e:
+            self.get_logger().warn(f'LSS write error: {e}')
+            self._lss_connected = False
 
     def _init_odrive(self):
         if not ODRIVE_AVAILABLE:
@@ -182,55 +250,6 @@ class AckermannDriveNode(Node):
             self.get_logger().error(f'ODrive command failed: {e}')
             self._odrive_connected = False
 
-    def _send_serial(self, msg):
-        if self.serial_conn is None:
-            return
-        try:
-            self.serial_conn.write((msg + '\n').encode('utf-8'))
-            self.serial_conn.flush()
-        except Exception as e:
-            self.get_logger().warn(f'Serial write error: {e}')
-
-    def _read_serial_responses(self):
-        if self.serial_conn is None:
-            return
-        try:
-            waiting = self.serial_conn.in_waiting
-            if waiting > 0:
-                data = self.serial_conn.read(waiting).decode('utf-8', errors='ignore')
-                self._serial_buffer += data
-            while '\n' in self._serial_buffer:
-                line, self._serial_buffer = self._serial_buffer.split('\n', 1)
-                line = line.strip()
-                if not line:
-                    continue
-                self._parse_arduino_response(line)
-        except Exception as e:
-            self.get_logger().warn(f'Serial read error: {e}')
-
-    def _parse_arduino_response(self, line):
-        cmd = line[0]
-        payload = line[1:] if len(line) > 1 else ""
-
-        if cmd == 'H':
-            self._last_heartbeat_time = time.monotonic()
-        elif cmd == 'S':
-            pass
-        elif cmd == 'L':
-            self.get_logger().warn('RC signal lost (Arduino)')
-        elif cmd == 'R':
-            self.get_logger().info('RC signal recovered (Arduino)')
-        elif cmd == 'E':
-            self.get_logger().error('Emergency stop from Arduino')
-            self._estop_active = True
-            self.linear_vel = 0.0
-            self.angular_vel = 0.0
-        elif cmd == 'G':
-            try:
-                self._current_gear = int(payload)
-            except ValueError:
-                pass
-
     def _process_gear(self, ramped_speed):
         if ramped_speed > 0.05:
             self._target_gear = self.GEAR_HIGH
@@ -247,24 +266,26 @@ class AckermannDriveNode(Node):
             return
 
         if self._current_gear == self.GEAR_HIGH and self._target_gear == self.GEAR_REVERSE:
-            self._send_serial(f'K{self.GEAR_NEUTRAL}')
-            self._current_gear = self.GEAR_NEUTRAL
+            self._command_gear(self.GEAR_NEUTRAL)
             self._gear_shift_time = now
             return
 
         if self._current_gear == self.GEAR_REVERSE and self._target_gear == self.GEAR_HIGH:
-            self._send_serial(f'K{self.GEAR_NEUTRAL}')
-            self._current_gear = self.GEAR_NEUTRAL
+            self._command_gear(self.GEAR_NEUTRAL)
             self._gear_shift_time = now
             return
 
-        self._send_serial(f'K{self._target_gear}')
-        self._current_gear = self._target_gear
+        self._command_gear(self._target_gear)
         self._gear_shift_time = now
 
+    def _command_gear(self, gear):
+        lss_pos = self.GEAR_LSS_POSITIONS[gear]
+        if lss_pos != self._last_gear_lss:
+            self._send_lss(f'#{LSS_GEAR_ID}D{lss_pos}\r')
+            self._last_gear_lss = lss_pos
+        self._current_gear = gear
+
     def cmd_vel_callback(self, msg: Twist):
-        if self._estop_active:
-            return
         self.linear_vel = max(-self.MAX_SPEED, min(self.MAX_SPEED, msg.linear.x))
         self.angular_vel = msg.angular.z
         self.last_cmd_time = self.get_clock().now()
@@ -315,34 +336,33 @@ class AckermannDriveNode(Node):
 
             wheel_speed = ramped_speed / self.WHEEL_RADIUS
 
-        if self.hardware_mode:
-            self._read_serial_responses()
-
-            now = time.monotonic()
-            if now - self._last_heartbeat_time > 2.0:
-                if not hasattr(self, '_heartbeat_warned') or not self._heartbeat_warned:
-                    self.get_logger().warn('Arduino heartbeat timeout (>2s)')
-                    self._heartbeat_warned = True
-            else:
-                self._heartbeat_warned = False
-
+        if self.hardware_mode and self._lss_connected:
             if ramped_speed > 0.01:
-                throttle = int(abs(ramped_speed) / self.MAX_SPEED * 75)
-                throttle = max(0, min(75, throttle))
-                brake = 180
+                throttle_deg = int(abs(ramped_speed) / self.MAX_SPEED * 75)
+                throttle_deg = max(0, min(75, throttle_deg))
+                brake_deg = 180
             elif ramped_speed < -0.01:
-                throttle = int(abs(ramped_speed) / self.MAX_SPEED * 75)
-                throttle = max(0, min(75, throttle))
-                brake = 180
+                throttle_deg = int(abs(ramped_speed) / self.MAX_SPEED * 75)
+                throttle_deg = max(0, min(75, throttle_deg))
+                brake_deg = 180
             else:
-                throttle = 0
-                brake = 180
+                throttle_deg = 0
+                brake_deg = 180
 
-            self._send_serial(f'J{throttle},{brake}')
+            throttle_lss = (throttle_deg - 90) * 10
+            brake_lss = (brake_deg - 90) * 10
+
+            if throttle_lss != self._last_throttle_lss:
+                self._send_lss(f'#{LSS_THROTTLE_ID}D{throttle_lss}\r')
+                self._last_throttle_lss = throttle_lss
+
+            if brake_lss != self._last_brake_lss:
+                self._send_lss(f'#{LSS_BRAKE_ID}D{brake_lss}\r')
+                self._last_brake_lss = brake_lss
+
             self._process_gear(ramped_speed)
 
-            if self._odrive_connected:
-                self._command_odrive_steering(steering_angle)
+            self._command_odrive_steering(steering_angle)
 
         left_steer, right_steer = self.compute_ackermann_angles(steering_angle)
 
@@ -427,7 +447,13 @@ class AckermannDriveNode(Node):
                     pass
             if self.serial_conn is not None:
                 try:
-                    self.serial_conn.write(b'MANUAL\n')
+                    self._send_lss(f'#{LSS_THROTTLE_ID}D{LSS_THROTTLE_NEUTRAL}\r')
+                    self._send_lss(f'#{LSS_BRAKE_ID}D{LSS_BRAKE_ENGAGED}\r')
+                    time.sleep(0.05)
+                    self._send_lss(f'#{LSS_BRAKE_ID}H\r')
+                    self._send_lss(f'#{LSS_THROTTLE_ID}L\r')
+                    self._send_lss(f'#{LSS_GEAR_ID}L\r')
+                    time.sleep(0.05)
                     self.serial_conn.close()
                 except Exception:
                     pass

@@ -21,6 +21,7 @@ setup(
             'dynamic_navigator_node = exia_control.dynamic_navigator_node:main',
             'ackermann_drive_node = exia_control.ackermann_drive_node:main',
             'nav_to = exia_control.nav_to_cmd:main',
+            'teleop = exia_control.teleop_node:main',
         ],
     },
 )

@@ -1,4 +1,28 @@
 #!/usr/bin/env python3
+
+"""
+this for later on jetson: sudo apt install ros-humble-velodyne
+
+Go to local coordinates                                                                                                                                                           
+ros2 run exia_control nav_to xy 30.0 15.0
+                                                                                                                                                                                      
+Go to GPS coordinates                                                                                                                                                             
+ros2 run exia_control nav_to latlon 49.666667 11.841389                                                                                                                             
+
+GPS with custom origin
+ros2 run exia_control nav_to latlon 49.666667 11.841389 --origin 49.6664 11.8411
+
+DMS format
+ros2 run exia_control nav_to dms "49D40'00\"N" "11D50'29\"E"
+
+Cancel current navigation
+ros2 run exia_control nav_to cancel
+
+for hardware, just need to change these vals
+for sims update exia_world.sdf and thre gps_params_yaml as well
+
+"""
+
 import math
 import re
 import threading
@@ -27,42 +51,17 @@ from exia_msgs.msg import NavigationGoal
 from exia_control.planning.pure_pursuit import (
     PurePursuitController, PurePursuitConfig, Path as PurePursuitPath
 )
+
 from exia_control.navigation.path_validator import PathValidator
 from exia_control.navigation.planner_interface import (
     PlannerInterface, PlanningResult, PlanningStatus
 )
+from exia_control.navigation.path_smoother import PathSmoother, PathSmootherConfig
 
-# for scan vis:
-# rviz2 -d ~/exia_ws/install/exia_bringup/share/exia_bringup/rviz/exia_3d.rviz 
-
-TARGET_POINT = [22, 24] # if u dont wanna use gps coord
-
-# for hardware, just need to change these vals
-# for sims update exia_world.sdf and thre gps_params_yaml as well
-
-USE_GPS_MODE = True
-TARGET_GPS = [49.666667, 11.841389]  # 49°40'00"N 11°50'29"E germany hill loc i think
-ORIGIN_GPS = [49.666400, 11.841100]
-
-# this is for the foxglove:
-# ros2 launch foxglove_bridge foxglove_bridge_launch.xml
-
-# need this for later on jetson: sudo apt install ros-humble-velodyne
-
-#   Go to local coordinates                                                                                                                                                           
-#   ros2 run exia_control nav_to xy 30.0 15.0
-                                                                                                                                                                                      
-#   Go to GPS coordinates                                                                                                                                                             
-#   ros2 run exia_control nav_to latlon 49.666667 11.841389                                                                                                                             
-
-#   GPS with custom origin
-#   ros2 run exia_control nav_to latlon 49.666667 11.841389 --origin 49.6664 11.8411
-
-#   DMS format
-#   ros2 run exia_control nav_to dms "49D40'00\"N" "11D50'29\"E"
-
-#   Cancel current navigation
-#   ros2 run exia_control nav_to cancel
+TARGET_POINT              = [22, 24] # if u dont wanna use gps coord
+TARGET_GPS                = [49.666667, 11.841389]  # 49°40'00"N 11°50'29"E germany hill loc i think
+ORIGIN_GPS                = [49.666400, 11.841100]
+USE_GPS_MODE              = True
 
 # convert lat long to x,y
 def gps_to_local(lat: float, lon: float, origin_lat: float, origin_lon: float) -> tuple:
@@ -117,21 +116,22 @@ def parse_dms_coordinates(coord_str: str) -> Tuple[float, float]:
     lon = dms_to_decimal(lon_str)
     return lat, lon
 
-
+# these represent all potential states of the atv at any time
 class NavigatorState(Enum):
-    IDLE = 0
-    PLANNING = 1
-    EXECUTING = 2
-    RECOVERING = 3
-    DIRECT_REVERSING = 4
-    MOVE_FORWARD = 5
-    MOVE_TURN = 6
+    IDLE                    = 0
+    PLANNING                = 1
+    EXECUTING               = 2
+    RECOVERING              = 3
+    DIRECT_REVERSING        = 4
+    MOVE_FORWARD            = 5
+    MOVE_TURN               = 6
 
 class DynamicNavigator(Node):
 
     def __init__(self):
         super().__init__('dynamic_navigator')
 
+        # init declare parameters
         self.declare_parameter('replan_period', 0.5)
         self.declare_parameter('min_replan_interval', 0.2)
         self.declare_parameter('goal_tolerance', 1.0)
@@ -139,8 +139,14 @@ class DynamicNavigator(Node):
         self.declare_parameter('target_speed', 2.0)
         self.declare_parameter('path_switch_threshold', 2.0)
         self.declare_parameter('obstacle_lookahead', 8.0)
-        self.declare_parameter('control_rate', 50.0)
+        self.declare_parameter('obstacle_replan_distance', 7.0)
+        self.declare_parameter('enable_periodic_replan', True)
+        self.declare_parameter('obstacle_replan_confirmations', 1)
+        self.declare_parameter('control_rate', 30.0)
         self.declare_parameter('auto_start', False)
+        self.declare_parameter('lock_gps_map_offset', True)
+        self.declare_parameter('path_smoothing_enabled', True)
+        self.declare_parameter('path_smoothing_spacing', 2.5)
 
         _dyn = ParameterDescriptor(dynamic_typing=True)
         self.declare_parameter('use_gps_waypoint', USE_GPS_MODE, _dyn)
@@ -158,47 +164,58 @@ class DynamicNavigator(Node):
         self.target_speed = self.get_parameter('target_speed').value
         self.path_switch_threshold = self.get_parameter('path_switch_threshold').value
         self.obstacle_lookahead = self.get_parameter('obstacle_lookahead').value
-        control_rate = self.get_parameter('control_rate').value
+        self.obstacle_replan_distance = self.get_parameter('obstacle_replan_distance').value
+        self.enable_periodic_replan = self.get_parameter('enable_periodic_replan').value
+        self.obstacle_replan_confirmations = int(
+            self.get_parameter('obstacle_replan_confirmations').value
+        )
 
-        self._nav_lock = threading.Lock()
-        self._pose_lock = threading.Lock()
+        control_rate                                     = self.get_parameter('control_rate').value
+        self.lock_gps_map_offset                         = self.get_parameter('lock_gps_map_offset').value
 
-        self.state = NavigatorState.IDLE
-        self.robot_x = 0.0
-        self.robot_y = 0.0
-        self.robot_yaw = 0.0
-        self.robot_speed = 0.0
+        self._nav_lock                                   = threading.Lock()
+        self._pose_lock                                  = threading.Lock()
 
-        self.current_goal: Optional[PoseStamped] = None
-        self.current_path: Optional[PurePursuitPath] = None
-        self.current_nav_path: Optional[Path] = None
-        self.path_index = 0
-        self.last_replan_time = 0.0
-        self.replan_pending = False
-        self._direct_mode = False
+        self.state                                       = NavigatorState.IDLE
+        self.robot_x                                     = 0.0
+        self.robot_y                                     = 0.0
+        self.robot_yaw                                   = 0.0
+        self.robot_speed                                 = 0.0
 
-        self._waypoint_queue = []
-        self._final_goal = None
-        self._final_goal_gps_x = 0.0
-        self._final_goal_gps_y = 0.0
-        self._final_goal_uses_gps = False
-        self._waypoint_segment_distance = 35.0
-        self._waypoint_tolerance = 5.0
-        self._waypoint_index = 0
+        self.current_goal: Optional[PoseStamped]         = None
+        self.current_path: Optional[PurePursuitPath]     = None
+        self.current_nav_path: Optional[Path]            = None
+        self.path_index                                  = 0
+        self.last_replan_time                            = 0.0
+        self.replan_pending                              = False
+        self._direct_mode                                = False
+        self._last_goal_time                             = 0.0
+        self._last_goal_x                                = None
+        self._last_goal_y                                = None
 
-        self._last_scan_time = time.time()
-        self._last_odom_time = time.time()
-        self._sensor_timeout = 2.0
-        self._sensor_warned = False
-        self._latest_scan: Optional[LaserScan] = None
+        self._waypoint_queue                             = []
+        self._final_goal                                 = None
+        self._final_goal_gps_x                           = 0.0
+        self._final_goal_gps_y                           = 0.0
+        self._final_goal_uses_gps                        = False
+        self._waypoint_segment_distance                  = 35.0
+        self._waypoint_tolerance                         = 5.0
+        self._waypoint_index                             = 0
 
-        self._move_type = ''
-        self._move_value = 0.0
-        self._move_speed = 0.0
-        self._move_start_time = 0.0
-        self._move_start_x = 0.0
-        self._move_start_y = 0.0
-        self._move_target_heading = 0.0
+        self._last_scan_time                             = time.time()
+        self._last_odom_time                             = time.time()
+        self._last_costmap_time                          = time.time()
+        self._sensor_timeout                             = 2.0
+        self._sensor_warned                              = False
+        self._latest_scan: Optional[LaserScan]           = None
+
+        self._move_type                                  = ''
+        self._move_value                                 = 0.0
+        self._move_speed                                 = 0.0
+        self._move_start_time                            = 0.0
+        self._move_start_x                               = 0.0
+        self._move_start_y                               = 0.0
+        self._move_target_heading                        = 0.0
 
         # configure pp controller
         pp_config = PurePursuitConfig(
@@ -212,6 +229,10 @@ class DynamicNavigator(Node):
         self.pure_pursuit = PurePursuitController(pp_config)
 
         self.path_validator = PathValidator()
+        self.path_smoother = PathSmoother(PathSmootherConfig(
+            control_point_spacing=self.get_parameter('path_smoothing_spacing').value,
+            enabled=self.get_parameter('path_smoothing_enabled').value,
+        ))
         self.costmap: Optional[OccupancyGrid] = None
         self.callback_group = ReentrantCallbackGroup()
         self.planner = PlannerInterface(self)
@@ -254,6 +275,7 @@ class DynamicNavigator(Node):
         self._gps_available = False
         self._gps_to_map_offset_x = 0.0
         self._gps_to_map_offset_y = 0.0
+        self._gps_offset_initialized = False
         self._goal_gps_x = 0.0
         self._goal_gps_y = 0.0
         self._goal_uses_gps = False
@@ -278,6 +300,7 @@ class DynamicNavigator(Node):
         self._auto_start_done = False
         self._costmap_update_count = 0
         self._min_costmap_updates = 10
+        self._path_blocked_streak = 0
 
         self.use_gps_waypoint = bool(self.get_parameter('use_gps_waypoint').value)
         self.target_lat = float(self.get_parameter('target_lat').value)
@@ -320,6 +343,7 @@ class DynamicNavigator(Node):
         timer = self.create_timer(period, wrapper, callback_group=self.callback_group)
         return timer
 
+    # wait for costmap to stabilize before beginning auton
     def _delayed_auto_start(self):
         if self._auto_start_done or self.state != NavigatorState.IDLE:
             return
@@ -351,11 +375,13 @@ class DynamicNavigator(Node):
         self.get_logger().info(f'Auto-starting navigation to ({self.target_x:.2f}, {self.target_y:.2f})')
         self._goal_callback(goal)
 
+    # get msg from scan topic
     def _scan_callback(self, msg: LaserScan):
         self._last_scan_time = time.time()
         with self._pose_lock:
             self._latest_scan = msg
 
+    # get the offset from the coordinates returned by the gps vs the actual robot position
     def _gps_odom_callback(self, msg: Odometry):
         with self._pose_lock:
             self._gps_x = msg.pose.pose.position.x
@@ -364,9 +390,22 @@ class DynamicNavigator(Node):
                 self._gps_available = True
                 self.get_logger().info(
                     f'GPS reference active: ({self._gps_x:.2f}, {self._gps_y:.2f})')
-            self._gps_to_map_offset_x = self.robot_x - self._gps_x
-            self._gps_to_map_offset_y = self.robot_y - self._gps_y
+            observed_offset_x = self.robot_x - self._gps_x
+            observed_offset_y = self.robot_y - self._gps_y
 
+            if not self._gps_offset_initialized:
+                self._gps_to_map_offset_x = observed_offset_x
+                self._gps_to_map_offset_y = observed_offset_y
+                self._gps_offset_initialized = True
+                self.get_logger().info(
+                    f'GPS->map offset initialized: '
+                    f'({self._gps_to_map_offset_x:.2f}, {self._gps_to_map_offset_y:.2f})'
+                )
+            elif not self.lock_gps_map_offset:
+                self._gps_to_map_offset_x = observed_offset_x
+                self._gps_to_map_offset_y = observed_offset_y
+
+    # get the position of the robot returned by odom
     def _odom_callback(self, msg: Odometry):
         self._last_odom_time = time.time()
 
@@ -387,7 +426,23 @@ class DynamicNavigator(Node):
             self.robot_yaw = ryaw
             self.robot_speed = msg.twist.twist.linear.x
 
+    # get goal coord position
     def _goal_callback(self, msg: PoseStamped):
+        now = time.time()
+        gx = msg.pose.position.x
+        gy = msg.pose.position.y
+        if (
+            self._last_goal_x is not None
+            and self._last_goal_y is not None
+            and (now - self._last_goal_time) < 1.5
+        ):
+            dup_dist = math.sqrt((gx - self._last_goal_x) ** 2 + (gy - self._last_goal_y) ** 2)
+            if dup_dist < 0.25:
+                self.get_logger().info(
+                    f'Ignoring duplicate goal ({gx:.2f}, {gy:.2f})'
+                )
+                return
+
         with self._nav_lock:
             self.current_goal = msg
             self.get_logger().info(f'New goal: ({msg.pose.position.x:.2f}, {msg.pose.position.y:.2f})')
@@ -395,7 +450,11 @@ class DynamicNavigator(Node):
             self.current_path = None
             self.current_nav_path = None
             self._consecutive_replan_failures = 0
+            self._path_blocked_streak = 0
             self.state = NavigatorState.PLANNING
+            self._last_goal_time = now
+            self._last_goal_x = gx
+            self._last_goal_y = gy
         self._request_initial_plan()
 
     def _goal_pose_callback(self, msg: PoseStamped):
@@ -405,6 +464,7 @@ class DynamicNavigator(Node):
 
     def _nav_goal_callback(self, msg: NavigationGoal):
         coord_type = msg.coord_type.strip().lower()
+        goal_is_gps_local = False
 
         if coord_type == 'xy':
             target_x, target_y = msg.x, msg.y
@@ -414,6 +474,7 @@ class DynamicNavigator(Node):
             o_lat = msg.origin_lat if msg.origin_lat != 0.0 else self.origin_lat
             o_lon = msg.origin_lon if msg.origin_lon != 0.0 else self.origin_lon
             target_x, target_y = gps_to_local(msg.lat, msg.lon, o_lat, o_lon)
+            goal_is_gps_local = True
             self.get_logger().info(
                 f'Navigation goal (latlon): ({msg.lat:.6f}, {msg.lon:.6f}) -> ({target_x:.2f}, {target_y:.2f})')
 
@@ -423,6 +484,7 @@ class DynamicNavigator(Node):
             o_lat = msg.origin_lat if msg.origin_lat != 0.0 else self.origin_lat
             o_lon = msg.origin_lon if msg.origin_lon != 0.0 else self.origin_lon
             target_x, target_y = gps_to_local(lat, lon, o_lat, o_lon)
+            goal_is_gps_local = True
             self.get_logger().info(
                 f'Navigation goal (dms): ({lat:.6f}, {lon:.6f}) -> ({target_x:.2f}, {target_y:.2f})')
 
@@ -430,7 +492,7 @@ class DynamicNavigator(Node):
             with self._nav_lock:
                 self._move_type = msg.move_type
                 self._move_value = msg.move_value
-                self._move_speed = msg.move_speed
+                self._move_speed = max(0.1, min(5.0, msg.move_speed))
                 self._move_start_time = time.time()
                 self._move_start_x = self.robot_x
                 self._move_start_y = self.robot_y
@@ -448,7 +510,7 @@ class DynamicNavigator(Node):
             with self._nav_lock:
                 self._move_type = msg.move_type
                 self._move_value = msg.move_value
-                self._move_speed = msg.move_speed
+                self._move_speed = max(0.1, min(5.0, msg.move_speed))
                 self._move_start_time = time.time()
                 if self._move_type == 'heading':
                     target = self.robot_yaw + math.radians(msg.move_value)
@@ -476,9 +538,15 @@ class DynamicNavigator(Node):
             self.get_logger().error(f'Unknown coord_type: "{coord_type}". Use "xy", "latlon", "dms", "forward", or "turn".')
             return
 
-        self._goal_gps_x = target_x
-        self._goal_gps_y = target_y
-        self._goal_uses_gps = self._gps_available
+        if goal_is_gps_local:
+            self._goal_gps_x = target_x
+            self._goal_gps_y = target_y
+            self._goal_uses_gps = self._gps_available
+        else:
+            # XY goals are already in the map/local planning frame.
+            self._goal_gps_x = 0.0
+            self._goal_gps_y = 0.0
+            self._goal_uses_gps = False
 
         if self._goal_uses_gps:
             map_x = target_x + self._gps_to_map_offset_x
@@ -524,6 +592,7 @@ class DynamicNavigator(Node):
 
     def _costmap_callback(self, msg: OccupancyGrid):
         self.costmap = msg
+        self._last_costmap_time = time.time()
         self.path_validator.update_costmap(msg)
         self._costmap_update_count += 1
 
@@ -542,6 +611,7 @@ class DynamicNavigator(Node):
         self._waypoint_queue = []
         self._waypoint_index = 0
         self._final_goal = None
+        self._path_blocked_streak = 0
         self._publish_stop()
         response.success = True
         response.message = 'Navigation cancelled'
@@ -604,6 +674,11 @@ class DynamicNavigator(Node):
                 self._publish_stop()
             elif self.state == NavigatorState.EXECUTING:
                 self._execute_path()
+                if not self._direct_mode and not self.replan_pending:
+                    now_t = time.time()
+                    if now_t - getattr(self, '_last_ctrl_obstacle_check', 0) > 0.25:
+                        self._last_ctrl_obstacle_check = now_t
+                        self._check_path_for_obstacles()
             elif self.state == NavigatorState.RECOVERING:
                 self._execute_recovery()
             elif self.state == NavigatorState.DIRECT_REVERSING:
@@ -660,6 +735,15 @@ class DynamicNavigator(Node):
             return
 
         if self._direct_reverse_phase == 'reverse':
+            rear_range = self._get_min_rear_range()
+            if rear_range <= 1.5:
+                self._publish_stop()
+                self.get_logger().warn(
+                    f'Obstacle behind at {rear_range:.2f}m, stopping reverse')
+                self._publish_status('OBSTACLE_STOPPED')
+                self.state = NavigatorState.IDLE
+                self._direct_mode = False
+                return
             dx = self.robot_x - self._direct_reverse_start_x
             dy = self.robot_y - self._direct_reverse_start_y
             dist_reversed = math.sqrt(dx * dx + dy * dy)
@@ -695,6 +779,33 @@ class DynamicNavigator(Node):
                 min_range = r
 
         return min_range <= stop_distance
+
+    def _get_min_forward_range(self, cone_half_angle=0.5236) -> float:
+        scan = self._latest_scan
+        if scan is None:
+            return float('inf')
+        min_range = float('inf')
+        for i, r in enumerate(scan.ranges):
+            if r < scan.range_min or r > scan.range_max or math.isinf(r) or math.isnan(r):
+                continue
+            beam_angle = scan.angle_min + i * scan.angle_increment
+            if abs(beam_angle) <= cone_half_angle and r < min_range:
+                min_range = r
+        return min_range
+
+    def _get_min_rear_range(self, cone_half_angle=0.5236) -> float:
+        scan = self._latest_scan
+        if scan is None:
+            return float('inf')
+        min_range = float('inf')
+        for i, r in enumerate(scan.ranges):
+            if r < scan.range_min or r > scan.range_max or math.isinf(r) or math.isnan(r):
+                continue
+            beam_angle = scan.angle_min + i * scan.angle_increment
+            rear_offset = abs(abs(beam_angle) - math.pi)
+            if rear_offset <= cone_half_angle and r < min_range:
+                min_range = r
+        return min_range
 
     def _execute_move_forward(self):
         if self._check_forward_obstacle():
@@ -784,6 +895,23 @@ class DynamicNavigator(Node):
         if self._direct_mode and self._check_ahead_for_obstacle():
             return
 
+        min_forward_range = float('inf')
+        if not self._direct_mode:
+            min_forward_range = self._get_min_forward_range()
+            if min_forward_range <= 2.0:
+                self._publish_stop()
+                self.get_logger().warn(
+                    f'Emergency stop: obstacle at {min_forward_range:.2f}m ahead, replanning')
+                if not self.replan_pending:
+                    self._request_replan()
+                return
+
+        costmap_age = time.time() - self._last_costmap_time
+        if costmap_age > 5.0:
+            self._publish_stop()
+            self.get_logger().error(f'Costmap stale ({costmap_age:.1f}s), stopping')
+            return
+
         if self._goal_uses_gps and self._gps_available:
             dist_to_goal = math.sqrt(
                 (self._goal_gps_x - self._gps_x)**2 +
@@ -830,7 +958,8 @@ class DynamicNavigator(Node):
                 if self._waypoint_index < len(self._waypoint_queue):
                     self._advance_to_waypoint(self._waypoint_queue[self._waypoint_index])
                 else:
-                    self._advance_to_final_goal()
+                    # self._advance_to_final_goal()
+                    self._advance_to_waypoint(self._waypoint_queue[self._waypoint_index])
                 return
             else:
                 self.get_logger().info(f'Goal reached! Distance: {dist_to_goal:.2f}m')
@@ -891,6 +1020,13 @@ class DynamicNavigator(Node):
                 self.get_logger().info('Path ended but goal not reached, replanning...')
                 self._request_replan()
 
+        if not self._direct_mode and min_forward_range <= 5.0:
+            scale = max((min_forward_range - 2.0) / 3.0, 0.2)
+            cmd.linear.x *= scale
+
+        if costmap_age > 2.0:
+            cmd.linear.x = min(cmd.linear.x, 0.5)
+
         self.cmd_vel_pub.publish(cmd)
 
     # this is a little scuffed, ideally we never should reach this point if the A* recalculates properly.
@@ -899,7 +1035,17 @@ class DynamicNavigator(Node):
             self._recovery_in_progress = True
             self._recovery_start_x = self.robot_x
             self._recovery_start_y = self.robot_y
+            self._recovery_start_time = time.time()
             self.get_logger().info('Starting recovery maneuver (backing up 2m)')
+
+        if time.time() - self._recovery_start_time > 10.0:
+            self.get_logger().error('Recovery timeout, aborting')
+            self._recovery_in_progress = False
+            self._publish_stop()
+            self._publish_status('PATH_BLOCKED')
+            self.state = NavigatorState.IDLE
+            self.current_goal = None
+            return
 
         dx = self.robot_x - self._recovery_start_x
         dy = self.robot_y - self._recovery_start_y
@@ -913,12 +1059,21 @@ class DynamicNavigator(Node):
             self._request_initial_plan()
             return
 
+        rear_range = self._get_min_rear_range()
+        if rear_range <= 1.5:
+            self.get_logger().warn(f'Obstacle behind at {rear_range:.2f}m, stopping recovery')
+            self._recovery_in_progress = False
+            self._publish_stop()
+            self.state = NavigatorState.PLANNING
+            self._request_initial_plan()
+            return
+
         behind_x = self.robot_x - 1.0 * math.cos(self.robot_yaw)
         behind_y = self.robot_y - 1.0 * math.sin(self.robot_yaw)
         behind_cost = self.path_validator._get_cost_at_world(behind_x, behind_y)
 
         if behind_cost >= 100:
-            self.get_logger().warn('Obstacle behind, cannot back up further')
+            self.get_logger().warn('Obstacle behind in costmap, stopping recovery')
             self._recovery_in_progress = False
             self.state = NavigatorState.PLANNING
             self._request_initial_plan()
@@ -930,6 +1085,8 @@ class DynamicNavigator(Node):
 
     # replan the a* every 500ms, with an interval of replanning of 200ms 
     def _periodic_replan(self):
+        if not self.enable_periodic_replan:
+            return
         if self._direct_mode:
             return
         if self.state != NavigatorState.EXECUTING or self.current_goal is None:
@@ -1161,6 +1318,16 @@ class DynamicNavigator(Node):
                         self._one_shot_timer(0.5, self._request_initial_plan)
                     return
 
+                smoothed = self.path_smoother.smooth(nav_path)
+                if smoothed is not nav_path:
+                    sv = self.path_validator.validate_path(smoothed, check_footprint=True)
+                    if sv.is_valid:
+                        nav_path = smoothed
+                        self.get_logger().info(
+                            f'Path smoothed: {len(nav_path.poses)} poses')
+                    else:
+                        self.get_logger().warn('Smoothed path has collision, using original')
+
                 self.current_nav_path = nav_path
                 self.current_path = self._nav_path_to_pp_path(nav_path)
                 self.pure_pursuit.set_path(self.current_path)
@@ -1188,15 +1355,17 @@ class DynamicNavigator(Node):
             if result.status != PlanningStatus.SUCCEEDED or not result.path:
                 self._consecutive_replan_failures += 1
                 self.get_logger().warn(f'Replan failed ({self._consecutive_replan_failures}): {result.error_message}')
-                if self._consecutive_replan_failures >= 5:
+                if self._consecutive_replan_failures >= 3:
                     if self.current_nav_path is not None:
                         current_validation = self.path_validator.validate_path(
                             self.current_nav_path, check_footprint=False, max_poses=20)
                         if not current_validation.is_valid:
-                            self.get_logger().error('Current path blocked and replanning failed, stopping')
+                            self.get_logger().error('Current path blocked and replanning failed, recovering')
                             self._publish_stop()
                             self.state = NavigatorState.RECOVERING
                             self._consecutive_replan_failures = 0
+                            return
+                    self._one_shot_timer(0.3, self._request_replan)
                 return
 
             self._consecutive_replan_failures = 0
@@ -1205,15 +1374,29 @@ class DynamicNavigator(Node):
 
             validation = self.path_validator.validate_path(new_nav_path, check_footprint=True)
             if not validation.is_valid:
-                self.get_logger().warn(f'New path has collision at index {validation.blocked_index}')
+                self.get_logger().warn(f'New path has collision at index {validation.blocked_index}, retrying')
+                self._consecutive_replan_failures += 1
+                if self._consecutive_replan_failures >= 3:
+                    self.get_logger().error('Blocked replans exhausted, recovering')
+                    self._publish_stop()
+                    self.state = NavigatorState.RECOVERING
+                    self._consecutive_replan_failures = 0
+                    return
+                self._one_shot_timer(0.3, self._request_replan)
                 return
+
+            smoothed = self.path_smoother.smooth(new_nav_path)
+            if smoothed is not new_nav_path:
+                sv = self.path_validator.validate_path(smoothed, check_footprint=True)
+                if sv.is_valid:
+                    new_nav_path = smoothed
 
             self.get_logger().info('Switching to updated path from replanning')
             self.current_nav_path = new_nav_path
             self.current_path = self._nav_path_to_pp_path(new_nav_path)
             self.pure_pursuit.set_path(self.current_path)
             self.pure_pursuit.start()
-            self.path_pub.publish(new_nav_path)
+            self.path_pub.publish(self.current_nav_path)
 
     def _check_path_for_obstacles(self):
         if self.current_nav_path is None:
@@ -1230,18 +1413,30 @@ class DynamicNavigator(Node):
         if lookahead_path is None or len(lookahead_path.poses) < 3:
             return
 
-        result = self.path_validator.validate_path(lookahead_path, check_footprint=True)
+        # Fast precheck on centerline path.
+        result = self.path_validator.validate_path(
+            lookahead_path, check_footprint=False, max_poses=30
+        )
         if not result.is_valid:
             obstacle_dist = math.sqrt(
                 (result.blocked_position[0] - self.robot_x)**2 +
                 (result.blocked_position[1] - self.robot_y)**2
             )
-            if obstacle_dist < 6.0:
+            if obstacle_dist < self.obstacle_replan_distance:
+                # Confirm with footprint before committing to a maneuver.
+                fp_result = self.path_validator.validate_path(
+                    lookahead_path, check_footprint=True, max_poses=20
+                )
+                if fp_result.is_valid:
+                    # Keep moving if only centerline was blocked but footprint is clear.
+                    self._path_blocked_streak = 0
+                    return
+
                 if self._direct_mode:
                     self._publish_stop()
                     self.get_logger().warn(
                         f'DIRECT NAV STOPPED: Obstacle at '
-                        f'({result.blocked_position[0]:.2f}, {result.blocked_position[1]:.2f}) '
+                        f'({fp_result.blocked_position[0]:.2f}, {fp_result.blocked_position[1]:.2f}) '
                         f'dist={obstacle_dist:.1f}m')
                     self.get_logger().info(
                         f'Robot position: ({self.robot_x:.2f}, {self.robot_y:.2f}), '
@@ -1255,17 +1450,24 @@ class DynamicNavigator(Node):
                     self._direct_reverse_timer = time.time()
                     self.state = NavigatorState.DIRECT_REVERSING
                     return
-                self.get_logger().warn(
-                    f'Obstacle at ({result.blocked_position[0]:.1f}, {result.blocked_position[1]:.1f}) '
-                    f'dist={obstacle_dist:.1f}m, replanning')
-                self._request_replan()
+                self._path_blocked_streak += 1
+                if self._path_blocked_streak >= self.obstacle_replan_confirmations:
+                    self.get_logger().warn(
+                        f'Obstacle at ({fp_result.blocked_position[0]:.1f}, {fp_result.blocked_position[1]:.1f}) '
+                        f'dist={obstacle_dist:.1f}m, replanning '
+                        f'({self._path_blocked_streak} confirmations)')
+                    self._path_blocked_streak = 0
+                    self._request_replan()
+            return
+
+        self._path_blocked_streak = 0
 
     def _create_lookahead_segment(self) -> Optional[Path]:
         if self.current_nav_path is None:
             return None
 
         path = Path()
-        path.header.frame_id = 'odom'
+        path.header.frame_id = 'map'
         path.header.stamp = self.get_clock().now().to_msg()
 
         min_dist = float('inf')
@@ -1338,7 +1540,7 @@ class DynamicNavigator(Node):
 
         if self.current_goal is not None:
             goal_marker = Marker()
-            goal_marker.header.frame_id = 'odom'
+            goal_marker.header.frame_id = 'map'
             goal_marker.header.stamp = self.get_clock().now().to_msg()
             goal_marker.ns = 'goal'
             goal_marker.id = 0
@@ -1355,7 +1557,7 @@ class DynamicNavigator(Node):
             markers.markers.append(goal_marker)
 
         state_marker = Marker()
-        state_marker.header.frame_id = 'odom'
+        state_marker.header.frame_id = 'map'
         state_marker.header.stamp = self.get_clock().now().to_msg()
         state_marker.ns = 'state'
         state_marker.id = 0

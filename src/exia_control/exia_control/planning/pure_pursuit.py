@@ -17,7 +17,7 @@ class PurePursuitConfig:
     max_linear_speed: float = 2.0
     min_linear_speed: float = 0.3
     max_angular_speed: float = 1.0
-    reverse_speed: float = 1.0
+    reverse_speed: float = 0.5
 
     wheelbase: float = 1.3
 
@@ -138,6 +138,7 @@ class PurePursuitController:
 
             curvature = 2.0 * math.sin(alpha_reverse) / dist_to_lookahead
             steering_angle = math.atan(self.config.wheelbase * curvature)
+            steering_angle = max(-0.6, min(0.6, steering_angle))
 
             approach_factor = min(dist_to_goal / 2.0, 1.0)
             linear_vel = -self.config.reverse_speed * approach_factor
@@ -147,6 +148,7 @@ class PurePursuitController:
         else:
             curvature = 2.0 * math.sin(alpha) / dist_to_lookahead
             steering_angle = math.atan(self.config.wheelbase * curvature)
+            steering_angle = max(-0.6, min(0.6, steering_angle))
 
             turn_factor = 1.0 - min(abs(steering_angle) / 0.6, 0.7)
 

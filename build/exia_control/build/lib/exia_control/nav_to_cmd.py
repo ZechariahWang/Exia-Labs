@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import sys
+import os
+import time
 import threading
 import rclpy
 from rclpy.node import Node
@@ -22,22 +24,47 @@ class NavToCmd(Node):
         self._status_event = threading.Event()
         self._final_status = None
 
+    def _wait_for_goal_subscriber(self, timeout_sec: float = 12.0) -> bool:
+        steps = int(timeout_sec / 0.1)
+        for _ in range(steps):
+            rclpy.spin_once(self, timeout_sec=0.1)
+            if self.pub.get_subscription_count() > 0:
+                return True
+        return self.pub.get_subscription_count() > 0
+
     def send_goal(self, msg):
-        for _ in range(5):
-            rclpy.spin_once(self, timeout_sec=0.05)
-        self.pub.publish(msg)
-        rclpy.spin_once(self, timeout_sec=0.1)
+        if not self._wait_for_goal_subscriber(timeout_sec=12.0):
+            domain = os.environ.get('ROS_DOMAIN_ID', '<unset>')
+            self.get_logger().warn(
+                f'No subscriber found on /navigation/goal after 12s '
+                f'(ROS_DOMAIN_ID={domain})'
+            )
+        for _ in range(3):
+            self.pub.publish(msg)
+            rclpy.spin_once(self, timeout_sec=0.2)
 
     def send_goal_and_wait(self, msg):
         self.create_subscription(String, '/navigation/status', self._status_callback, 10)
 
-        for _ in range(20):
-            rclpy.spin_once(self, timeout_sec=0.05)
-        self.pub.publish(msg)
+        if not self._wait_for_goal_subscriber(timeout_sec=12.0):
+            domain = os.environ.get('ROS_DOMAIN_ID', '<unset>')
+            self.get_logger().warn(
+                f'No subscriber found on /navigation/goal after 12s '
+                f'(ROS_DOMAIN_ID={domain})'
+            )
+        for _ in range(3):
+            self.pub.publish(msg)
+            rclpy.spin_once(self, timeout_sec=0.2)
         self.get_logger().info('Waiting for navigation to complete (Ctrl+C to cancel)...')
+        nav_timeout = 300.0
+        nav_start = time.time()
 
         try:
             while rclpy.ok() and not self._status_event.is_set():
+                if time.time() - nav_start > nav_timeout:
+                    self.get_logger().error(f'Navigation timeout ({nav_timeout:.0f}s), cancelling...')
+                    self.send_cancel()
+                    return
                 rclpy.spin_once(self, timeout_sec=0.1)
         except KeyboardInterrupt:
             self.get_logger().info('Interrupted, cancelling navigation...')

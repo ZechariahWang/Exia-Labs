@@ -73,6 +73,12 @@ def generate_launch_description():
         description='GPS origin longitude (decimal degrees)'
     )
 
+    navigator_delay_arg = DeclareLaunchArgument(
+        'navigator_delay',
+        default_value='5.0',
+        description='Delay before launching dynamic_navigator (seconds)'
+    )
+
     use_sim_time = LaunchConfiguration('use_sim_time')
     autostart = LaunchConfiguration('autostart')
     use_ekf = LaunchConfiguration('use_ekf')
@@ -83,6 +89,7 @@ def generate_launch_description():
     target_lon = LaunchConfiguration('target_lon')
     origin_lat = LaunchConfiguration('origin_lat')
     origin_lon = LaunchConfiguration('origin_lon')
+    navigator_delay = LaunchConfiguration('navigator_delay')
 
     nav2_params_file = os.path.join(bringup_dir, 'config', 'nav2_params.yaml')
     slam_params_file = os.path.join(bringup_dir, 'config', 'slam_toolbox_params.yaml')
@@ -169,7 +176,7 @@ def generate_launch_description():
     )
 
     delayed_navigator = TimerAction(
-        period=20.0,
+        period=navigator_delay,
         actions=[dynamic_navigator_node],
     )
 
@@ -201,6 +208,7 @@ def generate_launch_description():
         target_lon_arg,
         origin_lat_arg,
         origin_lon_arg,
+        navigator_delay_arg,
         pointcloud_to_laserscan,
         slam_toolbox_node,
         planner_server_node,

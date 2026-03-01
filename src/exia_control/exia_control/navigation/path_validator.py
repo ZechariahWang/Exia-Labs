@@ -25,7 +25,7 @@ class PathValidator:
     def __init__(self, robot_footprint: Optional[List[Tuple[float, float]]] = None):
         if robot_footprint is None:
             self._footprint = self._generate_dense_footprint(
-                length=2.1, width=1.2, edge_spacing=0.3
+                length=2.25, width=1.35, edge_spacing=0.2
             )
         else:
             self._footprint = robot_footprint

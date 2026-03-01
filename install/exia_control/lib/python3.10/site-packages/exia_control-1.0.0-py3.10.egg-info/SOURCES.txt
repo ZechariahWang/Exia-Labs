@@ -13,6 +13,7 @@ exia_control/ackermann_drive_node.py
 exia_control/dynamic_navigator_node.py
 exia_control/nav_to_cmd.py
 exia_control/navigation/__init__.py
+exia_control/navigation/path_smoother.py
 exia_control/navigation/path_validator.py
 exia_control/navigation/planner_interface.py
 exia_control/planning/__init__.py

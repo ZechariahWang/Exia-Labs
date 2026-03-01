@@ -1,0 +1,473 @@
+#!/usr/bin/env python3
+import sys
+import time
+import signal
+import atexit
+import threading
+import termios
+import tty
+import select
+
+import rclpy
+from rclpy.node import Node
+
+try:
+    from Phidget22.Devices.DCMotor import DCMotor
+    from Phidget22.PhidgetException import PhidgetException
+    PHIDGETS_AVAILABLE = True
+except ImportError:
+    PHIDGETS_AVAILABLE = False
+
+LSS_THROTTLE_ID = 1
+LSS_BRAKE_ID = 2
+LSS_GEAR_ID = 3
+
+LSS_THROTTLE_NEUTRAL = -900
+LSS_THROTTLE_MAX = -150
+LSS_BRAKE_RELEASED = 900
+LSS_BRAKE_ENGAGED = -100
+LSS_GEAR_REVERSE = -330
+LSS_GEAR_NEUTRAL = -100
+LSS_GEAR_HIGH = 200
+
+GEAR_NAMES = {0: 'R', 1: 'N', 2: 'H'}
+GEAR_LSS = {0: LSS_GEAR_REVERSE, 1: LSS_GEAR_NEUTRAL, 2: LSS_GEAR_HIGH}
+
+KEY_WINDOW_INITIAL = 0.6
+KEY_WINDOW_REPEAT = 0.15
+KEY_REPEAT_GAP = 0.12
+RAMP_RATE = 1.8
+SPRING_RATE = 4.0
+STEER_RAMP_RATE = 2.5
+STEER_SPRING_RATE = 5.0
+
+LSS_SEND_DEADBAND = 8
+LSS_SEND_MIN_INTERVAL = 0.025
+LSS_SERVO_SPEED = 600
+
+
+def _clamp(value, lo, hi):
+    return max(lo, min(hi, value))
+
+
+def _lerp(a, b, t):
+    return a + (b - a) * t
+
+
+class SmoothFilter:
+
+    def __init__(self, default, tau):
+        self._x = float(default)
+        self._tau = float(tau)
+
+    def update(self, target, dt):
+        dt = _clamp(float(dt), 1e-4, 0.2)
+        alpha = 1.0 - pow(2.0, -dt / self._tau) if self._tau > 1e-6 else 1.0
+        self._x += alpha * (float(target) - self._x)
+        return self._x
+
+    def snap(self, value):
+        self._x = float(value)
+
+    @property
+    def value(self):
+        return self._x
+
+
+class HwTeleopNode(Node):
+
+    def __init__(self):
+        super().__init__('hw_teleop_node')
+
+        self.declare_parameter('serial_port', '/dev/lss_controller')
+        self.declare_parameter('serial_baud', 115200)
+        self.declare_parameter('phidgets_hub_port', 0)
+        self.declare_parameter('steering_max_duty', 0.3)
+        self.declare_parameter('steering_current_limit', 3.0)
+
+        self.serial_conn = None
+        self._lss_ok = False
+
+        self._dc_motor = None
+        self._motor_ok = False
+        self._motor_lock = threading.Lock()
+        self._max_duty = self.get_parameter('steering_max_duty').value
+
+        self._throttle_ramp = 0.0
+        self._brake_ramp = 0.0
+        self._steer_ramp = 0.0
+
+        self._throttle_f = SmoothFilter(LSS_THROTTLE_NEUTRAL, tau=0.04)
+        self._brake_f = SmoothFilter(LSS_BRAKE_RELEASED, tau=0.03)
+        self._steer_f = SmoothFilter(0.0, tau=0.04)
+
+        self._gear = 1
+        self._last_tick_t = time.monotonic()
+
+        self._last_sent_throttle = None
+        self._last_sent_brake = None
+        self._last_sent_duty = None
+        self._last_send_time_throttle = 0.0
+        self._last_send_time_brake = 0.0
+
+        self._key_times = {'w': 0.0, 's': 0.0, 'a': 0.0, 'd': 0.0}
+        self._key_repeating = {'w': False, 's': False, 'a': False, 'd': False}
+        self._estop = False
+
+        self.running = True
+        self.old_settings = None
+
+        self._init_lss()
+        self._init_phidgets()
+
+        self._setup_terminal()
+        self.key_thread = threading.Thread(target=self._key_reader, daemon=True)
+        self.key_thread.start()
+
+        self.create_timer(0.02, self._tick)
+
+    def _init_lss(self):
+        try:
+            import serial
+            port = self.get_parameter('serial_port').value
+            baud = self.get_parameter('serial_baud').value
+            self.serial_conn = serial.Serial(port=port, baudrate=baud, timeout=0.1)
+            time.sleep(0.5)
+            self.serial_conn.reset_input_buffer()
+        except Exception as e:
+            self.get_logger().warn(f'LSS serial failed: {e}')
+            self.serial_conn = None
+            return
+
+        for sid, name in [(1, 'throttle'), (2, 'brake'), (3, 'gear')]:
+            if self._query_servo(sid):
+                self.get_logger().info(f'LSS servo {sid} ({name}): OK')
+                self._send_lss(f'#{sid}SD{LSS_SERVO_SPEED}\r')
+            else:
+                self.get_logger().warn(f'LSS servo {sid} ({name}): no response')
+
+        self._lss_ok = True
+        self._send_lss(f'#{LSS_THROTTLE_ID}D{LSS_THROTTLE_NEUTRAL}\r')
+        self._send_lss(f'#{LSS_BRAKE_ID}D{LSS_BRAKE_RELEASED}\r')
+        self._send_lss(f'#{LSS_GEAR_ID}D{LSS_GEAR_NEUTRAL}\r')
+
+    def _query_servo(self, servo_id):
+        if self.serial_conn is None:
+            return False
+        try:
+            self.serial_conn.reset_input_buffer()
+            self.serial_conn.write(f'#{servo_id}QS\r'.encode())
+            self.serial_conn.flush()
+            time.sleep(0.05)
+            response = b''
+            deadline = time.monotonic() + 0.2
+            while time.monotonic() < deadline:
+                if self.serial_conn.in_waiting > 0:
+                    response += self.serial_conn.read(self.serial_conn.in_waiting)
+                    if b'\r' in response:
+                        break
+                time.sleep(0.01)
+            return f'*{servo_id}'.encode() in response
+        except Exception:
+            return False
+
+    def _send_lss(self, cmd):
+        if self.serial_conn is None:
+            return
+        try:
+            self.serial_conn.write(cmd.encode())
+            self.serial_conn.flush()
+        except Exception:
+            pass
+
+    def _init_phidgets(self):
+        if not PHIDGETS_AVAILABLE:
+            self.get_logger().warn('Phidget22 not installed — steering unavailable')
+            return
+        try:
+            ch = DCMotor()
+            ch.setHubPort(self.get_parameter('phidgets_hub_port').value)
+            ch.setIsHubPortDevice(False)
+            ch.setOnAttachHandler(self._on_attach)
+            ch.setOnDetachHandler(self._on_detach)
+            self._dc_motor = ch
+            ch.open()
+            self.get_logger().info('DCMotor channel opened, waiting for attach...')
+        except PhidgetException as e:
+            self.get_logger().warn(f'Phidgets init failed: {e}')
+
+    def _on_attach(self, sender):
+        try:
+            sender.setCurrentLimit(self.get_parameter('steering_current_limit').value)
+            sender.setAcceleration(sender.getMaxAcceleration())
+            sender.enableFailsafe(500)
+            sender.setTargetVelocity(0.0)
+            with self._motor_lock:
+                self._motor_ok = True
+            self.get_logger().info(
+                f'DCMotor attached (max_duty={self._max_duty}, '
+                f'current_limit={self.get_parameter("steering_current_limit").value}A)')
+        except PhidgetException as e:
+            self.get_logger().error(f'DCMotor config failed: {e}')
+
+    def _on_detach(self, sender):
+        with self._motor_lock:
+            self._motor_ok = False
+        self.get_logger().warn('DCMotor detached')
+
+    def _set_duty(self, duty):
+        with self._motor_lock:
+            if not self._motor_ok:
+                return
+        try:
+            self._dc_motor.setTargetVelocity(duty)
+        except PhidgetException:
+            pass
+
+    def _key_active(self, key):
+        window = KEY_WINDOW_REPEAT if self._key_repeating[key] else KEY_WINDOW_INITIAL
+        return (time.monotonic() - self._key_times[key]) < window
+
+    def _tick(self):
+        now = time.monotonic()
+        dt = now - self._last_tick_t
+        self._last_tick_t = now
+
+        with self._motor_lock:
+            motor_ok = self._motor_ok
+        if motor_ok:
+            try:
+                self._dc_motor.resetFailsafe()
+            except PhidgetException:
+                pass
+
+        if self._estop:
+            return
+
+        if self._key_active('w'):
+            self._throttle_ramp = _clamp(self._throttle_ramp + RAMP_RATE * dt, 0.0, 1.0)
+        else:
+            self._throttle_ramp = _clamp(self._throttle_ramp - SPRING_RATE * dt, 0.0, 1.0)
+
+        if self._key_active('s'):
+            self._brake_ramp = _clamp(self._brake_ramp + RAMP_RATE * dt, 0.0, 1.0)
+        else:
+            self._brake_ramp = _clamp(self._brake_ramp - SPRING_RATE * dt, 0.0, 1.0)
+
+        a_active = self._key_active('a')
+        d_active = self._key_active('d')
+        if a_active and d_active:
+            if self._key_times['a'] >= self._key_times['d']:
+                self._steer_ramp = _clamp(
+                    self._steer_ramp + STEER_RAMP_RATE * dt, -1.0, 1.0)
+            else:
+                self._steer_ramp = _clamp(
+                    self._steer_ramp - STEER_RAMP_RATE * dt, -1.0, 1.0)
+        elif a_active:
+            self._steer_ramp = _clamp(
+                self._steer_ramp + STEER_RAMP_RATE * dt, -1.0, 1.0)
+        elif d_active:
+            self._steer_ramp = _clamp(
+                self._steer_ramp - STEER_RAMP_RATE * dt, -1.0, 1.0)
+        else:
+            if self._steer_ramp > 0.0:
+                self._steer_ramp = _clamp(
+                    self._steer_ramp - STEER_SPRING_RATE * dt, 0.0, 1.0)
+            elif self._steer_ramp < 0.0:
+                self._steer_ramp = _clamp(
+                    self._steer_ramp + STEER_SPRING_RATE * dt, -1.0, 0.0)
+
+        thr_target = _lerp(LSS_THROTTLE_NEUTRAL, LSS_THROTTLE_MAX, self._throttle_ramp)
+        brk_target = _lerp(LSS_BRAKE_RELEASED, LSS_BRAKE_ENGAGED, self._brake_ramp)
+        steer_target = self._steer_ramp * self._max_duty
+
+        thr_val = self._throttle_f.update(thr_target, dt)
+        brk_val = self._brake_f.update(brk_target, dt)
+        duty_val = self._steer_f.update(steer_target, dt)
+
+        thr_int = int(round(thr_val))
+        thr_at_neutral = (thr_int == LSS_THROTTLE_NEUTRAL)
+        thr_needs_send = (
+            self._last_sent_throttle is None
+            or abs(thr_int - self._last_sent_throttle) >= LSS_SEND_DEADBAND
+            or (thr_at_neutral and self._last_sent_throttle != LSS_THROTTLE_NEUTRAL))
+        if thr_needs_send and (now - self._last_send_time_throttle) >= LSS_SEND_MIN_INTERVAL:
+            self._send_lss(f'#{LSS_THROTTLE_ID}D{thr_int}\r')
+            self._last_sent_throttle = thr_int
+            self._last_send_time_throttle = now
+
+        brk_int = int(round(brk_val))
+        brk_at_released = (brk_int == LSS_BRAKE_RELEASED)
+        brk_at_engaged = (brk_int == LSS_BRAKE_ENGAGED)
+        brk_needs_send = (
+            self._last_sent_brake is None
+            or abs(brk_int - self._last_sent_brake) >= LSS_SEND_DEADBAND
+            or (brk_at_released and self._last_sent_brake != LSS_BRAKE_RELEASED)
+            or (brk_at_engaged and self._last_sent_brake != LSS_BRAKE_ENGAGED))
+        if brk_needs_send and (now - self._last_send_time_brake) >= LSS_SEND_MIN_INTERVAL:
+            self._send_lss(f'#{LSS_BRAKE_ID}D{brk_int}\r')
+            self._last_sent_brake = brk_int
+            self._last_send_time_brake = now
+
+        duty_round = round(duty_val, 4)
+        if self._last_sent_duty is None or abs(duty_round - self._last_sent_duty) >= 0.005:
+            self._set_duty(duty_round)
+            self._last_sent_duty = duty_round
+
+        self._print_hud()
+
+    def _safe_stop(self):
+        self._estop = True
+        self._throttle_ramp = 0.0
+        self._brake_ramp = 1.0
+        self._steer_ramp = 0.0
+        self._throttle_f.snap(LSS_THROTTLE_NEUTRAL)
+        self._brake_f.snap(LSS_BRAKE_ENGAGED)
+        self._steer_f.snap(0.0)
+        self._last_sent_throttle = None
+        self._last_sent_brake = None
+        self._last_sent_duty = None
+        self._send_lss(f'#{LSS_THROTTLE_ID}D{LSS_THROTTLE_NEUTRAL}\r')
+        self._send_lss(f'#{LSS_BRAKE_ID}D{LSS_BRAKE_ENGAGED}\r')
+        self._set_duty(0.0)
+        self._print_hud()
+
+    def _setup_terminal(self):
+        self.old_settings = termios.tcgetattr(sys.stdin)
+        tty.setcbreak(sys.stdin.fileno())
+        atexit.register(self._restore_terminal)
+        signal.signal(signal.SIGINT, self._signal_handler)
+        signal.signal(signal.SIGTERM, self._signal_handler)
+
+    def _restore_terminal(self):
+        if self.old_settings is not None:
+            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self.old_settings)
+            self.old_settings = None
+
+    def _signal_handler(self, _sig, _frame):
+        self.running = False
+        self._safe_stop()
+        self._restore_terminal()
+        raise SystemExit(0)
+
+    def _key_reader(self):
+        while self.running:
+            try:
+                if not select.select([sys.stdin], [], [], 0.05)[0]:
+                    continue
+                ch = sys.stdin.read(1)
+
+                if ch == '\x1b':
+                    if select.select([sys.stdin], [], [], 0.01)[0]:
+                        sys.stdin.read(1)
+                        if select.select([sys.stdin], [], [], 0.01)[0]:
+                            sys.stdin.read(1)
+                    continue
+
+                lower = ch.lower()
+
+                if lower in self._key_times:
+                    now_k = time.monotonic()
+                    gap = now_k - self._key_times[lower]
+                    if gap < KEY_REPEAT_GAP:
+                        self._key_repeating[lower] = True
+                    elif gap > KEY_WINDOW_INITIAL:
+                        self._key_repeating[lower] = False
+                    self._key_times[lower] = now_k
+                    if self._estop:
+                        self._estop = False
+
+                elif ch in ('1', '2', '3'):
+                    self._gear = int(ch) - 1
+                    self._send_lss(f'#{LSS_GEAR_ID}D{GEAR_LSS[self._gear]}\r')
+
+                elif ch == ' ':
+                    self._safe_stop()
+
+            except Exception:
+                if not self.running:
+                    break
+
+    def _throttle_pct(self):
+        return int(self._throttle_ramp * 100)
+
+    def _brake_pct(self):
+        return int(self._brake_ramp * 100)
+
+    def _print_hud(self):
+        with self._motor_lock:
+            motor_ok = self._motor_ok
+
+        lss_tag = 'LSS:OK' if self._lss_ok else 'LSS:--'
+        steer_tag = 'MTR:OK' if motor_ok else 'MTR:--'
+        gear_str = GEAR_NAMES.get(self._gear, '?')
+        duty_pct = int(self._steer_ramp * 100)
+        estop_str = ' ** E-STOP **' if self._estop else ''
+
+        sys.stdout.write('\r\033[K')
+        sys.stdout.write(
+            f'[{lss_tag} {steer_tag}] '
+            f'Thr:{self._throttle_pct():3d}% | '
+            f'Brk:{self._brake_pct():3d}% | '
+            f'Gear:{gear_str} | '
+            f'Str:{duty_pct:+4d}%'
+            f'{estop_str}'
+        )
+        sys.stdout.flush()
+
+    def destroy_node(self):
+        self.running = False
+        self._safe_stop()
+
+        if self.serial_conn is not None:
+            try:
+                self._send_lss(f'#{LSS_BRAKE_ID}H\r')
+                self._send_lss(f'#{LSS_THROTTLE_ID}L\r')
+                self._send_lss(f'#{LSS_GEAR_ID}L\r')
+                time.sleep(0.05)
+                self.serial_conn.close()
+            except Exception:
+                pass
+
+        if self._dc_motor is not None:
+            try:
+                with self._motor_lock:
+                    if self._motor_ok:
+                        self._dc_motor.setTargetVelocity(0.0)
+                self._dc_motor.close()
+            except PhidgetException:
+                pass
+
+        self._restore_terminal()
+        sys.stdout.write('\n')
+        super().destroy_node()
+
+
+def main(args=None):
+    rclpy.init(args=args)
+
+    print('Exia Hardware Teleop')
+    print('--------------------')
+    print('  W       : throttle (hold)')
+    print('  S       : brake (hold)')
+    print('  A/D     : steer left/right (hold)')
+    print('  1/2/3   : gear Reverse/Neutral/High')
+    print('  Space   : e-stop')
+    print('  Ctrl+C  : quit')
+    print()
+    print('  All controls spring back on release.')
+    print()
+
+    node = HwTeleopNode()
+    try:
+        rclpy.spin(node)
+    except (KeyboardInterrupt, SystemExit):
+        pass
+    finally:
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()

@@ -22,6 +22,7 @@ setup(
             'ackermann_drive_node = exia_control.ackermann_drive_node:main',
             'nav_to = exia_control.nav_to_cmd:main',
             'teleop = exia_control.teleop_node:main',
+            'hw_teleop = exia_control.hw_teleop_node:main',
         ],
     },
 )

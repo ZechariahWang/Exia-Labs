@@ -145,7 +145,7 @@ def generate_launch_description():
             'publish_tf': True,
             'hardware_mode': True,
             'serial_port': serial_port,
-            'use_odrive': True,
+            'use_phidgets': True,
         }],
     )
 

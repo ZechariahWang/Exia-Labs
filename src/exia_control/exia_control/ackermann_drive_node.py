@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import math
 import time
+import threading
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
@@ -10,11 +11,11 @@ from std_msgs.msg import Float64MultiArray
 from tf2_ros import TransformBroadcaster
 
 try:
-    import odrive
-    from odrive.enums import AxisState, ControlMode, InputMode
-    ODRIVE_AVAILABLE = True
+    from Phidget22.Devices.MotorPositionController import MotorPositionController
+    from Phidget22.PhidgetException import PhidgetException
+    PHIDGETS_AVAILABLE = True
 except ImportError:
-    ODRIVE_AVAILABLE = False
+    PHIDGETS_AVAILABLE = False
 
 LSS_THROTTLE_ID = 1
 LSS_BRAKE_ID = 2
@@ -52,7 +53,16 @@ class AckermannDriveNode(Node):
         self.declare_parameter('hardware_mode', False)
         self.declare_parameter('serial_port', '/dev/lss_controller')
         self.declare_parameter('serial_baud', 115200)
-        self.declare_parameter('use_odrive', True)
+        self.declare_parameter('use_phidgets', True)
+        self.declare_parameter('phidgets_hub_port', 0)
+        self.declare_parameter('motor_degrees_at_max_steer', 2160.0)
+        self.declare_parameter('steering_kp', 400.0)
+        self.declare_parameter('steering_ki', 0.0)
+        self.declare_parameter('steering_kd', 150.0)
+        self.declare_parameter('steering_velocity_limit', 10000.0)
+        self.declare_parameter('steering_acceleration', 50000.0)
+        self.declare_parameter('steering_dead_band', 2.0)
+        self.declare_parameter('steering_current_limit', 3.0)
 
         self.publish_tf = self.get_parameter('publish_tf').value
         self.hardware_mode = self.get_parameter('hardware_mode').value
@@ -76,18 +86,16 @@ class AckermannDriveNode(Node):
         self._last_brake_lss = None
         self._last_gear_lss = None
 
-        self._odrive = None
-        self._odrive_axis = None
-        self._odrive_anchor = 0.0
-        self._odrive_connected = False
-        self._odrive_last_attempt = 0.0
-        self._odrive_retry_interval = 5.0
+        self._phidgets_controller = None
+        self._phidgets_connected = False
+        self._phidgets_lock = threading.Lock()
+        self._phidgets_runaway_count = 0
+        self._motor_degrees_at_max_steer = self.get_parameter('motor_degrees_at_max_steer').value
 
         if self.hardware_mode:
             self._init_lss()
-            use_odrive = self.get_parameter('use_odrive').value
-            if use_odrive:
-                self._init_odrive()
+            if self.get_parameter('use_phidgets').value:
+                self._init_phidgets()
 
         self.last_time = self.get_clock().now()
 
@@ -198,57 +206,74 @@ class AckermannDriveNode(Node):
             self.get_logger().warn(f'LSS write error: {e}')
             self._lss_connected = False
 
-    def _init_odrive(self):
-        if not ODRIVE_AVAILABLE:
-            self.get_logger().warn('ODrive library not installed, steering will not be controlled')
-            return
-        self._connect_odrive()
-
-    def _connect_odrive(self):
-        self._odrive_last_attempt = time.monotonic()
-        try:
-            self.get_logger().info('Searching for ODrive...')
-            self._odrive = odrive.find_any(timeout=10)
-            if self._odrive is None:
-                self.get_logger().error('ODrive not found')
-                return
-            self._odrive_axis = self._odrive.axis0
-            self._odrive_axis.config.motor.current_soft_max = 20.0
-            self._odrive_axis.config.motor.current_hard_max = 30.0
-            ctrl = self._odrive_axis.controller
-            ctrl.config.control_mode = ControlMode.POSITION_CONTROL
-            ctrl.config.input_mode = InputMode.PASSTHROUGH
-            ctrl.config.vel_limit = 15.0
-            if self._odrive_axis.current_state != AxisState.CLOSED_LOOP_CONTROL:
-                self._odrive_axis.requested_state = AxisState.CLOSED_LOOP_CONTROL
-                deadline = time.monotonic() + 2.0
-                while self._odrive_axis.current_state != AxisState.CLOSED_LOOP_CONTROL:
-                    if time.monotonic() > deadline:
-                        self.get_logger().error('ODrive closed-loop timeout')
-                        return
-                    time.sleep(0.05)
-            self._odrive_anchor = self._odrive_axis.pos_estimate
-            self._odrive_connected = True
-            self.get_logger().info(f'ODrive connected, anchor={self._odrive_anchor:.3f}')
-        except Exception as e:
-            self.get_logger().error(f'ODrive connection failed: {e}')
-            self._odrive_connected = False
-
-    def _command_odrive_steering(self, steering_angle):
-        if not self._odrive_connected:
-            now = time.monotonic()
-            if now - self._odrive_last_attempt > self._odrive_retry_interval:
-                self._connect_odrive()
+    def _init_phidgets(self):
+        if not PHIDGETS_AVAILABLE:
+            self.get_logger().warn('Phidget22 library not installed, steering will not be controlled')
             return
         try:
-            max_pos = 6.0
+            ch = MotorPositionController()
+            ch.setHubPort(self.get_parameter('phidgets_hub_port').value)
+            ch.setIsHubPortDevice(False)
+            ch.setOnAttachHandler(self._on_phidgets_attach)
+            ch.setOnDetachHandler(self._on_phidgets_detach)
+            self._phidgets_controller = ch
+            ch.open()
+            self.get_logger().info('Phidgets DCC1000 channel opened, waiting for attachment...')
+        except PhidgetException as e:
+            self.get_logger().error(f'Phidgets open failed: {e}')
+
+    def _on_phidgets_attach(self, sender):
+        try:
+            sender.setRescaleFactor(360.0 / (300 * 4 * 4.25))
+            sender.setCurrentLimit(self.get_parameter('steering_current_limit').value)
+            sender.setVelocityLimit(self.get_parameter('steering_velocity_limit').value)
+            sender.setAcceleration(self.get_parameter('steering_acceleration').value)
+            sender.setDeadBand(self.get_parameter('steering_dead_band').value)
+            sender.setKp(self.get_parameter('steering_kp').value)
+            sender.setKi(self.get_parameter('steering_ki').value)
+            sender.setKd(self.get_parameter('steering_kd').value)
+            sender.addPositionOffset(-sender.getPosition())
+            sender.enableFailsafe(500)
+            sender.setEngaged(True)
+            with self._phidgets_lock:
+                self._phidgets_connected = True
+                self._phidgets_runaway_count = 0
+            self.get_logger().info('Phidgets DCC1000 attached and engaged (failsafe=500ms)')
+        except PhidgetException as e:
+            self.get_logger().error(f'Phidgets attach configuration failed: {e}')
+            with self._phidgets_lock:
+                self._phidgets_connected = False
+
+    def _on_phidgets_detach(self, sender):
+        with self._phidgets_lock:
+            self._phidgets_connected = False
+        self.get_logger().warn('Phidgets DCC1000 detached')
+
+    def _command_phidgets_steering(self, steering_angle):
+        with self._phidgets_lock:
+            connected = self._phidgets_connected
+        if not connected:
+            return
+        try:
+            self._phidgets_controller.resetFailsafe()
             normalized = steering_angle / self.MAX_STEERING_ANGLE
-            target_turns = normalized * max_pos
-            absolute_pos = self._odrive_anchor + target_turns
-            self._odrive_axis.controller.input_pos = absolute_pos
-        except Exception as e:
-            self.get_logger().error(f'ODrive command failed: {e}')
-            self._odrive_connected = False
+            target_pos = normalized * self._motor_degrees_at_max_steer
+            self._phidgets_controller.setTargetPosition(target_pos)
+
+            duty = abs(self._phidgets_controller.getDutyCycle())
+            if duty > 0.95:
+                self._phidgets_runaway_count += 1
+                if self._phidgets_runaway_count > 25:
+                    self.get_logger().error('Steering motor runaway detected — disengaging')
+                    self._phidgets_controller.setEngaged(False)
+                    with self._phidgets_lock:
+                        self._phidgets_connected = False
+            else:
+                self._phidgets_runaway_count = 0
+        except PhidgetException as e:
+            self.get_logger().error(f'Phidgets command failed: {e}')
+            with self._phidgets_lock:
+                self._phidgets_connected = False
 
     def _process_gear(self, ramped_speed):
         if ramped_speed > 0.05:
@@ -337,17 +362,13 @@ class AckermannDriveNode(Node):
             wheel_speed = ramped_speed / self.WHEEL_RADIUS
 
         if self.hardware_mode and self._lss_connected:
-            if ramped_speed > 0.01:
-                throttle_deg = int(abs(ramped_speed) / self.MAX_SPEED * 75)
-                throttle_deg = max(0, min(75, throttle_deg))
-                brake_deg = 180
-            elif ramped_speed < -0.01:
+            if abs(ramped_speed) > 0.01:
                 throttle_deg = int(abs(ramped_speed) / self.MAX_SPEED * 75)
                 throttle_deg = max(0, min(75, throttle_deg))
                 brake_deg = 180
             else:
                 throttle_deg = 0
-                brake_deg = 180
+                brake_deg = 80
 
             throttle_lss = (throttle_deg - 90) * 10
             brake_lss = (brake_deg - 90) * 10
@@ -362,7 +383,8 @@ class AckermannDriveNode(Node):
 
             self._process_gear(ramped_speed)
 
-            self._command_odrive_steering(steering_angle)
+        if self.hardware_mode:
+            self._command_phidgets_steering(steering_angle)
 
         left_steer, right_steer = self.compute_ackermann_angles(steering_angle)
 
@@ -439,11 +461,14 @@ class AckermannDriveNode(Node):
 
     def destroy_node(self):
         if self.hardware_mode:
-            if self._odrive_connected and self._odrive_axis is not None:
+            if self._phidgets_controller is not None:
                 try:
-                    self._odrive_axis.controller.input_pos = self._odrive_axis.pos_estimate
-                    self._odrive_axis.requested_state = AxisState.IDLE
-                except Exception:
+                    if self._phidgets_connected:
+                        self._phidgets_controller.setTargetPosition(
+                            self._phidgets_controller.getPosition())
+                        self._phidgets_controller.setEngaged(False)
+                    self._phidgets_controller.close()
+                except PhidgetException:
                     pass
             if self.serial_conn is not None:
                 try:

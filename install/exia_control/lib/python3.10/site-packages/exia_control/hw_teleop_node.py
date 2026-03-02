@@ -42,9 +42,10 @@ LSS_BRAKE_ENGAGED                    = -100 # -300
 GEAR_NAMES                           = {0: 'R', 1: 'N', 2: 'H'}
 GEAR_PWM_PIN                         = 32
 GEAR_PWM_FREQ                        = 50
-GEAR_PWM_REVERSE                     = 3.5
-GEAR_PWM_NEUTRAL                     = 7.5
-GEAR_PWM_HIGH                        = 11.5
+# duty% = (500 + (deg / 180) * 2000) / 20000 * 100
+GEAR_PWM_REVERSE                     = 5.67  # 57 deg -> 1133us
+GEAR_PWM_NEUTRAL                     = 6.94  # 80 deg -> 1389us
+GEAR_PWM_HIGH                        = 8.61  # 110 deg -> 1722us
 GEAR_PWM                             = {0: GEAR_PWM_REVERSE, 1: GEAR_PWM_NEUTRAL, 2: GEAR_PWM_HIGH}
 
 KEY_WINDOW_INITIAL                   = 0.6
@@ -52,8 +53,13 @@ KEY_WINDOW_REPEAT                    = 0.15
 KEY_REPEAT_GAP                       = 0.12
 RAMP_RATE                            = 1.8 # how fast throttle/brake ramps up
 SPRING_RATE                          = 4.0 # how fast fall back to 0
-STEER_RAMP_RATE                      = 2.5 
+STEER_RAMP_RATE                      = 2.5
 STEER_SPRING_RATE                    = 5.0
+
+CMD_VEL_MAX_SPEED                    = 5.0
+CMD_VEL_MAX_REVERSE                  = 0.5
+CMD_VEL_MAX_STEER                    = 0.6
+CMD_VEL_WHEELBASE                    = 1.3
 
 # prevents flooding serial 
 LSS_SEND_DEADBAND                    = 8 # only send new command when value >8
@@ -194,6 +200,7 @@ class HwTeleopNode(Node):
             self.create_subscription(Twist, '/radio/teleop', self._remote_teleop_cb, 10)
             self.create_subscription(Int32, '/radio/gear', self._remote_gear_cb, 10)
 
+        self._cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
         self.create_subscription(Joy, '/joy', self._joy_cb, 10)
 
         if self._interactive:
@@ -479,7 +486,7 @@ class HwTeleopNode(Node):
 
         self._joy_throttle = _clamp((1.0 - r2) / 2.0, 0.0, 1.0)
         self._joy_brake = _clamp((1.0 - l2) / 2.0, 0.0, 1.0)
-        self._joy_steer = _clamp(-right_x, -1.0, 1.0)
+        self._joy_steer = _clamp(right_x, -1.0, 1.0)
 
         if left_y > 0.5:
             self._joy_throttle = _clamp(left_y, 0.0, 1.0)
@@ -528,6 +535,27 @@ class HwTeleopNode(Node):
     def _key_active(self, key):
         window = KEY_WINDOW_REPEAT if self._key_repeating[key] else KEY_WINDOW_INITIAL
         return (time.monotonic() - self._key_times[key]) < window
+
+    def _publish_cmd_vel(self):
+        if self._gear == 2:
+            speed = self._throttle_ramp * CMD_VEL_MAX_SPEED
+        elif self._gear == 0:
+            speed = -self._throttle_ramp * CMD_VEL_MAX_REVERSE
+        else:
+            speed = 0.0
+
+        if self._brake_ramp > 0.05:
+            speed *= max(0.0, 1.0 - self._brake_ramp)
+
+        steer_angle = self._steer_ramp * CMD_VEL_MAX_STEER
+
+        msg = Twist()
+        msg.linear.x = speed
+        if abs(speed) > 0.05 and abs(steer_angle) > 0.001:
+            msg.angular.z = speed / (CMD_VEL_WHEELBASE / math.tan(steer_angle))
+        else:
+            msg.angular.z = 0.0
+        self._cmd_vel_pub.publish(msg)
 
     def _tick(self):
         now = time.monotonic()
@@ -588,6 +616,8 @@ class HwTeleopNode(Node):
                     self._steer_ramp = _clamp(
                         self._steer_ramp + STEER_SPRING_RATE * dt, -1.0, 0.0)
 
+        self._publish_cmd_vel()
+
         if self._remote_mode:
             msg = Twist()
             msg.linear.x = self._throttle_ramp
@@ -641,6 +671,8 @@ class HwTeleopNode(Node):
         self._throttle_ramp = 0.0
         self._brake_ramp = 1.0
         self._steer_ramp = 0.0
+        stop_msg = Twist()
+        self._cmd_vel_pub.publish(stop_msg)
         if self._remote_mode:
             msg = Twist()
             msg.linear.x = 0.0

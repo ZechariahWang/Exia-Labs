@@ -3,8 +3,9 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, TimerAction
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
 from launch.conditions import IfCondition
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, LaunchConfiguration
 from launch_ros.actions import Node
 from nav2_common.launch import RewrittenYaml
@@ -79,6 +80,7 @@ def generate_launch_description():
     ekf_params_file = os.path.join(bringup_dir, 'config', 'ekf_params.yaml')
     septentrio_params_file = os.path.join(bringup_dir, 'config', 'septentrio_rover.yaml')
     imu_params_file = os.path.join(bringup_dir, 'config', 'imu_params.yaml')
+    radio_params_file = os.path.join(bringup_dir, 'config', 'radio_params.yaml')
     pointcloud_to_laserscan_config = os.path.join(
         bringup_dir, 'config', 'pointcloud_to_laserscan.yaml'
     )
@@ -269,6 +271,44 @@ def generate_launch_description():
         parameters=[imu_params_file, {'use_sim_time': False}],
     )
 
+    lidar_tf_publisher = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='lidar_tf_publisher',
+        output='screen',
+        arguments=[
+            '--x', '0', '--y', '0', '--z', '0',
+            '--roll', '0', '--pitch', '0', '--yaw', '0',
+            '--frame-id', 'lidar_link', '--child-frame-id', 'velodyne',
+        ],
+    )
+
+    hw_teleop_node = Node(
+        package='exia_control',
+        executable='hw_teleop_node',
+        name='hw_teleop_node',
+        output='screen',
+        parameters=[{
+            'use_sim_time': False,
+            'serial_port': serial_port,
+            'launch_sensors': False,
+        }],
+    )
+
+    radio_bridge_node = Node(
+        package='exia_driver',
+        executable='radio_bridge_node',
+        name='radio_bridge',
+        output='screen',
+        parameters=[
+            radio_params_file,
+            {
+                'use_sim_time': False,
+                'role': 'robot',
+            },
+        ],
+    )
+
     return LaunchDescription([
         use_ekf_arg,
         use_gps_arg,
@@ -294,4 +334,7 @@ def generate_launch_description():
         depth_camera_node,
         septentrio_gnss_node,
         imu_node,
+        lidar_tf_publisher,
+        hw_teleop_node,
+        radio_bridge_node,
     ])

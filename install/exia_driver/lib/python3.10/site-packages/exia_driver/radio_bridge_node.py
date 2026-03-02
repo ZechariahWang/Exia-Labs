@@ -10,9 +10,19 @@ import math
 import rclpy
 from rclpy.node import Node
 from rclpy.callback_groups import ReentrantCallbackGroup
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Twist, Quaternion
 from nav_msgs.msg import Odometry
-from std_msgs.msg import String
+from sensor_msgs.msg import NavSatFix, NavSatStatus, Imu, CompressedImage
+
+_IMAGE_AVAILABLE = False
+try:
+    import numpy as np
+    import cv2
+    from sensor_msgs.msg import Image as RosImage
+    _IMAGE_AVAILABLE = True
+except ImportError:
+    pass
+from std_msgs.msg import Int32, String
 from std_srvs.srv import Trigger
 from exia_msgs.msg import NavigationGoal
 
@@ -25,6 +35,8 @@ SERIAL_BUFFER_MAX = 4096
 SERIAL_RECONNECT_INTERVAL = 1.0
 KEY_FRAGMENT_TIMEOUT = 2.0
 HEARTBEAT_ACK_MISS_LIMIT = 30
+IMG_CHUNK_RAW_SIZE = 200
+IMG_CHUNK_SEND_INTERVAL = 0.08
 
 
 def load_rsa_keys(key_dir):
@@ -370,6 +382,11 @@ class RadioBridge(Node):
         )
 
         self._status_pub = self.create_publisher(String, '/navigation/status', 10)
+        self._odom_pub = self.create_publisher(Odometry, '/odom', 10)
+        self._gps_pub = self.create_publisher(NavSatFix, '/navsatfix', 10)
+        self._imu_pub = self.create_publisher(Imu, '/imu/data', 10)
+        self._img_pub = self.create_publisher(CompressedImage, '/radio/camera/compressed', 10)
+        self._img_reassembly = {}
 
         self._cancel_srv = self.create_service(
             Trigger, '/radio/cancel',
@@ -395,6 +412,19 @@ class RadioBridge(Node):
             callback_group=self._cb_group,
         )
         self._last_cmd_vel_relay_time = 0.0
+
+        self._teleop_sub = self.create_subscription(
+            Twist, '/radio/teleop',
+            self._base_teleop_callback, 10,
+            callback_group=self._cb_group,
+        )
+        self._last_teleop_relay_time = 0.0
+
+        self._gear_sub = self.create_subscription(
+            Int32, '/radio/gear',
+            self._base_gear_callback, 10,
+            callback_group=self._cb_group,
+        )
 
         self._heartbeat_timer = self.create_timer(
             1.0 / self._heartbeat_rate,
@@ -572,6 +602,17 @@ class RadioBridge(Node):
         payload = f'{msg.linear.x:.4f},{msg.angular.z:.4f}'
         self._serial_write('V', payload)
 
+    def _base_teleop_callback(self, msg):
+        now = time.monotonic()
+        if now - self._last_teleop_relay_time < 0.05:
+            return
+        self._last_teleop_relay_time = now
+        payload = f'{msg.linear.x:.4f},{msg.linear.y:.4f},{msg.angular.z:.4f}'
+        self._serial_write('D', payload)
+
+    def _base_gear_callback(self, msg):
+        self._serial_write('G', str(msg.data))
+
     def _base_send_heartbeat(self):
         with self._state_lock:
             if not self._handshake_complete:
@@ -597,32 +638,135 @@ class RadioBridge(Node):
             self._base_handle_telemetry(payload)
         elif msg_type == 'R':
             self._base_handle_relay(payload)
+        elif msg_type == 'I':
+            self._base_handle_image_chunk(payload)
         elif msg_type == 'EA':
             self.get_logger().info('Received e-stop acknowledgment from robot')
 
+    @staticmethod
+    def _yaw_to_quaternion(yaw_deg):
+        yaw = math.radians(yaw_deg)
+        return Quaternion(x=0.0, y=0.0, z=math.sin(yaw / 2.0), w=math.cos(yaw / 2.0))
+
+    @staticmethod
+    def _euler_to_quaternion(roll_deg, pitch_deg, yaw_deg):
+        r = math.radians(roll_deg)
+        p = math.radians(pitch_deg)
+        y = math.radians(yaw_deg)
+        cr, sr = math.cos(r / 2), math.sin(r / 2)
+        cp, sp = math.cos(p / 2), math.sin(p / 2)
+        cy, sy = math.cos(y / 2), math.sin(y / 2)
+        return Quaternion(
+            x=sr * cp * cy - cr * sp * sy,
+            y=cr * sp * cy + sr * cp * sy,
+            z=cr * cp * sy - sr * sp * cy,
+            w=cr * cp * cy + sr * sp * sy,
+        )
+
     def _base_handle_telemetry(self, payload):
         parts = payload.split(',')
-        if len(parts) >= 5:
-            state, x, y, hdg, spd = parts[0], parts[1], parts[2], parts[3], parts[4]
-            now = time.monotonic()
-            if now - self._last_telemetry_info_time >= 5.0:
-                self.get_logger().info(
-                    f'[Telemetry] state={state} pos=({x},{y}) hdg={hdg} spd={spd}'
-                )
-                self._last_telemetry_info_time = now
-            else:
-                self.get_logger().debug(
-                    f'[Telemetry] state={state} pos=({x},{y}) hdg={hdg} spd={spd}'
-                )
+        if len(parts) < 5:
+            return
+
+        try:
+            state = parts[0]
+            x, y = float(parts[1]), float(parts[2])
+            hdg, spd = float(parts[3]), float(parts[4])
+        except ValueError:
+            return
+
+        now_stamp = self.get_clock().now().to_msg()
+
+        odom = Odometry()
+        odom.header.stamp = now_stamp
+        odom.header.frame_id = 'odom'
+        odom.child_frame_id = 'base_link'
+        odom.pose.pose.position.x = x
+        odom.pose.pose.position.y = y
+        odom.pose.pose.orientation = self._yaw_to_quaternion(hdg)
+        yaw_rad = math.radians(hdg)
+        odom.twist.twist.linear.x = spd * math.cos(yaw_rad)
+        odom.twist.twist.linear.y = spd * math.sin(yaw_rad)
+        self._odom_pub.publish(odom)
+
+        if len(parts) >= 10:
+            try:
+                lat, lon = float(parts[5]), float(parts[6])
+                imu_h, imu_r, imu_p = float(parts[7]), float(parts[8]), float(parts[9])
+            except ValueError:
+                lat = lon = imu_h = imu_r = imu_p = float('nan')
+
+            if math.isfinite(lat) and math.isfinite(lon):
+                gps = NavSatFix()
+                gps.header.stamp = now_stamp
+                gps.header.frame_id = 'gps_link'
+                gps.latitude = lat
+                gps.longitude = lon
+                gps.status.status = NavSatStatus.STATUS_FIX
+                gps.status.service = NavSatStatus.SERVICE_GPS
+                self._gps_pub.publish(gps)
+
+            if math.isfinite(imu_h):
+                imu = Imu()
+                imu.header.stamp = now_stamp
+                imu.header.frame_id = 'imu_link'
+                imu.orientation = self._euler_to_quaternion(imu_r, imu_p, imu_h)
+                imu.orientation_covariance[0] = 0.01
+                imu.orientation_covariance[4] = 0.01
+                imu.orientation_covariance[8] = 0.01
+                self._imu_pub.publish(imu)
+
+        now_mono = time.monotonic()
+        if now_mono - self._last_telemetry_info_time >= 5.0:
+            self.get_logger().info(
+                f'[Telemetry] state={state} pos=({x:.1f},{y:.1f}) hdg={hdg:.0f} spd={spd:.1f}'
+            )
+            self._last_telemetry_info_time = now_mono
 
     def _base_handle_relay(self, payload):
         msg = String()
         msg.data = payload
         self._status_pub.publish(msg)
 
+    def _base_handle_image_chunk(self, payload):
+        parts = payload.split(',', 3)
+        if len(parts) < 4:
+            return
+        try:
+            seq = int(parts[0])
+            idx = int(parts[1])
+            total = int(parts[2])
+            chunk_data = base64.b64decode(parts[3])
+        except Exception:
+            return
+
+        if seq not in self._img_reassembly:
+            self._img_reassembly = {seq: {'total': total, 'chunks': {}}}
+
+        buf = self._img_reassembly[seq]
+        buf['chunks'][idx] = chunk_data
+
+        if len(buf['chunks']) == total:
+            jpeg_bytes = b''
+            for i in range(total):
+                if i not in buf['chunks']:
+                    self._img_reassembly.pop(seq, None)
+                    return
+                jpeg_bytes += buf['chunks'][i]
+            self._img_reassembly.pop(seq, None)
+
+            msg = CompressedImage()
+            msg.header.stamp = self.get_clock().now().to_msg()
+            msg.header.frame_id = 'camera_link'
+            msg.format = 'jpeg'
+            msg.data = jpeg_bytes
+            self._img_pub.publish(msg)
+
     def _setup_robot(self):
         self._goal_pub = self.create_publisher(NavigationGoal, '/navigation/goal', 10)
         self._cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
+        self._teleop_pub = self.create_publisher(Twist, '/radio/teleop', 10)
+        self._gear_pub = self.create_publisher(Int32, '/radio/gear', 10)
 
         self._cancel_client = self.create_client(
             Trigger, '/navigation/cancel', callback_group=self._cb_group,
@@ -637,6 +781,24 @@ class RadioBridge(Node):
         self._status_sub = self.create_subscription(
             String, '/navigation/status',
             self._robot_status_callback, 10,
+            callback_group=self._cb_group,
+        )
+
+        self._last_gps_lat = float('nan')
+        self._last_gps_lon = float('nan')
+        self._last_imu_heading = float('nan')
+        self._last_imu_roll = float('nan')
+        self._last_imu_pitch = float('nan')
+
+        self._gps_sub = self.create_subscription(
+            NavSatFix, '/navsatfix',
+            self._robot_gps_callback, 10,
+            callback_group=self._cb_group,
+        )
+
+        self._imu_sub = self.create_subscription(
+            Imu, '/imu/data',
+            self._robot_imu_callback, 10,
             callback_group=self._cb_group,
         )
 
@@ -655,6 +817,37 @@ class RadioBridge(Node):
             self._robot_send_telemetry,
             callback_group=self._cb_group,
         )
+
+        self._img_seq = 0
+        self._img_chunk_queue = []
+        self._last_img_time = 0.0
+
+        if _IMAGE_AVAILABLE:
+            self.declare_parameter('image_topic', '/camera/color/image_raw')
+            self.declare_parameter('image_quality', 25)
+            self.declare_parameter('image_width', 320)
+            self.declare_parameter('image_interval', 2.0)
+
+            self._img_quality = self.get_parameter('image_quality').value
+            self._img_width = self.get_parameter('image_width').value
+            self._img_interval = self.get_parameter('image_interval').value
+
+            self.create_subscription(
+                RosImage, self.get_parameter('image_topic').value,
+                self._robot_image_callback, 1,
+                callback_group=self._cb_group,
+            )
+            self.create_timer(
+                IMG_CHUNK_SEND_INTERVAL,
+                self._robot_send_image_chunk,
+                callback_group=self._cb_group,
+            )
+            self.get_logger().info(
+                f'Image transfer enabled: topic={self.get_parameter("image_topic").value} '
+                f'quality={self._img_quality} width={self._img_width}'
+            )
+        else:
+            self.get_logger().warn('cv2/numpy not available — image transfer disabled')
 
     def _robot_local_goal_callback(self, msg):
         h = self._goal_hash(msg)
@@ -675,6 +868,10 @@ class RadioBridge(Node):
             self._robot_handle_estop_clear()
         elif msg_type == 'V':
             self._robot_handle_cmd_vel(payload)
+        elif msg_type == 'D':
+            self._robot_handle_teleop(payload)
+        elif msg_type == 'G':
+            self._robot_handle_gear(payload)
 
     def _robot_handle_cmd_vel(self, payload):
         parts = payload.split(',')
@@ -687,6 +884,80 @@ class RadioBridge(Node):
             self._cmd_vel_pub.publish(twist)
         except ValueError:
             pass
+
+    def _robot_handle_teleop(self, payload):
+        parts = payload.split(',')
+        if len(parts) < 3:
+            return
+        try:
+            msg = Twist()
+            msg.linear.x = float(parts[0])
+            msg.linear.y = float(parts[1])
+            msg.angular.z = float(parts[2])
+            self._teleop_pub.publish(msg)
+        except ValueError:
+            pass
+
+    def _robot_handle_gear(self, payload):
+        try:
+            msg = Int32()
+            msg.data = int(payload)
+            self._gear_pub.publish(msg)
+        except ValueError:
+            pass
+
+    def _robot_image_callback(self, msg):
+        now = time.monotonic()
+        if now - self._last_img_time < self._img_interval:
+            return
+        if self._img_chunk_queue:
+            return
+        with self._state_lock:
+            if not self._handshake_complete:
+                return
+        try:
+            if msg.encoding in ('rgb8', 'RGB8'):
+                img = np.frombuffer(msg.data, dtype=np.uint8).reshape(msg.height, msg.width, 3)
+                img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+            elif msg.encoding in ('bgr8', 'BGR8'):
+                img = np.frombuffer(msg.data, dtype=np.uint8).reshape(msg.height, msg.width, 3)
+            elif msg.encoding in ('mono8', 'MONO8'):
+                img = np.frombuffer(msg.data, dtype=np.uint8).reshape(msg.height, msg.width)
+            else:
+                return
+
+            h, w = img.shape[:2]
+            scale = self._img_width / w
+            new_h = int(h * scale)
+            img = cv2.resize(img, (self._img_width, new_h))
+
+            _, jpeg = cv2.imencode('.jpg', img, [cv2.IMWRITE_JPEG_QUALITY, self._img_quality])
+            jpeg_bytes = jpeg.tobytes()
+
+            seq = self._img_seq % 256
+            self._img_seq += 1
+            total = (len(jpeg_bytes) + IMG_CHUNK_RAW_SIZE - 1) // IMG_CHUNK_RAW_SIZE
+
+            chunks = []
+            for i in range(total):
+                chunk_data = jpeg_bytes[i * IMG_CHUNK_RAW_SIZE:(i + 1) * IMG_CHUNK_RAW_SIZE]
+                b64 = base64.b64encode(chunk_data).decode('ascii')
+                chunks.append(f'{seq},{i},{total},{b64}')
+
+            self._img_chunk_queue = chunks
+            self._last_img_time = now
+        except Exception as e:
+            self.get_logger().warn(f'Image compression failed: {e}')
+
+    def _robot_send_image_chunk(self):
+        if not self._img_chunk_queue:
+            return
+        with self._state_lock:
+            if not self._handshake_complete:
+                self._img_chunk_queue = []
+                return
+        chunk_payload = self._img_chunk_queue.pop(0)
+        self._serial_write('I', chunk_payload)
 
     def _robot_handle_heartbeat(self, payload):
         self._last_heartbeat_time = time.monotonic()
@@ -825,6 +1096,23 @@ class RadioBridge(Node):
                 self._serial_write('EA', 'heartbeat_loss')
                 self._robot_handle_cancel()
 
+    def _robot_gps_callback(self, msg):
+        if math.isfinite(msg.latitude) and math.isfinite(msg.longitude):
+            self._last_gps_lat = msg.latitude
+            self._last_gps_lon = msg.longitude
+
+    def _robot_imu_callback(self, msg):
+        q = msg.orientation
+        siny_cosp = 2.0 * (q.w * q.z + q.x * q.y)
+        cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
+        self._last_imu_heading = math.degrees(math.atan2(siny_cosp, cosy_cosp))
+        sinr_cosp = 2.0 * (q.w * q.x + q.y * q.z)
+        cosr_cosp = 1.0 - 2.0 * (q.x * q.x + q.y * q.y)
+        self._last_imu_roll = math.degrees(math.atan2(sinr_cosp, cosr_cosp))
+        sinp = 2.0 * (q.w * q.y - q.z * q.x)
+        sinp = max(-1.0, min(1.0, sinp))
+        self._last_imu_pitch = math.degrees(math.asin(sinp))
+
     def _robot_odom_callback(self, msg):
         self._last_odom_x = msg.pose.pose.position.x
         self._last_odom_y = msg.pose.pose.position.y
@@ -857,7 +1145,9 @@ class RadioBridge(Node):
         state = 'ESTOP' if estop else 'OK'
         payload = (
             f'{state},{self._last_odom_x:.2f},{self._last_odom_y:.2f},'
-            f'{self._last_odom_heading:.1f},{self._last_odom_speed:.2f}'
+            f'{self._last_odom_heading:.1f},{self._last_odom_speed:.2f},'
+            f'{self._last_gps_lat:.8f},{self._last_gps_lon:.8f},'
+            f'{self._last_imu_heading:.1f},{self._last_imu_roll:.1f},{self._last_imu_pitch:.1f}'
         )
         self._serial_write('S', payload)
 

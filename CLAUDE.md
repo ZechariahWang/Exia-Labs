@@ -119,7 +119,7 @@ Goals are sent via `/navigation/goal` using `NavigationGoal.msg`. The `coord_typ
 - DMS formats: `49°40'00"N`, `49D40'00"N`, `49°40.5'N`
 - If `origin_lat`/`origin_lon` are 0 in msg, falls back to node's `ORIGIN_GPS` params
 - `--direct` flag (xy/latlon/dms): straight-line nav, stops on obstacle, reverses 1.5m, CLI blocks
-- `forward`/`turn` always block CLI until terminal status on `/navigation/status`
+- `forward`/`turn` always block CLI untilradio terminal status on `/navigation/status`
 - Terminal statuses: `GOAL_REACHED`, `OBSTACLE_STOPPED`, `PATH_ENDED`, `PATH_BLOCKED`, `MOVE_COMPLETE`, `TURN_COMPLETE`
 - Cancel: `nav_to cancel` or `/navigation/cancel` service (std_srvs/Trigger)
 

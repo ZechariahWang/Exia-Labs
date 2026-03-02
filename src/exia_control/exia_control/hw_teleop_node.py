@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+
+# rm -rf build/ install/ log/
 import sys
 import time
 import signal

@@ -10,9 +10,11 @@ import select
 import subprocess
 import os
 
+import math
+
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import NavSatFix
+from sensor_msgs.msg import NavSatFix, Imu
 
 try:
     from Phidget22.Devices.DCMotor import DCMotor
@@ -118,12 +120,24 @@ class HwTeleopNode(Node):
         self._estop = False
         self._gps_lat = None
         self._gps_lon = None
+        self._imu_heading = None
+        self._imu_roll = None
+        self._imu_pitch = None
 
         self.running = True
         self.old_settings = None
 
         self._gnss_proc = None
+        self._imu_proc = None
+        self._lidar_proc = None
+        self._foxglove_proc = None
+        self._rsp_proc = None
+        self._lidar_tf_proc = None
         self._init_gnss_driver()
+        self._init_imu_driver()
+        self._init_lidar_driver()
+        self._init_foxglove_bridge()
+        self._init_robot_state_publisher()
         self._init_lss()
         self._init_phidgets()
 
@@ -132,6 +146,7 @@ class HwTeleopNode(Node):
         self.key_thread.start()
 
         self.create_subscription(NavSatFix, '/navsatfix', self._gps_cb, 10)
+        self.create_subscription(Imu, '/imu/data', self._imu_cb, 10)
 
         self.create_timer(0.02, self._tick)
 
@@ -159,6 +174,68 @@ class HwTeleopNode(Node):
             self.get_logger().info(f'GPS driver started (pid={self._gnss_proc.pid})')
         except Exception as e:
             self.get_logger().warn(f'Failed to start GPS driver: {e}')
+
+    def _init_imu_driver(self):
+        try:
+            self._imu_proc = subprocess.Popen(
+                ['ros2', 'run', 'exia_driver', 'imu_node'],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            self.get_logger().info(f'IMU driver started (pid={self._imu_proc.pid})')
+        except Exception as e:
+            self.get_logger().warn(f'Failed to start IMU driver: {e}')
+
+    def _init_lidar_driver(self):
+        try:
+            self._lidar_proc = subprocess.Popen(
+                ['ros2', 'launch', 'velodyne',
+                 'velodyne-all-nodes-VLP32C-launch.py'],
+                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+            self.get_logger().info(f'Lidar driver started (pid={self._lidar_proc.pid})')
+        except Exception as e:
+            self.get_logger().warn(f'Failed to start lidar driver: {e}')
+        try:
+            self._lidar_tf_proc = subprocess.Popen(
+                ['ros2', 'run', 'tf2_ros', 'static_transform_publisher',
+                 '--x', '0', '--y', '0', '--z', '0',
+                 '--roll', '0', '--pitch', '0', '--yaw', '0',
+                 '--frame-id', 'lidar_link', '--child-frame-id', 'velodyne'],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            self.get_logger().info('Lidar TF (lidar_link->velodyne) published')
+        except Exception as e:
+            self.get_logger().warn(f'Failed to start lidar TF publisher: {e}')
+
+    def _init_foxglove_bridge(self):
+        try:
+            self._foxglove_proc = subprocess.Popen(
+                ['ros2', 'launch', 'foxglove_bridge',
+                 'foxglove_bridge_launch.xml', 'port:=8765'],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            self.get_logger().info(f'Foxglove bridge started on :8765 (pid={self._foxglove_proc.pid})')
+        except Exception as e:
+            self.get_logger().warn(f'Failed to start Foxglove bridge: {e}')
+
+    def _init_robot_state_publisher(self):
+        urdf_xacro = os.path.join(
+            os.path.expanduser('~/exia_ws'),
+            'src', 'exia_bringup', 'urdf', 'exia_ground.urdf.xacro')
+        if not os.path.isfile(urdf_xacro):
+            self.get_logger().warn(f'URDF not found: {urdf_xacro}')
+            return
+        try:
+            result = subprocess.run(
+                ['xacro', urdf_xacro],
+                capture_output=True, text=True, timeout=10)
+            if result.returncode != 0:
+                self.get_logger().warn(f'xacro failed: {result.stderr.strip()}')
+                return
+            urdf_xml = result.stdout
+            self._rsp_proc = subprocess.Popen(
+                ['ros2', 'run', 'robot_state_publisher', 'robot_state_publisher',
+                 '--ros-args', '-p', f'robot_description:={urdf_xml}'],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            self.get_logger().info(f'Robot state publisher started (pid={self._rsp_proc.pid})')
+        except Exception as e:
+            self.get_logger().warn(f'Failed to start robot_state_publisher: {e}')
 
     def _init_lss(self):
         try:
@@ -266,8 +343,21 @@ class HwTeleopNode(Node):
             pass
 
     def _gps_cb(self, msg):
-        self._gps_lat = msg.latitude
-        self._gps_lon = msg.longitude
+        if math.isfinite(msg.latitude) and math.isfinite(msg.longitude):
+            self._gps_lat = msg.latitude
+            self._gps_lon = msg.longitude
+
+    def _imu_cb(self, msg):
+        q = msg.orientation
+        siny_cosp = 2.0 * (q.w * q.z + q.x * q.y)
+        cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
+        self._imu_heading = math.degrees(math.atan2(siny_cosp, cosy_cosp))
+        sinr_cosp = 2.0 * (q.w * q.x + q.y * q.z)
+        cosr_cosp = 1.0 - 2.0 * (q.x * q.x + q.y * q.y)
+        self._imu_roll = math.degrees(math.atan2(sinr_cosp, cosr_cosp))
+        sinp = 2.0 * (q.w * q.y - q.z * q.x)
+        sinp = max(-1.0, min(1.0, sinp))
+        self._imu_pitch = math.degrees(math.asin(sinp))
 
     def _key_active(self, key):
         window = KEY_WINDOW_REPEAT if self._key_repeating[key] else KEY_WINDOW_INITIAL
@@ -450,32 +540,39 @@ class HwTeleopNode(Node):
         estop_str = ' ** E-STOP **' if self._estop else ''
 
         if self._gps_lat is not None:
-            gps_str = f' {self._gps_lat:.6f}, {self._gps_lon:.6f}'
+            gps_str = f'{self._gps_lat:.6f},{self._gps_lon:.6f}'
         else:
-            gps_str = ' --'
+            gps_str = '--'
 
-        sys.stdout.write('\r\033[K')
+        if self._imu_heading is not None:
+            imu_str = f'H:{self._imu_heading:+7.1f} R:{self._imu_roll:+6.1f} P:{self._imu_pitch:+6.1f}'
+        else:
+            imu_str = '--'
+
+        sys.stdout.write('\033[2A\r\033[K')
         sys.stdout.write(
             f'[{lss_tag} {steer_tag}] '
             f'T:{self._throttle_pct():3d}% '
             f'B:{self._brake_pct():3d}% '
             f'G:{gear_str} '
             f'S:{duty_pct:+4d}%'
-            f' GPS{gps_str}'
             f'{estop_str}'
         )
+        sys.stdout.write(f'\n\033[K GPS:{gps_str} IMU:{imu_str}\n')
         sys.stdout.flush()
 
     def destroy_node(self):
         self.running = False
         self._safe_stop()
 
-        if self._gnss_proc is not None:
-            self._gnss_proc.terminate()
-            try:
-                self._gnss_proc.wait(timeout=3)
-            except subprocess.TimeoutExpired:
-                self._gnss_proc.kill()
+        for proc in [self._gnss_proc, self._imu_proc, self._lidar_proc,
+                     self._lidar_tf_proc, self._foxglove_proc, self._rsp_proc]:
+            if proc is not None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
 
         if self.serial_conn is not None:
             try:
@@ -514,6 +611,8 @@ def main(args=None):
     print('  Ctrl+C  : quit')
     print()
     print('  All controls spring back on release.')
+    print()
+    print()
     print()
 
     node = HwTeleopNode()

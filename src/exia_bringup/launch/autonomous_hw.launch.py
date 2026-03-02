@@ -253,7 +253,7 @@ def generate_launch_description():
     septentrio_gnss_node = Node(
         package='septentrio_gnss_driver',
         executable='septentrio_gnss_driver_node',
-        name='septentrio_gnss_driver',
+        name='septentrio_gnss',
         output='screen',
         parameters=[septentrio_params_file, {'use_sim_time': False}],
         remappings=[

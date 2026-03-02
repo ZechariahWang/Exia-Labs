@@ -23,6 +23,7 @@ setup(
             'nav_to = exia_control.nav_to_cmd:main',
             'teleop = exia_control.teleop_node:main',
             'hw_teleop = exia_control.hw_teleop_node:main',
+            'lss_calibrate = exia_control.lss_calibrate:main',
         ],
     },
 )

@@ -7,9 +7,12 @@ import threading
 import termios
 import tty
 import select
+import subprocess
+import os
 
 import rclpy
 from rclpy.node import Node
+from sensor_msgs.msg import NavSatFix
 
 try:
     from Phidget22.Devices.DCMotor import DCMotor
@@ -22,10 +25,10 @@ LSS_THROTTLE_ID = 1
 LSS_BRAKE_ID = 2
 LSS_GEAR_ID = 3
 
-LSS_THROTTLE_NEUTRAL = -900
-LSS_THROTTLE_MAX = -150
-LSS_BRAKE_RELEASED = 900
-LSS_BRAKE_ENGAGED = -100
+LSS_THROTTLE_NEUTRAL = 5
+LSS_THROTTLE_MAX = 550 # 550
+LSS_BRAKE_RELEASED = 0
+LSS_BRAKE_ENGAGED = -100 # -300
 LSS_GEAR_REVERSE = -330
 LSS_GEAR_NEUTRAL = -100
 LSS_GEAR_HIGH = 200
@@ -113,10 +116,14 @@ class HwTeleopNode(Node):
         self._key_times = {'w': 0.0, 's': 0.0, 'a': 0.0, 'd': 0.0}
         self._key_repeating = {'w': False, 's': False, 'a': False, 'd': False}
         self._estop = False
+        self._gps_lat = None
+        self._gps_lon = None
 
         self.running = True
         self.old_settings = None
 
+        self._gnss_proc = None
+        self._init_gnss_driver()
         self._init_lss()
         self._init_phidgets()
 
@@ -124,7 +131,34 @@ class HwTeleopNode(Node):
         self.key_thread = threading.Thread(target=self._key_reader, daemon=True)
         self.key_thread.start()
 
+        self.create_subscription(NavSatFix, '/navsatfix', self._gps_cb, 10)
+
         self.create_timer(0.02, self._tick)
+
+    def _init_gnss_driver(self):
+        ws = os.path.expanduser('~/exia_ws')
+        candidates = [
+            os.path.join(ws, 'src', 'exia_bringup', 'config', 'septentrio_rover.yaml'),
+            os.path.join(ws, 'install', 'exia_bringup', 'share',
+                         'exia_bringup', 'config', 'septentrio_rover.yaml'),
+        ]
+        params_file = None
+        for c in candidates:
+            if os.path.isfile(c):
+                params_file = c
+                break
+        if params_file is None:
+            self.get_logger().error(f'GPS params file not found, tried: {candidates}')
+            return
+        try:
+            self._gnss_proc = subprocess.Popen(
+                ['ros2', 'run', 'septentrio_gnss_driver',
+                 'septentrio_gnss_driver_node',
+                 '--ros-args', '--params-file', params_file],
+                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+            self.get_logger().info(f'GPS driver started (pid={self._gnss_proc.pid})')
+        except Exception as e:
+            self.get_logger().warn(f'Failed to start GPS driver: {e}')
 
     def _init_lss(self):
         try:
@@ -139,12 +173,19 @@ class HwTeleopNode(Node):
             self.serial_conn = None
             return
 
+        servo_ok = {}
         for sid, name in [(1, 'throttle'), (2, 'brake'), (3, 'gear')]:
             if self._query_servo(sid):
                 self.get_logger().info(f'LSS servo {sid} ({name}): OK')
                 self._send_lss(f'#{sid}SD{LSS_SERVO_SPEED}\r')
+                servo_ok[sid] = True
             else:
                 self.get_logger().warn(f'LSS servo {sid} ({name}): no response')
+                servo_ok[sid] = False
+
+        if not servo_ok.get(LSS_THROTTLE_ID):
+            self.get_logger().error('Throttle servo not responding — LSS disabled')
+            return
 
         self._lss_ok = True
         self._send_lss(f'#{LSS_THROTTLE_ID}D{LSS_THROTTLE_NEUTRAL}\r')
@@ -224,6 +265,10 @@ class HwTeleopNode(Node):
         except PhidgetException:
             pass
 
+    def _gps_cb(self, msg):
+        self._gps_lat = msg.latitude
+        self._gps_lon = msg.longitude
+
     def _key_active(self, key):
         window = KEY_WINDOW_REPEAT if self._key_repeating[key] else KEY_WINDOW_INITIAL
         return (time.monotonic() - self._key_times[key]) < window
@@ -292,7 +337,7 @@ class HwTeleopNode(Node):
             or abs(thr_int - self._last_sent_throttle) >= LSS_SEND_DEADBAND
             or (thr_at_neutral and self._last_sent_throttle != LSS_THROTTLE_NEUTRAL))
         if thr_needs_send and (now - self._last_send_time_throttle) >= LSS_SEND_MIN_INTERVAL:
-            self._send_lss(f'#{LSS_THROTTLE_ID}D{thr_int}\r')
+            self._send_lss(f'#{LSS_THROTTLE_ID}D{thr_int}T50\r')
             self._last_sent_throttle = thr_int
             self._last_send_time_throttle = now
 
@@ -305,7 +350,7 @@ class HwTeleopNode(Node):
             or (brk_at_released and self._last_sent_brake != LSS_BRAKE_RELEASED)
             or (brk_at_engaged and self._last_sent_brake != LSS_BRAKE_ENGAGED))
         if brk_needs_send and (now - self._last_send_time_brake) >= LSS_SEND_MIN_INTERVAL:
-            self._send_lss(f'#{LSS_BRAKE_ID}D{brk_int}\r')
+            self._send_lss(f'#{LSS_BRAKE_ID}D{brk_int}T50\r')
             self._last_sent_brake = brk_int
             self._last_send_time_brake = now
 
@@ -404,13 +449,19 @@ class HwTeleopNode(Node):
         duty_pct = int(self._steer_ramp * 100)
         estop_str = ' ** E-STOP **' if self._estop else ''
 
+        if self._gps_lat is not None:
+            gps_str = f' {self._gps_lat:.6f}, {self._gps_lon:.6f}'
+        else:
+            gps_str = ' --'
+
         sys.stdout.write('\r\033[K')
         sys.stdout.write(
             f'[{lss_tag} {steer_tag}] '
-            f'Thr:{self._throttle_pct():3d}% | '
-            f'Brk:{self._brake_pct():3d}% | '
-            f'Gear:{gear_str} | '
-            f'Str:{duty_pct:+4d}%'
+            f'T:{self._throttle_pct():3d}% '
+            f'B:{self._brake_pct():3d}% '
+            f'G:{gear_str} '
+            f'S:{duty_pct:+4d}%'
+            f' GPS{gps_str}'
             f'{estop_str}'
         )
         sys.stdout.flush()
@@ -418,6 +469,13 @@ class HwTeleopNode(Node):
     def destroy_node(self):
         self.running = False
         self._safe_stop()
+
+        if self._gnss_proc is not None:
+            self._gnss_proc.terminate()
+            try:
+                self._gnss_proc.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                self._gnss_proc.kill()
 
         if self.serial_conn is not None:
             try:

@@ -492,7 +492,7 @@ class DynamicNavigator(Node):
             with self._nav_lock:
                 self._move_type = msg.move_type
                 self._move_value = msg.move_value
-                self._move_speed = max(0.1, min(5.0, msg.move_speed))
+                self._move_speed = msg.move_speed
                 self._move_start_time = time.time()
                 self._move_start_x = self.robot_x
                 self._move_start_y = self.robot_y
@@ -510,7 +510,7 @@ class DynamicNavigator(Node):
             with self._nav_lock:
                 self._move_type = msg.move_type
                 self._move_value = msg.move_value
-                self._move_speed = max(0.1, min(5.0, msg.move_speed))
+                self._move_speed = msg.move_speed
                 self._move_start_time = time.time()
                 if self._move_type == 'heading':
                     target = self.robot_yaw + math.radians(msg.move_value)
@@ -669,7 +669,7 @@ class DynamicNavigator(Node):
                 return
 
             if self.state == NavigatorState.IDLE:
-                pass
+                self._publish_stop()
             elif self.state == NavigatorState.PLANNING:
                 self._publish_stop()
             elif self.state == NavigatorState.EXECUTING:

@@ -1,6 +1,6 @@
-septentrio_gnss_driver:
+septentrio_gnss:
   ros__parameters:
-    device: /dev/exia_gps
+    device: serial:/dev/exia_gps
     serial_baud_rate: 921600
     frame_id: gps_link
 
@@ -31,4 +31,5 @@ septentrio_gnss_driver:
 
     use_gnss_time: false
     rtk_settings: none
-    polling_period: main: 100
+    polling_period:
+      main: 100

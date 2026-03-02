@@ -67,15 +67,18 @@ time.sleep(1)
 print(f"\n[6] Current position:")
 lss_query("QD")
 
-print("\n[7] Interactive mode - type positions in degrees (q to quit):")
+print("\n[7] Interactive mode (q to quit):")
+print("     Type degrees (e.g. 45) or tenths with 't' suffix (e.g. 900t)")
 while True:
     try:
-        val = input("  Degrees (e.g. 45, -30, 0): ").strip()
+        val = input("  Position: ").strip()
         if val.lower() == 'q':
             break
-        deg = float(val)
-        tenths = int(deg * 10)
-        print(f"  Sending D{tenths}...")
+        if val.lower().endswith('t'):
+            tenths = int(float(val[:-1]))
+        else:
+            tenths = int(float(val) * 10)
+        print(f"  Sending D{tenths} ({tenths/10:.1f} deg)...")
         lss_send(f"D{tenths}")
     except ValueError:
         print("  Invalid input")

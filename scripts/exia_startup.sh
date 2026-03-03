@@ -104,7 +104,7 @@ if [ ! -f "$KEY_DIR/radio_private.pem" ] || [ ! -f "$KEY_DIR/radio_public.pem" ]
 fi
 echo "Radio encryption keys found"
 
-# --- Launch autonomous stack (ackermann_drive_node handles Arduino + ODrive) ---
+# --- Launch autonomous stack (ackermann_drive_node handles Arduino + ODrive) --- test
 echo "Starting autonomous stack..."
 ros2 launch exia_bringup autonomous_hw.launch.py &
 PIDS+=($!)

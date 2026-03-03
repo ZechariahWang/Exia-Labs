@@ -44,7 +44,7 @@ try:
 except ImportError:
     BLUE_AVAILABLE = False
 
-LSS_THROTTLE_ID                      = 1
+LSS_THROTTLE_ID                      = 1 # test
 LSS_BRAKE_ID                         = 2
 
 LSS_THROTTLE_NEUTRAL                 = 5
@@ -894,29 +894,16 @@ class HwTeleopNode(Node):
 
     def _init_blue(self):
         import asyncio
-        import logging
         from pathlib import Path
         from exia_control.blue_core.config import ConfigStore
         from exia_control.blue_core.state import RuntimeState
         from exia_control.argus.exia_ros_vehicle import ExiaRosVehicle
-        from exia_control.blue.client import BlueClient
-        from exia_control.blue_core.service import AppService
 
         config_path = Path.home() / '.exia' / 'blue_config.toml'
         config_path.parent.mkdir(parents=True, exist_ok=True)
         self._blue_config_store = ConfigStore.load_or_create(config_path)
         self._blue_state = RuntimeState()
         self._blue_vehicle = ExiaRosVehicle(self)
-
-        cfg = self._blue_config_store.get()
-        self._blue_client = BlueClient(cfg.blue_base_url, cfg.blue_api_key, cfg.request_timeout_seconds)
-        self._blue_service = AppService(
-            config_store=self._blue_config_store,
-            state=self._blue_state,
-            client=self._blue_client,
-            vehicle=self._blue_vehicle,
-            logger=logging.getLogger('exia.blue'),
-        )
 
         self._blue_loop = asyncio.new_event_loop()
         self._blue_thread = threading.Thread(target=self._run_blue_loop, daemon=True)
@@ -930,7 +917,20 @@ class HwTeleopNode(Node):
 
     async def _blue_main(self):
         import asyncio
-        async with self._blue_client:
+        import logging
+        from exia_control.blue.client import BlueClient
+        from exia_control.blue_core.service import AppService
+
+        cfg = self._blue_config_store.get()
+        logger = logging.getLogger('exia.blue')
+        async with BlueClient(cfg.blue_base_url, cfg.blue_api_key, cfg.request_timeout_seconds) as client:
+            self._blue_service = AppService(
+                config_store=self._blue_config_store,
+                state=self._blue_state,
+                client=client,
+                vehicle=self._blue_vehicle,
+                logger=logger,
+            )
             await self._blue_service.start()
             try:
                 while rclpy.ok():

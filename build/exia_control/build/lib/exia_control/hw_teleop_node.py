@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 import sys
 import time
 import signal
@@ -31,28 +32,39 @@ try:
 except ImportError:
     JETSON_GPIO_AVAILABLE = False
 
+try:
+    import dearpygui.dearpygui as dpg
+    DEARPYGUI_AVAILABLE = True
+except ImportError:
+    DEARPYGUI_AVAILABLE = False
+
+try:
+    import httpx
+    BLUE_AVAILABLE = True
+except ImportError:
+    BLUE_AVAILABLE = False
+
 LSS_THROTTLE_ID                      = 1
 LSS_BRAKE_ID                         = 2
 
 LSS_THROTTLE_NEUTRAL                 = 5
-LSS_THROTTLE_MAX                     = 550 # 550
+LSS_THROTTLE_MAX                     = 550
 LSS_BRAKE_RELEASED                   = 0
-LSS_BRAKE_ENGAGED                    = -100 # -300
+LSS_BRAKE_ENGAGED                    = -100
 
 GEAR_NAMES                           = {0: 'R', 1: 'N', 2: 'H'}
 GEAR_PWM_PIN                         = 32
 GEAR_PWM_FREQ                        = 50
-# duty% = (500 + (deg / 180) * 2000) / 20000 * 100
-GEAR_PWM_REVERSE                     = 5.67  # 57 deg -> 1133us
-GEAR_PWM_NEUTRAL                     = 6.94  # 80 deg -> 1389us
-GEAR_PWM_HIGH                        = 8.61  # 110 deg -> 1722us
+GEAR_PWM_REVERSE                     = 5.67
+GEAR_PWM_NEUTRAL                     = 6.94
+GEAR_PWM_HIGH                        = 8.61
 GEAR_PWM                             = {0: GEAR_PWM_REVERSE, 1: GEAR_PWM_NEUTRAL, 2: GEAR_PWM_HIGH}
 
 KEY_WINDOW_INITIAL                   = 0.6
 KEY_WINDOW_REPEAT                    = 0.15
 KEY_REPEAT_GAP                       = 0.12
-RAMP_RATE                            = 1.8 # how fast throttle/brake ramps up
-SPRING_RATE                          = 4.0 # how fast fall back to 0
+RAMP_RATE                            = 1.8
+SPRING_RATE                          = 4.0
 STEER_RAMP_RATE                      = 2.5
 STEER_SPRING_RATE                    = 5.0
 
@@ -61,8 +73,7 @@ CMD_VEL_MAX_REVERSE                  = 0.5
 CMD_VEL_MAX_STEER                    = 0.6
 CMD_VEL_WHEELBASE                    = 1.3
 
-# prevents flooding serial 
-LSS_SEND_DEADBAND                    = 8 # only send new command when value >8
+LSS_SEND_DEADBAND                    = 8
 LSS_SEND_MIN_INTERVAL                = 0.025
 LSS_SERVO_SPEED                      = 600
 
@@ -106,6 +117,8 @@ class HwTeleopNode(Node):
         self.declare_parameter('steering_current_limit', 3.0)
         self.declare_parameter('remote_mode', False)
         self.declare_parameter('launch_sensors', True)
+        self.declare_parameter('gui', False)
+        self.declare_parameter('blue', False)
         self.declare_parameter('gear_pwm_pin', GEAR_PWM_PIN)
         self.declare_parameter('gear_pwm_reverse', GEAR_PWM_REVERSE)
         self.declare_parameter('gear_pwm_neutral', GEAR_PWM_NEUTRAL)
@@ -169,6 +182,19 @@ class HwTeleopNode(Node):
         self._camera_proc = None
         self._remote_last_time = 0.0
 
+        self._cmd_vel_linear_x = 0.0
+        self._cmd_vel_angular_z = 0.0
+
+        self._blue_enabled = self.get_parameter('blue').value and BLUE_AVAILABLE
+        self._blue_loop = None
+        self._blue_thread = None
+        self._blue_state = None
+        self._blue_config_store = None
+        self._blue_service = None
+
+        if self._blue_enabled:
+            self._init_blue()
+
         self._joy_throttle = 0.0
         self._joy_brake = 0.0
         self._joy_steer = 0.0
@@ -203,7 +229,12 @@ class HwTeleopNode(Node):
         self._cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
         self.create_subscription(Joy, '/joy', self._joy_cb, 10)
 
-        if self._interactive:
+        self._gui_mode = self.get_parameter('gui').value and DEARPYGUI_AVAILABLE
+
+        if self._gui_mode:
+            signal.signal(signal.SIGINT, self._signal_handler)
+            signal.signal(signal.SIGTERM, self._signal_handler)
+        elif self._interactive:
             self._setup_terminal()
             self.key_thread = threading.Thread(target=self._key_reader, daemon=True)
             self.key_thread.start()
@@ -555,6 +586,8 @@ class HwTeleopNode(Node):
             msg.angular.z = speed / (CMD_VEL_WHEELBASE / math.tan(steer_angle))
         else:
             msg.angular.z = 0.0
+        self._cmd_vel_linear_x = msg.linear.x
+        self._cmd_vel_angular_z = msg.angular.z
         self._cmd_vel_pub.publish(msg)
 
     def _tick(self):
@@ -755,7 +788,7 @@ class HwTeleopNode(Node):
         return int(self._brake_ramp * 100)
 
     def _print_hud(self):
-        if not self._interactive:
+        if not self._interactive or self._gui_mode:
             return
 
         gear_str = GEAR_NAMES.get(self._gear, '?')
@@ -851,41 +884,118 @@ class HwTeleopNode(Node):
 
         self._restore_terminal()
         sys.stdout.write('\n')
+
+        if self._blue_loop is not None:
+            self._blue_loop.call_soon_threadsafe(self._blue_loop.stop)
+        if self._blue_thread is not None:
+            self._blue_thread.join(timeout=5)
+
         super().destroy_node()
+
+    def _init_blue(self):
+        import asyncio
+        import logging
+        from pathlib import Path
+        from exia_control.blue_core.config import ConfigStore
+        from exia_control.blue_core.state import RuntimeState
+        from exia_control.argus.exia_ros_vehicle import ExiaRosVehicle
+        from exia_control.blue.client import BlueClient
+        from exia_control.blue_core.service import AppService
+
+        config_path = Path.home() / '.exia' / 'blue_config.toml'
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        self._blue_config_store = ConfigStore.load_or_create(config_path)
+        self._blue_state = RuntimeState()
+        self._blue_vehicle = ExiaRosVehicle(self)
+
+        cfg = self._blue_config_store.get()
+        self._blue_client = BlueClient(cfg.blue_base_url, cfg.blue_api_key, cfg.request_timeout_seconds)
+        self._blue_service = AppService(
+            config_store=self._blue_config_store,
+            state=self._blue_state,
+            client=self._blue_client,
+            vehicle=self._blue_vehicle,
+            logger=logging.getLogger('exia.blue'),
+        )
+
+        self._blue_loop = asyncio.new_event_loop()
+        self._blue_thread = threading.Thread(target=self._run_blue_loop, daemon=True)
+        self._blue_thread.start()
+        self.get_logger().info('Blue sync started (config: %s)' % str(config_path))
+
+    def _run_blue_loop(self):
+        import asyncio
+        asyncio.set_event_loop(self._blue_loop)
+        self._blue_loop.run_until_complete(self._blue_main())
+
+    async def _blue_main(self):
+        import asyncio
+        async with self._blue_client:
+            await self._blue_service.start()
+            try:
+                while rclpy.ok():
+                    await asyncio.sleep(0.1)
+            except asyncio.CancelledError:
+                pass
+            finally:
+                await self._blue_service.stop()
 
 
 def main(args=None):
     rclpy.init(args=args)
 
-    if sys.stdin.isatty():
-        remote = '--ros-args' in sys.argv and 'remote_mode:=true' in ' '.join(sys.argv)
-        if remote:
-            print('Exia Remote Teleop (Base Station)')
-            print('----------------------------------')
-        else:
-            print('Exia Hardware Teleop')
-            print('--------------------')
-        print('  W       : throttle (hold)')
-        print('  S       : brake (hold)')
-        print('  A/D     : steer left/right (hold)')
-        print('  1/2/3   : gear Reverse/Neutral/High')
-        print('  Space   : e-stop')
-        print('  Ctrl+C  : quit')
-        print()
-        print('  All controls spring back on release.')
-        print()
-        print()
-        print()
-
     node = HwTeleopNode()
-    try:
-        rclpy.spin(node)
-    except (KeyboardInterrupt, SystemExit):
-        pass
-    finally:
-        node.destroy_node()
-        if rclpy.ok():
-            rclpy.shutdown()
+    gui_requested = node.get_parameter('gui').value
+
+    if gui_requested and DEARPYGUI_AVAILABLE:
+        from exia_control.gui.dashboard import create_dashboard, run_frame, stop_dashboard
+        create_dashboard(
+            node,
+            blue_state=node._blue_state,
+            blue_config_store=node._blue_config_store,
+            blue_service=node._blue_service,
+        )
+        spin_thread = threading.Thread(target=rclpy.spin, args=(node,), daemon=True)
+        spin_thread.start()
+        try:
+            while run_frame():
+                pass
+        except (KeyboardInterrupt, SystemExit):
+            pass
+        finally:
+            stop_dashboard()
+            node.destroy_node()
+            if rclpy.ok():
+                rclpy.shutdown()
+    else:
+        if sys.stdin.isatty():
+            remote = '--ros-args' in sys.argv and 'remote_mode:=true' in ' '.join(sys.argv)
+            if remote:
+                print('Exia Remote Teleop (Base Station)')
+                print('----------------------------------')
+            else:
+                print('Exia Hardware Teleop')
+                print('--------------------')
+            print('  W       : throttle (hold)')
+            print('  S       : brake (hold)')
+            print('  A/D     : steer left/right (hold)')
+            print('  1/2/3   : gear Reverse/Neutral/High')
+            print('  Space   : e-stop')
+            print('  Ctrl+C  : quit')
+            print()
+            print('  All controls spring back on release.')
+            print()
+            print()
+            print()
+
+        try:
+            rclpy.spin(node)
+        except (KeyboardInterrupt, SystemExit):
+            pass
+        finally:
+            node.destroy_node()
+            if rclpy.ok():
+                rclpy.shutdown()
 
 
 if __name__ == '__main__':

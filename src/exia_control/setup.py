@@ -10,7 +10,12 @@ setup(
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
     ],
-    install_requires=['setuptools'],
+    install_requires=[
+        'setuptools',
+        'httpx>=0.27',
+        'tomli-w>=1.0',
+        'tomli>=2.0',
+    ],
     zip_safe=True,
     maintainer='Zechariah Wang',
     maintainer_email='zechariahwang@gmail.com',

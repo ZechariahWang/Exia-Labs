@@ -1,1 +1,1 @@
-/home/zech/exia_ws/build/exia_bringup/ament_cmake_index/share/ament_index/resource_index/package_run_dependencies/exia_bringup
+robot_state_publisher;joint_state_publisher;xacro;rviz2;ros_gz_sim;ros_gz_bridge;gz_ros2_control;controller_manager;slam_toolbox;nav2_planner;nav2_costmap_2d;nav2_lifecycle_manager;pointcloud_to_laserscan;exia_driver;exia_control

@@ -1,1 +1,6 @@
-/home/zech/exia_ws/src/exia_bringup/config/imu_params.yaml
+imu_node:
+  ros__parameters:
+    port: /dev/exia_imu
+    baud_rate: 115200
+    frame_id: imu_link
+    output_rate: 200

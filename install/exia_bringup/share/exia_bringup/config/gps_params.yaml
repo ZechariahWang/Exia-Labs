@@ -1,1 +1,9 @@
-/home/zech/exia_ws/src/exia_bringup/config/gps_params.yaml
+gps_transform_node:
+  ros__parameters:
+    origin_lat: 49.666400
+    origin_lon: 11.841100
+    auto_set_origin: true
+    publish_tf: false
+    gps_frame_id: gps_link
+    odom_frame_id: odom
+    require_rtk: true

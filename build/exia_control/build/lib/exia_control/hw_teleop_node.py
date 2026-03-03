@@ -47,7 +47,7 @@ except ImportError:
 LSS_THROTTLE_ID                      = 1 # test
 LSS_BRAKE_ID                         = 2
 
-LSS_THROTTLE_NEUTRAL                 = 250
+LSS_THROTTLE_NEUTRAL                 = 5
 LSS_THROTTLE_MAX                     = 550
 LSS_BRAKE_RELEASED                   = 0
 LSS_BRAKE_ENGAGED                    = -100

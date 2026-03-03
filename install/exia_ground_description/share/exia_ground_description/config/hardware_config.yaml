@@ -1,6 +1,0 @@
-# Minimal config for gz_ros2_control - just controller_manager settings
-# Controllers are loaded separately by spawners
-
-controller_manager:
-  ros__parameters:
-    update_rate: 100  # Hz

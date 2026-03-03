@@ -1,21 +1,28 @@
 [Unit]
-Description=Exia Ground Robot Autonomous + Radio Bridge
-After=network.target local-fs.target
+Description=Exia Ground Robot Teleop + Radio Bridge
+After=network.target local-fs.target systemd-udev-settle.service
 Wants=network.target
 
 [Service]
 Type=simple
 User=exialabsargus
 Group=exialabsargus
+SupplementaryGroups=dialout gpio i2c
 WorkingDirectory=/home/exialabsargus/exia_ws
 ExecStart=/home/exialabsargus/exia_ws/scripts/exia_startup.sh
+KillMode=control-group
 Restart=on-failure
 RestartSec=10
+TimeoutStartSec=180
 StandardOutput=journal
 StandardError=journal
 
 Environment="HOME=/home/exialabsargus"
 Environment="PATH=/home/exialabsargus/bin:/usr/local/bin:/usr/bin:/bin:/home/exialabsargus/.local/bin"
+Environment="EXIA_WS=/home/exialabsargus/exia_ws"
+Environment="ROS_DOMAIN_ID=0"
+Environment="JETSON_MODEL_NAME=JETSON_ORIN_NANO"
+Environment="PYTHONUNBUFFERED=1"
 
 [Install]
 WantedBy=multi-user.target

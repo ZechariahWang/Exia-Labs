@@ -1,15 +1,16 @@
 #!/bin/bash
 # Exia Ground Robot — Startup Script
-# Paths are hardcoded for user `exialabsargus` on Jetson Orin
+# Hardware: LSS servo bus (throttle/brake), Phidgets DC motor (steering),
+#           Jetson GPIO PWM (gear), RFD900x radio, sensors via hw_teleop
+# Paths hardcoded for user `exialabsargus` on Jetson Orin
 
 LOGFILE="/home/exialabsargus/exia_startup.log"
-ARDUINO_PORT="/dev/arduino_control"
-ARDUINO_CLI="/home/exialabsargus/bin/arduino-cli"
-ARDUINO_SKETCH_DIR="/home/exialabsargus/rc_control_pwm"
-WORKSPACE="/home/exialabsargus/exia_ws"
+LSS_PORT="/dev/lss_controller"
 RADIO_PORT="/dev/exia_radio"
+IMU_PORT="/dev/exia_imu"
+GPS_PORT="/dev/exia_gps"
+WORKSPACE="/home/exialabsargus/exia_ws"
 KEY_DIR="/home/exialabsargus/.exia"
-MAX_WAIT=120
 
 PIDS=()
 
@@ -18,110 +19,60 @@ cleanup() {
     for pid in "${PIDS[@]}"; do
         kill "$pid" 2>/dev/null
     done
-    wait
+    pkill -f "ros2.*exia" 2>/dev/null
+    pkill -f "foxglove_bridge" 2>/dev/null
+    pkill -f "velodyne" 2>/dev/null
+    pkill -f "orbbec_camera" 2>/dev/null
+    pkill -f "septentrio_gnss" 2>/dev/null
+    wait 2>/dev/null
     echo "Shutdown complete at $(date)"
 }
 
 trap cleanup EXIT INT TERM
 
+truncate -s 0 "$LOGFILE" 2>/dev/null
 exec > >(tee -a "$LOGFILE") 2>&1
 echo "=========================================="
 echo "Exia Robot Startup - $(date)"
 echo "=========================================="
 
-wait_for_device() {
+check_device() {
     local device=$1
-    local waited=0
-    echo "Waiting for $device..."
-    while [ ! -e "$device" ] && [ $waited -lt $MAX_WAIT ]; do
-        sleep 1
-        waited=$((waited + 1))
-    done
     if [ -e "$device" ]; then
-        echo "$device found after ${waited}s"
-        return 0
+        echo "$device : FOUND"
     else
-        echo "ERROR: $device not found after ${MAX_WAIT}s"
-        return 1
+        echo "$device : not present — node will connect when available"
     fi
 }
 
-reset_arduino() {
-    echo "Resetting Arduino via DTR..."
-    stty -F "$ARDUINO_PORT" 115200 hupcl -echo
-    exec 3<>"$ARDUINO_PORT"
-    sleep 0.25
-    exec 3>&-
-    sleep 3
-    echo "Arduino reset complete"
-}
+echo "=== Device Check ==="
+check_device "$LSS_PORT"
+check_device "$RADIO_PORT"
+check_device "$IMU_PORT"
+check_device "$GPS_PORT"
+echo "===================="
 
-wait_for_arduino_ready() {
-    local waited=0
-    local max_wait=30
-    echo "Waiting for Arduino READY message..."
-    stty -F "$ARDUINO_PORT" 115200 raw -echo
-    while [ $waited -lt $max_wait ]; do
-        if timeout 2 cat "$ARDUINO_PORT" 2>/dev/null | head -c 50 | grep -q "READY"; then
-            echo "Arduino READY after ${waited}s"
-            echo -n "C" > "$ARDUINO_PORT"
-            echo "Sent handshake confirmation to Arduino"
-            return 0
-        fi
-        sleep 1
-        waited=$((waited + 1))
-    done
-    echo "WARNING: No READY from Arduino after ${max_wait}s"
-    return 1
-}
-
-# --- Wait for Arduino USB device ---
-if ! wait_for_device "$ARDUINO_PORT"; then
-    echo "Arduino not detected. Exiting."
-    exit 1
-fi
-
-sleep 2
-
-# --- Reset Arduino and complete handshake ---
-reset_arduino
-wait_for_arduino_ready
-
-# --- ODrive connection is handled by ackermann_drive_node (use_odrive param) ---
-
-sleep 2
 echo "Sourcing ROS2 environment..."
 source /opt/ros/humble/setup.bash
 source "$WORKSPACE/install/setup.bash"
 
 export ROS_DOMAIN_ID=0
 
-# --- Verify radio encryption keys ---
 if [ ! -f "$KEY_DIR/radio_private.pem" ] || [ ! -f "$KEY_DIR/radio_public.pem" ]; then
-    echo "ERROR: Radio encryption keys not found in $KEY_DIR"
+    echo "WARNING: Radio encryption keys not found in $KEY_DIR"
     echo "Run: bash $WORKSPACE/scripts/generate_radio_keys.sh"
-    exit 1
 fi
-echo "Radio encryption keys found"
 
-# --- Launch autonomous stack (ackermann_drive_node handles Arduino + ODrive) --- test
-echo "Starting autonomous stack..."
-ros2 launch exia_bringup autonomous_hw.launch.py &
+echo "Starting hardware teleop..."
+ros2 run exia_control hw_teleop &
 PIDS+=($!)
 
-sleep 5
+sleep 3
 
-# --- Launch radio bridge if RFD900x is connected ---
-if [ -e "$RADIO_PORT" ]; then
-    echo "Waiting for RFD900x radio boot..."
-    sleep 3
-    echo "Starting radio bridge (robot)..."
-    ros2 launch exia_bringup radio.launch.py role:=robot serial_port:="$RADIO_PORT" &
-    PIDS+=($!)
-else
-    echo "WARNING: Radio not detected at $RADIO_PORT, skipping radio bridge"
-fi
+echo "Starting radio bridge (robot)..."
+ros2 launch exia_bringup radio.launch.py role:=robot serial_port:="$RADIO_PORT" &
+PIDS+=($!)
 
 echo "All processes launched, waiting..."
-wait
-echo "Processes exited at $(date)"
+wait -n 2>/dev/null || wait
+echo "A process exited at $(date), shutting down..."

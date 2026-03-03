@@ -410,7 +410,7 @@ class HwTeleopNode(Node):
             return
         try:
             self.serial_conn.write(cmd.encode())
-            self.serial_conn.flush()
+            self.serial_conn.flush() # yes
         except Exception:
             pass
 

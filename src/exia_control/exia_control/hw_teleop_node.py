@@ -47,7 +47,7 @@ except ImportError:
 LSS_THROTTLE_ID                      = 1 # test
 LSS_BRAKE_ID                         = 2
 
-LSS_THROTTLE_NEUTRAL                 = 5
+LSS_THROTTLE_NEUTRAL                 = 250
 LSS_THROTTLE_MAX                     = 550
 LSS_BRAKE_RELEASED                   = 0
 LSS_BRAKE_ENGAGED                    = -100
@@ -519,14 +519,14 @@ class HwTeleopNode(Node):
         self._joy_brake = _clamp((1.0 - l2) / 2.0, 0.0, 1.0)
         self._joy_steer = _clamp(right_x, -1.0, 1.0)
 
-        if left_y > 0.5:
+        if left_y > 0.15:
             self._joy_throttle = _clamp(left_y, 0.0, 1.0)
-        elif left_y < -0.5:
+        elif left_y < -0.15:
             self._joy_brake = _clamp(-left_y, 0.0, 1.0)
 
-        has_input = (self._joy_throttle > 0.05
-                     or self._joy_brake > 0.05
-                     or abs(self._joy_steer) > 0.05)
+        has_input = (self._joy_throttle > 0.02
+                     or self._joy_brake > 0.02
+                     or abs(self._joy_steer) > 0.02)
         if has_input:
             self._joy_active = True
             self._joy_last_time = time.monotonic()

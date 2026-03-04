@@ -472,6 +472,11 @@ class HwTeleopNode(Node):
     def _on_detach(self, sender):
         with self._motor_lock:
             self._motor_ok = False
+        try:
+            sender.close()
+        except Exception:
+            pass
+        self._phidgets_controller = None
         self.get_logger().warn('MotorPositionController detached')
 
     def _set_steering_position(self, normalized):
@@ -537,7 +542,7 @@ class HwTeleopNode(Node):
             if not force:
                 if now - self._last_gear_shift_time < 0.3:
                     return
-                if target != 1 and self._throttle_ramp > 0.05:
+                if target != 1 and (self._throttle_ramp > 0.05 or self._brake_ramp < 0.3):
                     return
             if self._gear == 0 and target == 2:
                 return
@@ -659,6 +664,12 @@ class HwTeleopNode(Node):
         self._last_tick_t = now
 
         if self._estop:
+            if not self._remote_mode:
+                self._send_lss(f'#{LSS_THROTTLE_ID}D{LSS_THROTTLE_NEUTRAL}\r')
+                self._send_lss(f'#{LSS_BRAKE_ID}D{LSS_BRAKE_ENGAGED}\r')
+                self._set_steering_position(0.0)
+                stop_msg = Twist()
+                self._cmd_vel_pub.publish(stop_msg)
             self._print_hud()
             return
 

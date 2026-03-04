@@ -153,7 +153,7 @@ ros2 launch exia_bringup radio.launch.py role:=base
 | `R` | robot->base | Relay `/navigation/status` messages |
 | `EA` | robot->base | E-stop acknowledgment |
 
-**Safety**: Robot triggers e-stop if no heartbeat ACK for 0.5s. Base resets handshake after 15 missed ACKs. E-stop publishes zero cmd_vel at 20Hz and cancels active navigation. Heartbeat-loss e-stop auto-clears when heartbeats resume.
+**Safety**: Robot triggers e-stop if no heartbeat for 1.5s (configurable in `radio_params.yaml`). Base resets handshake after 30 missed ACKs (3s at 10Hz). E-stop publishes zero cmd_vel at 20Hz and cancels active navigation. Heartbeat-loss e-stop auto-clears when heartbeats resume.
 
 **Base station topics/services**:
 - Sub: `/navigation/goal` -> sends over radio

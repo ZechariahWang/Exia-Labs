@@ -64,6 +64,7 @@ if [ ! -f "$KEY_DIR/radio_private.pem" ] || [ ! -f "$KEY_DIR/radio_public.pem" ]
 fi
 
 echo "Starting hardware teleop..."
+export JETSON_MODEL_NAME=JETSON_ORIN_NANO
 ros2 run exia_control hw_teleop &
 PIDS+=($!)
 

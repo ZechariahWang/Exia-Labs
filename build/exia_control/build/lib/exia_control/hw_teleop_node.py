@@ -29,7 +29,7 @@ except ImportError:
 try:
     import Jetson.GPIO as GPIO
     JETSON_GPIO_AVAILABLE = True
-except ImportError:
+except Exception:
     JETSON_GPIO_AVAILABLE = False
 
 try:

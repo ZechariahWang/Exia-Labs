@@ -910,6 +910,13 @@ class RadioBridge(Node):
             pass
 
     def _robot_handle_teleop(self, payload):
+        with self._state_lock:
+            estop = self._estop_active
+        if estop:
+            stop = Twist()
+            stop.linear.y = 1.0
+            self._teleop_pub.publish(stop)
+            return
         parts = payload.split(',')
         if len(parts) < 3:
             return
@@ -923,6 +930,13 @@ class RadioBridge(Node):
             pass
 
     def _robot_handle_gear(self, payload):
+        with self._state_lock:
+            estop = self._estop_active
+        if estop:
+            msg = Int32()
+            msg.data = 1
+            self._gear_pub.publish(msg)
+            return
         try:
             msg = Int32()
             msg.data = int(payload)
@@ -1085,6 +1099,12 @@ class RadioBridge(Node):
             self._estop_from_remote = True
         stop = Twist()
         self._cmd_vel_pub.publish(stop)
+        teleop_stop = Twist()
+        teleop_stop.linear.y = 1.0
+        self._teleop_pub.publish(teleop_stop)
+        gear_neutral = Int32()
+        gear_neutral.data = 1
+        self._gear_pub.publish(gear_neutral)
         self.get_logger().warn('Remote e-stop activated')
         self._serial_write('EA', 'activated')
         self._robot_handle_cancel()
@@ -1103,6 +1123,9 @@ class RadioBridge(Node):
         if estop:
             stop = Twist()
             self._cmd_vel_pub.publish(stop)
+            teleop_stop = Twist()
+            teleop_stop.linear.y = 1.0
+            self._teleop_pub.publish(teleop_stop)
 
         if self._last_heartbeat_time is None:
             return

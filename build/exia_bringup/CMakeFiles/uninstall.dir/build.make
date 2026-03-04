@@ -53,10 +53,10 @@ RM = /usr/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /home/exialabsargus/exia_ws/src/exia_bringup
+CMAKE_SOURCE_DIR = /home/zech/exia_ws/src/exia_bringup
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /home/exialabsargus/exia_ws/build/exia_bringup
+CMAKE_BINARY_DIR = /home/zech/exia_ws/build/exia_bringup
 
 # Utility rule file for uninstall.
 
@@ -78,6 +78,6 @@ CMakeFiles/uninstall.dir/clean:
 .PHONY : CMakeFiles/uninstall.dir/clean
 
 CMakeFiles/uninstall.dir/depend:
-	cd /home/exialabsargus/exia_ws/build/exia_bringup && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /home/exialabsargus/exia_ws/src/exia_bringup /home/exialabsargus/exia_ws/src/exia_bringup /home/exialabsargus/exia_ws/build/exia_bringup /home/exialabsargus/exia_ws/build/exia_bringup /home/exialabsargus/exia_ws/build/exia_bringup/CMakeFiles/uninstall.dir/DependInfo.cmake --color=$(COLOR)
+	cd /home/zech/exia_ws/build/exia_bringup && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /home/zech/exia_ws/src/exia_bringup /home/zech/exia_ws/src/exia_bringup /home/zech/exia_ws/build/exia_bringup /home/zech/exia_ws/build/exia_bringup /home/zech/exia_ws/build/exia_bringup/CMakeFiles/uninstall.dir/DependInfo.cmake --color=$(COLOR)
 .PHONY : CMakeFiles/uninstall.dir/depend
 

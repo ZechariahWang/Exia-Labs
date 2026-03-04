@@ -1,8 +1,8 @@
-# Install script for directory: /home/exialabsargus/exia_ws/src/exia_bringup
+# Install script for directory: /home/zech/exia_ws/src/exia_bringup
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
-  set(CMAKE_INSTALL_PREFIX "/home/exialabsargus/exia_ws/install/exia_bringup")
+  set(CMAKE_INSTALL_PREFIX "/home/zech/exia_ws/install/exia_bringup")
 endif()
 string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
 
@@ -44,20 +44,20 @@ endif()
 
 if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
   file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/exia_bringup" TYPE DIRECTORY FILES
-    "/home/exialabsargus/exia_ws/src/exia_bringup/launch"
-    "/home/exialabsargus/exia_ws/src/exia_bringup/config"
-    "/home/exialabsargus/exia_ws/src/exia_bringup/urdf"
-    "/home/exialabsargus/exia_ws/src/exia_bringup/worlds"
-    "/home/exialabsargus/exia_ws/src/exia_bringup/rviz"
+    "/home/zech/exia_ws/src/exia_bringup/launch"
+    "/home/zech/exia_ws/src/exia_bringup/config"
+    "/home/zech/exia_ws/src/exia_bringup/urdf"
+    "/home/zech/exia_ws/src/exia_bringup/worlds"
+    "/home/zech/exia_ws/src/exia_bringup/rviz"
     )
 endif()
 
 if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/ament_index/resource_index/package_run_dependencies" TYPE FILE FILES "/home/exialabsargus/exia_ws/build/exia_bringup/ament_cmake_index/share/ament_index/resource_index/package_run_dependencies/exia_bringup")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/ament_index/resource_index/package_run_dependencies" TYPE FILE FILES "/home/zech/exia_ws/build/exia_bringup/ament_cmake_index/share/ament_index/resource_index/package_run_dependencies/exia_bringup")
 endif()
 
 if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/ament_index/resource_index/parent_prefix_path" TYPE FILE FILES "/home/exialabsargus/exia_ws/build/exia_bringup/ament_cmake_index/share/ament_index/resource_index/parent_prefix_path/exia_bringup")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/ament_index/resource_index/parent_prefix_path" TYPE FILE FILES "/home/zech/exia_ws/build/exia_bringup/ament_cmake_index/share/ament_index/resource_index/parent_prefix_path/exia_bringup")
 endif()
 
 if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
@@ -65,7 +65,7 @@ if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_
 endif()
 
 if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/exia_bringup/environment" TYPE FILE FILES "/home/exialabsargus/exia_ws/build/exia_bringup/ament_cmake_environment_hooks/ament_prefix_path.dsv")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/exia_bringup/environment" TYPE FILE FILES "/home/zech/exia_ws/build/exia_bringup/ament_cmake_environment_hooks/ament_prefix_path.dsv")
 endif()
 
 if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
@@ -73,42 +73,42 @@ if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_
 endif()
 
 if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/exia_bringup/environment" TYPE FILE FILES "/home/exialabsargus/exia_ws/build/exia_bringup/ament_cmake_environment_hooks/path.dsv")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/exia_bringup/environment" TYPE FILE FILES "/home/zech/exia_ws/build/exia_bringup/ament_cmake_environment_hooks/path.dsv")
 endif()
 
 if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/exia_bringup" TYPE FILE FILES "/home/exialabsargus/exia_ws/build/exia_bringup/ament_cmake_environment_hooks/local_setup.bash")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/exia_bringup" TYPE FILE FILES "/home/zech/exia_ws/build/exia_bringup/ament_cmake_environment_hooks/local_setup.bash")
 endif()
 
 if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/exia_bringup" TYPE FILE FILES "/home/exialabsargus/exia_ws/build/exia_bringup/ament_cmake_environment_hooks/local_setup.sh")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/exia_bringup" TYPE FILE FILES "/home/zech/exia_ws/build/exia_bringup/ament_cmake_environment_hooks/local_setup.sh")
 endif()
 
 if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/exia_bringup" TYPE FILE FILES "/home/exialabsargus/exia_ws/build/exia_bringup/ament_cmake_environment_hooks/local_setup.zsh")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/exia_bringup" TYPE FILE FILES "/home/zech/exia_ws/build/exia_bringup/ament_cmake_environment_hooks/local_setup.zsh")
 endif()
 
 if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/exia_bringup" TYPE FILE FILES "/home/exialabsargus/exia_ws/build/exia_bringup/ament_cmake_environment_hooks/local_setup.dsv")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/exia_bringup" TYPE FILE FILES "/home/zech/exia_ws/build/exia_bringup/ament_cmake_environment_hooks/local_setup.dsv")
 endif()
 
 if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/exia_bringup" TYPE FILE FILES "/home/exialabsargus/exia_ws/build/exia_bringup/ament_cmake_environment_hooks/package.dsv")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/exia_bringup" TYPE FILE FILES "/home/zech/exia_ws/build/exia_bringup/ament_cmake_environment_hooks/package.dsv")
 endif()
 
 if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/ament_index/resource_index/packages" TYPE FILE FILES "/home/exialabsargus/exia_ws/build/exia_bringup/ament_cmake_index/share/ament_index/resource_index/packages/exia_bringup")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/ament_index/resource_index/packages" TYPE FILE FILES "/home/zech/exia_ws/build/exia_bringup/ament_cmake_index/share/ament_index/resource_index/packages/exia_bringup")
 endif()
 
 if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
   file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/exia_bringup/cmake" TYPE FILE FILES
-    "/home/exialabsargus/exia_ws/build/exia_bringup/ament_cmake_core/exia_bringupConfig.cmake"
-    "/home/exialabsargus/exia_ws/build/exia_bringup/ament_cmake_core/exia_bringupConfig-version.cmake"
+    "/home/zech/exia_ws/build/exia_bringup/ament_cmake_core/exia_bringupConfig.cmake"
+    "/home/zech/exia_ws/build/exia_bringup/ament_cmake_core/exia_bringupConfig-version.cmake"
     )
 endif()
 
 if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/exia_bringup" TYPE FILE FILES "/home/exialabsargus/exia_ws/src/exia_bringup/package.xml")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/exia_bringup" TYPE FILE FILES "/home/zech/exia_ws/src/exia_bringup/package.xml")
 endif()
 
 if(CMAKE_INSTALL_COMPONENT)
@@ -119,5 +119,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "/home/exialabsargus/exia_ws/build/exia_bringup/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "/home/zech/exia_ws/build/exia_bringup/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")

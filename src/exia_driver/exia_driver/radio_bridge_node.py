@@ -154,7 +154,7 @@ class RadioBridge(Node):
         self.declare_parameter('serial_port', '/dev/exia_radio')
         self.declare_parameter('serial_baud', 57600)
         self.declare_parameter('heartbeat_rate', 10.0)
-        self.declare_parameter('heartbeat_timeout', 0.5) # also need to modify val in yaml
+        self.declare_parameter('heartbeat_timeout', 1.5) # also need to modify val in yaml
         self.declare_parameter('status_rate', 5.0)
         self.declare_parameter('key_dir', '~/.exia')
 
@@ -741,7 +741,7 @@ class RadioBridge(Node):
             return
 
         if seq not in self._img_reassembly:
-            self._img_reassembly = {seq: {'total': total, 'chunks': {}}}
+            self._img_reassembly[seq] = {'total': total, 'chunks': {}}
 
         buf = self._img_reassembly[seq]
         buf['chunks'][idx] = chunk_data

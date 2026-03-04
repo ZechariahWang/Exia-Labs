@@ -1,0 +1,18 @@
+running develop
+running egg_info
+writing exia_control.egg-info/PKG-INFO
+writing dependency_links to exia_control.egg-info/dependency_links.txt
+writing entry points to exia_control.egg-info/entry_points.txt
+writing requirements to exia_control.egg-info/requires.txt
+writing top-level names to exia_control.egg-info/top_level.txt
+reading manifest file 'exia_control.egg-info/SOURCES.txt'
+writing manifest file 'exia_control.egg-info/SOURCES.txt'
+running build_ext
+Creating /home/zech/exia_ws/install/exia_control/lib/python3.10/site-packages/exia-control.egg-link (link to .)
+Installing ackermann_drive_node script to /home/zech/exia_ws/install/exia_control/lib/exia_control
+Installing dynamic_navigator_node script to /home/zech/exia_ws/install/exia_control/lib/exia_control
+
+Installed /home/zech/exia_ws/build/exia_control
+running symlink_data
+symbolically linking /home/zech/exia_ws/build/exia_control/resource/exia_control -> /home/zech/exia_ws/install/exia_control/share/ament_index/resource_index/packages
+symbolically linking /home/zech/exia_ws/build/exia_control/package.xml -> /home/zech/exia_ws/install/exia_control/share/exia_control

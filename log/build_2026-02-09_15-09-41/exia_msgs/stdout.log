@@ -1,0 +1,60 @@
+-- Found ament_cmake: 1.3.12 (/opt/ros/humble/share/ament_cmake/cmake)
+-- Found rosidl_default_generators: 1.2.0 (/opt/ros/humble/share/rosidl_default_generators/cmake)
+-- Using all available rosidl_typesupport_c: rosidl_typesupport_fastrtps_c;rosidl_typesupport_introspection_c
+-- Found rosidl_adapter: 3.1.8 (/opt/ros/humble/share/rosidl_adapter/cmake)
+-- Using all available rosidl_typesupport_cpp: rosidl_typesupport_fastrtps_cpp;rosidl_typesupport_introspection_cpp
+-- Found ament_cmake_ros: 0.10.0 (/opt/ros/humble/share/ament_cmake_ros/cmake)
+-- Using all available rosidl_typesupport_c: rosidl_typesupport_fastrtps_c;rosidl_typesupport_introspection_c
+-- Using all available rosidl_typesupport_cpp: rosidl_typesupport_fastrtps_cpp;rosidl_typesupport_introspection_cpp
+-- Found PythonInterp: /home/zech/exia_ws/.venv/bin/python3 (found suitable version "3.10.12", minimum required is "3.6") 
+-- Found python_cmake_module: 0.10.0 (/opt/ros/humble/share/python_cmake_module/cmake)
+-- Found PythonLibs: /usr/lib/x86_64-linux-gnu/libpython3.10.so (found suitable version "3.10.12", minimum required is "3.5") 
+-- Using PYTHON_EXECUTABLE: /home/zech/exia_ws/.venv/bin/python3
+-- Using PYTHON_INCLUDE_DIRS: /usr/include/python3.10
+-- Using PYTHON_LIBRARIES: /usr/lib/x86_64-linux-gnu/libpython3.10.so
+-- Found PythonExtra: .so  
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/zech/exia_ws/build/exia_msgs
+[  3%] Generating C code for ROS interfaces
+[  6%] Generating C++ code for ROS interfaces
+[  6%] Built target ament_cmake_python_copy_exia_msgs
+running egg_info
+creating exia_msgs.egg-info
+writing exia_msgs.egg-info/PKG-INFO
+writing dependency_links to exia_msgs.egg-info/dependency_links.txt
+writing top-level names to exia_msgs.egg-info/top_level.txt
+writing manifest file 'exia_msgs.egg-info/SOURCES.txt'
+reading manifest file 'exia_msgs.egg-info/SOURCES.txt'
+writing manifest file 'exia_msgs.egg-info/SOURCES.txt'
+[  6%] Built target exia_msgs__cpp
+[  9%] Generating C++ introspection for ROS interfaces
+[ 12%] Building C object CMakeFiles/exia_msgs__rosidl_generator_c.dir/rosidl_generator_c/exia_msgs/msg/detail/navigation_goal__functions.c.o
+[ 16%] Generating C++ type support dispatch for ROS interfaces
+[ 19%] Generating C++ type support for eProsima Fast-RTPS
+[ 19%] Built target ament_cmake_python_build_exia_msgs_egg
+[ 22%] Linking C shared library libexia_msgs__rosidl_generator_c.so
+[ 22%] Built target exia_msgs__rosidl_generator_c
+[ 25%] Generating C introspection for ROS interfaces
+[ 29%] Generating C type support for eProsima Fast-RTPS
+[ 32%] Generating C type support dispatch for ROS interfaces
+[ 35%] Building CXX object CMakeFiles/exia_msgs__rosidl_typesupport_cpp.dir/rosidl_typesupport_cpp/exia_msgs/msg/navigation_goal__type_support.cpp.o
+[ 38%] Building CXX object CMakeFiles/exia_msgs__rosidl_typesupport_introspection_cpp.dir/rosidl_typesupport_introspection_cpp/exia_msgs/msg/detail/navigation_goal__type_support.cpp.o
+[ 41%] Building CXX object CMakeFiles/exia_msgs__rosidl_typesupport_fastrtps_cpp.dir/rosidl_typesupport_fastrtps_cpp/exia_msgs/msg/detail/dds_fastrtps/navigation_goal__type_support.cpp.o
+[ 45%] Building CXX object CMakeFiles/exia_msgs__rosidl_typesupport_c.dir/rosidl_typesupport_c/exia_msgs/msg/navigation_goal__type_support.cpp.o
+[ 48%] Building C object CMakeFiles/exia_msgs__rosidl_typesupport_introspection_c.dir/rosidl_typesupport_introspection_c/exia_msgs/msg/detail/navigation_goal__type_support.c.o
+[ 51%] Building CXX object CMakeFiles/exia_msgs__rosidl_typesupport_fastrtps_c.dir/rosidl_typesupport_fastrtps_c/exia_msgs/msg/detail/navigation_goal__type_support_c.cpp.o
+[ 54%] Linking CXX shared library libexia_msgs__rosidl_typesupport_c.so
+[ 58%] Linking C shared library libexia_msgs__rosidl_typesupport_introspection_c.so
+[ 58%] Built target exia_msgs__rosidl_typesupport_introspection_c
+[ 58%] Built target exia_msgs__rosidl_typesupport_c
+[ 61%] Linking CXX shared library libexia_msgs__rosidl_typesupport_cpp.so
+[ 61%] Built target exia_msgs__rosidl_typesupport_cpp
+[ 64%] Linking CXX shared library libexia_msgs__rosidl_typesupport_introspection_cpp.so
+[ 67%] Linking CXX shared library libexia_msgs__rosidl_typesupport_fastrtps_cpp.so
+[ 67%] Built target exia_msgs__rosidl_typesupport_introspection_cpp
+[ 67%] Built target exia_msgs__rosidl_typesupport_fastrtps_cpp
+[ 70%] Linking CXX shared library libexia_msgs__rosidl_typesupport_fastrtps_c.so
+[ 70%] Built target exia_msgs__rosidl_typesupport_fastrtps_c
+[ 70%] Built target exia_msgs
+[ 74%] Generating Python code for ROS interfaces

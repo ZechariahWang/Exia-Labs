@@ -1,0 +1,27 @@
+[0.464s] Invoking command in '/home/zech/exia_ws/src/exia_driver': CMAKE_PREFIX_PATH=/home/zech/exia_ws/install/exia_msgs:/home/zech/exia_ws/install/exia_bringup:/home/zech/exia_ws/install/exia_ground_description:/home/zech/ros2_ws/install/eclipse_diffdrive:/home/zech/ros2_ws/install/eclipse_ackermann PYTHONPATH=/home/zech/exia_ws/build/exia_driver/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/zech/exia_ws/install/exia_driver/lib/python3.10/site-packages:${PYTHONPATH} VIRTUAL_ENV_PROMPT=(.venv) /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/exia_driver build --build-base /home/zech/exia_ws/build/exia_driver/build install --record /home/zech/exia_ws/build/exia_driver/install.log --single-version-externally-managed install_data
+[0.582s] running egg_info
+[0.583s] writing ../../build/exia_driver/exia_driver.egg-info/PKG-INFO
+[0.583s] writing dependency_links to ../../build/exia_driver/exia_driver.egg-info/dependency_links.txt
+[0.583s] writing entry points to ../../build/exia_driver/exia_driver.egg-info/entry_points.txt
+[0.583s] writing requirements to ../../build/exia_driver/exia_driver.egg-info/requires.txt
+[0.583s] writing top-level names to ../../build/exia_driver/exia_driver.egg-info/top_level.txt
+[0.584s] reading manifest file '../../build/exia_driver/exia_driver.egg-info/SOURCES.txt'
+[0.584s] writing manifest file '../../build/exia_driver/exia_driver.egg-info/SOURCES.txt'
+[0.584s] running build
+[0.584s] running build_py
+[0.584s] copying exia_driver/imu_test.py -> /home/zech/exia_ws/build/exia_driver/build/lib/exia_driver
+[0.584s] running install
+[0.585s] running install_lib
+[0.585s] copying /home/zech/exia_ws/build/exia_driver/build/lib/exia_driver/imu_test.py -> /home/zech/exia_ws/install/exia_driver/lib/python3.10/site-packages/exia_driver
+[0.585s] byte-compiling /home/zech/exia_ws/install/exia_driver/lib/python3.10/site-packages/exia_driver/imu_test.py to imu_test.cpython-310.pyc
+[0.586s] running install_data
+[0.586s] running install_egg_info
+[0.587s] removing '/home/zech/exia_ws/install/exia_driver/lib/python3.10/site-packages/exia_driver-1.0.0-py3.10.egg-info' (and everything under it)
+[0.587s] Copying ../../build/exia_driver/exia_driver.egg-info to /home/zech/exia_ws/install/exia_driver/lib/python3.10/site-packages/exia_driver-1.0.0-py3.10.egg-info
+[0.588s] running install_scripts
+[0.599s] Installing gps_transform_node script to /home/zech/exia_ws/install/exia_driver/lib/exia_driver
+[0.599s] Installing imu_node script to /home/zech/exia_ws/install/exia_driver/lib/exia_driver
+[0.600s] Installing radio_bridge_node script to /home/zech/exia_ws/install/exia_driver/lib/exia_driver
+[0.600s] Installing rc_driver_node script to /home/zech/exia_ws/install/exia_driver/lib/exia_driver
+[0.600s] writing list of installed files to '/home/zech/exia_ws/build/exia_driver/install.log'
+[0.614s] Invoked command in '/home/zech/exia_ws/src/exia_driver' returned '0': CMAKE_PREFIX_PATH=/home/zech/exia_ws/install/exia_msgs:/home/zech/exia_ws/install/exia_bringup:/home/zech/exia_ws/install/exia_ground_description:/home/zech/ros2_ws/install/eclipse_diffdrive:/home/zech/ros2_ws/install/eclipse_ackermann PYTHONPATH=/home/zech/exia_ws/build/exia_driver/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/zech/exia_ws/install/exia_driver/lib/python3.10/site-packages:${PYTHONPATH} VIRTUAL_ENV_PROMPT=(.venv) /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/exia_driver build --build-base /home/zech/exia_ws/build/exia_driver/build install --record /home/zech/exia_ws/build/exia_driver/install.log --single-version-externally-managed install_data

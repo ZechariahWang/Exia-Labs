@@ -1,0 +1,305 @@
+[0.151s] DEBUG:colcon:Command line arguments: ['/usr/bin/colcon', 'build', '--packages-select', 'exia_msgs', 'exia_control']
+[0.151s] DEBUG:colcon:Parsed command line arguments: Namespace(log_base=None, log_level=None, verb_name='build', build_base='build', install_base='install', merge_install=False, symlink_install=False, test_result_base=None, continue_on_error=False, executor='parallel', parallel_workers=20, event_handlers=None, ignore_user_meta=False, metas=['./colcon.meta'], base_paths=['.'], packages_ignore=None, packages_ignore_regex=None, paths=None, packages_up_to=None, packages_up_to_regex=None, packages_above=None, packages_above_and_dependencies=None, packages_above_depth=None, packages_select_by_dep=None, packages_skip_by_dep=None, packages_skip_up_to=None, packages_select_build_failed=False, packages_skip_build_finished=False, packages_select_test_failures=False, packages_skip_test_passed=False, packages_select=['exia_msgs', 'exia_control'], packages_skip=None, packages_select_regex=None, packages_skip_regex=None, packages_start=None, packages_end=None, allow_overriding=[], cmake_args=None, cmake_target=None, cmake_target_skip_unavailable=False, cmake_clean_cache=False, cmake_clean_first=False, cmake_force_configure=False, ament_cmake_args=None, catkin_cmake_args=None, catkin_skip_building_tests=False, verb_parser=<colcon_defaults.argument_parser.defaults.DefaultArgumentsDecorator object at 0x7feab373e8f0>, verb_extension=<colcon_core.verb.build.BuildVerb object at 0x7feab373d8d0>, main=<bound method BuildVerb.main of <colcon_core.verb.build.BuildVerb object at 0x7feab373d8d0>>)
+[0.304s] Level 1:colcon.colcon_core.package_discovery:discover_packages(colcon_meta) check parameters
+[0.304s] Level 1:colcon.colcon_core.package_discovery:discover_packages(recursive) check parameters
+[0.304s] Level 1:colcon.colcon_core.package_discovery:discover_packages(ignore) check parameters
+[0.304s] Level 1:colcon.colcon_core.package_discovery:discover_packages(path) check parameters
+[0.304s] Level 1:colcon.colcon_core.package_discovery:discover_packages(colcon_meta) discover
+[0.304s] Level 1:colcon.colcon_core.package_discovery:discover_packages(recursive) discover
+[0.304s] INFO:colcon.colcon_core.package_discovery:Crawling recursively for packages in '/home/zech/exia_ws'
+[0.304s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['ignore', 'ignore_ament_install']
+[0.304s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'ignore'
+[0.305s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'ignore_ament_install'
+[0.305s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['colcon_pkg']
+[0.305s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'colcon_pkg'
+[0.305s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['colcon_meta']
+[0.305s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'colcon_meta'
+[0.305s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['ros']
+[0.305s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'ros'
+[0.312s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['cmake', 'python']
+[0.312s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'cmake'
+[0.312s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'python'
+[0.312s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['python_setup_py']
+[0.312s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'python_setup_py'
+[0.312s] Level 1:colcon.colcon_core.package_identification:_identify(arduino) by extensions ['ignore', 'ignore_ament_install']
+[0.312s] Level 1:colcon.colcon_core.package_identification:_identify(arduino) by extension 'ignore'
+[0.312s] Level 1:colcon.colcon_core.package_identification:_identify(arduino) by extension 'ignore_ament_install'
+[0.312s] Level 1:colcon.colcon_core.package_identification:_identify(arduino) by extensions ['colcon_pkg']
+[0.312s] Level 1:colcon.colcon_core.package_identification:_identify(arduino) by extension 'colcon_pkg'
+[0.312s] Level 1:colcon.colcon_core.package_identification:_identify(arduino) by extensions ['colcon_meta']
+[0.312s] Level 1:colcon.colcon_core.package_identification:_identify(arduino) by extension 'colcon_meta'
+[0.312s] Level 1:colcon.colcon_core.package_identification:_identify(arduino) by extensions ['ros']
+[0.312s] Level 1:colcon.colcon_core.package_identification:_identify(arduino) by extension 'ros'
+[0.312s] Level 1:colcon.colcon_core.package_identification:_identify(arduino) by extensions ['cmake', 'python']
+[0.312s] Level 1:colcon.colcon_core.package_identification:_identify(arduino) by extension 'cmake'
+[0.312s] Level 1:colcon.colcon_core.package_identification:_identify(arduino) by extension 'python'
+[0.312s] Level 1:colcon.colcon_core.package_identification:_identify(arduino) by extensions ['python_setup_py']
+[0.312s] Level 1:colcon.colcon_core.package_identification:_identify(arduino) by extension 'python_setup_py'
+[0.312s] Level 1:colcon.colcon_core.package_identification:_identify(arduino/exia_servo_controller) by extensions ['ignore', 'ignore_ament_install']
+[0.312s] Level 1:colcon.colcon_core.package_identification:_identify(arduino/exia_servo_controller) by extension 'ignore'
+[0.312s] Level 1:colcon.colcon_core.package_identification:_identify(arduino/exia_servo_controller) by extension 'ignore_ament_install'
+[0.312s] Level 1:colcon.colcon_core.package_identification:_identify(arduino/exia_servo_controller) by extensions ['colcon_pkg']
+[0.312s] Level 1:colcon.colcon_core.package_identification:_identify(arduino/exia_servo_controller) by extension 'colcon_pkg'
+[0.312s] Level 1:colcon.colcon_core.package_identification:_identify(arduino/exia_servo_controller) by extensions ['colcon_meta']
+[0.312s] Level 1:colcon.colcon_core.package_identification:_identify(arduino/exia_servo_controller) by extension 'colcon_meta'
+[0.312s] Level 1:colcon.colcon_core.package_identification:_identify(arduino/exia_servo_controller) by extensions ['ros']
+[0.312s] Level 1:colcon.colcon_core.package_identification:_identify(arduino/exia_servo_controller) by extension 'ros'
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(arduino/exia_servo_controller) by extensions ['cmake', 'python']
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(arduino/exia_servo_controller) by extension 'cmake'
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(arduino/exia_servo_controller) by extension 'python'
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(arduino/exia_servo_controller) by extensions ['python_setup_py']
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(arduino/exia_servo_controller) by extension 'python_setup_py'
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(build) by extensions ['ignore', 'ignore_ament_install']
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(build) by extension 'ignore'
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(build) ignored
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(install) by extensions ['ignore', 'ignore_ament_install']
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(install) by extension 'ignore'
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(install) ignored
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(log) by extensions ['ignore', 'ignore_ament_install']
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(log) by extension 'ignore'
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(log) ignored
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extensions ['ignore', 'ignore_ament_install']
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extension 'ignore'
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extension 'ignore_ament_install'
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extensions ['colcon_pkg']
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extension 'colcon_pkg'
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extensions ['colcon_meta']
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extension 'colcon_meta'
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extensions ['ros']
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extension 'ros'
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extensions ['cmake', 'python']
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extension 'cmake'
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extension 'python'
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extensions ['python_setup_py']
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(scripts) by extension 'python_setup_py'
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extensions ['ignore', 'ignore_ament_install']
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extension 'ignore'
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extension 'ignore_ament_install'
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extensions ['colcon_pkg']
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extension 'colcon_pkg'
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extensions ['colcon_meta']
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extension 'colcon_meta'
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extensions ['ros']
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extension 'ros'
+[0.313s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extensions ['cmake', 'python']
+[0.314s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extension 'cmake'
+[0.314s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extension 'python'
+[0.314s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extensions ['python_setup_py']
+[0.314s] Level 1:colcon.colcon_core.package_identification:_identify(src) by extension 'python_setup_py'
+[0.314s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_bringup) by extensions ['ignore', 'ignore_ament_install']
+[0.314s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_bringup) by extension 'ignore'
+[0.314s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_bringup) by extension 'ignore_ament_install'
+[0.314s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_bringup) by extensions ['colcon_pkg']
+[0.314s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_bringup) by extension 'colcon_pkg'
+[0.314s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_bringup) by extensions ['colcon_meta']
+[0.314s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_bringup) by extension 'colcon_meta'
+[0.314s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_bringup) by extensions ['ros']
+[0.314s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_bringup) by extension 'ros'
+[0.316s] DEBUG:colcon.colcon_core.package_identification:Package 'src/exia_bringup' with type 'ros.ament_cmake' and name 'exia_bringup'
+[0.316s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_control) by extensions ['ignore', 'ignore_ament_install']
+[0.316s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_control) by extension 'ignore'
+[0.316s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_control) by extension 'ignore_ament_install'
+[0.316s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_control) by extensions ['colcon_pkg']
+[0.316s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_control) by extension 'colcon_pkg'
+[0.316s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_control) by extensions ['colcon_meta']
+[0.316s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_control) by extension 'colcon_meta'
+[0.316s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_control) by extensions ['ros']
+[0.316s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_control) by extension 'ros'
+[0.316s] DEBUG:colcon.colcon_core.package_identification:Package 'src/exia_control' with type 'ros.ament_python' and name 'exia_control'
+[0.316s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_driver) by extensions ['ignore', 'ignore_ament_install']
+[0.316s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_driver) by extension 'ignore'
+[0.316s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_driver) by extension 'ignore_ament_install'
+[0.316s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_driver) by extensions ['colcon_pkg']
+[0.316s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_driver) by extension 'colcon_pkg'
+[0.316s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_driver) by extensions ['colcon_meta']
+[0.316s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_driver) by extension 'colcon_meta'
+[0.316s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_driver) by extensions ['ros']
+[0.316s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_driver) by extension 'ros'
+[0.317s] DEBUG:colcon.colcon_core.package_identification:Package 'src/exia_driver' with type 'ros.ament_python' and name 'exia_driver'
+[0.317s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_msgs) by extensions ['ignore', 'ignore_ament_install']
+[0.317s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_msgs) by extension 'ignore'
+[0.317s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_msgs) by extension 'ignore_ament_install'
+[0.317s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_msgs) by extensions ['colcon_pkg']
+[0.317s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_msgs) by extension 'colcon_pkg'
+[0.317s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_msgs) by extensions ['colcon_meta']
+[0.317s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_msgs) by extension 'colcon_meta'
+[0.317s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_msgs) by extensions ['ros']
+[0.317s] Level 1:colcon.colcon_core.package_identification:_identify(src/exia_msgs) by extension 'ros'
+[0.317s] DEBUG:colcon.colcon_core.package_identification:Package 'src/exia_msgs' with type 'ros.ament_cmake' and name 'exia_msgs'
+[0.317s] Level 1:colcon.colcon_core.package_discovery:discover_packages(recursive) using defaults
+[0.317s] Level 1:colcon.colcon_core.package_discovery:discover_packages(ignore) discover
+[0.317s] Level 1:colcon.colcon_core.package_discovery:discover_packages(ignore) using defaults
+[0.317s] Level 1:colcon.colcon_core.package_discovery:discover_packages(path) discover
+[0.317s] Level 1:colcon.colcon_core.package_discovery:discover_packages(path) using defaults
+[0.332s] INFO:colcon.colcon_core.package_selection:Skipping not selected package 'exia_driver' in 'src/exia_driver'
+[0.332s] INFO:colcon.colcon_core.package_selection:Skipping not selected package 'exia_bringup' in 'src/exia_bringup'
+[0.333s] Level 1:colcon.colcon_core.package_discovery:discover_packages(prefix_path) check parameters
+[0.333s] Level 1:colcon.colcon_core.package_discovery:discover_packages(prefix_path) discover
+[0.334s] DEBUG:colcon.colcon_installed_package_information.package_discovery:Found 5 installed packages in /home/zech/exia_ws/install
+[0.335s] DEBUG:colcon.colcon_installed_package_information.package_discovery:Found 2 installed packages in /home/zech/ros2_ws/install
+[0.335s] DEBUG:colcon.colcon_installed_package_information.package_discovery:Found 313 installed packages in /opt/ros/humble
+[0.342s] Level 1:colcon.colcon_core.package_discovery:discover_packages(prefix_path) using defaults
+[0.360s] WARNING:colcon.colcon_core.package_selection:Some selected packages are already built in one or more underlay workspaces:
+	'exia_control' is in: /home/zech/exia_ws/install/exia_control
+If a package in a merged underlay workspace is overridden and it installs headers, then all packages in the overlay must sort their include directories by workspace order. Failure to do so may result in build failures or undefined behavior at run time.
+If the overridden package is used by another package in any underlay, then the overriding package in the overlay must be API and ABI compatible or undefined behavior at run time may occur.
+
+If you understand the risks and want to override a package anyways, add the following to the command line:
+	--allow-overriding exia_control
+
+This may be promoted to an error in a future release of colcon-override-check.
+[0.361s] Level 5:colcon.colcon_core.verb:set package 'exia_msgs' build argument 'cmake_args' from command line to 'None'
+[0.361s] Level 5:colcon.colcon_core.verb:set package 'exia_msgs' build argument 'cmake_target' from command line to 'None'
+[0.361s] Level 5:colcon.colcon_core.verb:set package 'exia_msgs' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.361s] Level 5:colcon.colcon_core.verb:set package 'exia_msgs' build argument 'cmake_clean_cache' from command line to 'False'
+[0.361s] Level 5:colcon.colcon_core.verb:set package 'exia_msgs' build argument 'cmake_clean_first' from command line to 'False'
+[0.361s] Level 5:colcon.colcon_core.verb:set package 'exia_msgs' build argument 'cmake_force_configure' from command line to 'False'
+[0.361s] Level 5:colcon.colcon_core.verb:set package 'exia_msgs' build argument 'ament_cmake_args' from command line to 'None'
+[0.361s] Level 5:colcon.colcon_core.verb:set package 'exia_msgs' build argument 'catkin_cmake_args' from command line to 'None'
+[0.361s] Level 5:colcon.colcon_core.verb:set package 'exia_msgs' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.361s] DEBUG:colcon.colcon_core.verb:Building package 'exia_msgs' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/zech/exia_ws/build/exia_msgs', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/zech/exia_ws/install/exia_msgs', 'merge_install': False, 'path': '/home/zech/exia_ws/src/exia_msgs', 'symlink_install': False, 'test_result_base': None}
+[0.361s] Level 5:colcon.colcon_core.verb:set package 'exia_control' build argument 'cmake_args' from command line to 'None'
+[0.361s] Level 5:colcon.colcon_core.verb:set package 'exia_control' build argument 'cmake_target' from command line to 'None'
+[0.361s] Level 5:colcon.colcon_core.verb:set package 'exia_control' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.361s] Level 5:colcon.colcon_core.verb:set package 'exia_control' build argument 'cmake_clean_cache' from command line to 'False'
+[0.361s] Level 5:colcon.colcon_core.verb:set package 'exia_control' build argument 'cmake_clean_first' from command line to 'False'
+[0.361s] Level 5:colcon.colcon_core.verb:set package 'exia_control' build argument 'cmake_force_configure' from command line to 'False'
+[0.361s] Level 5:colcon.colcon_core.verb:set package 'exia_control' build argument 'ament_cmake_args' from command line to 'None'
+[0.361s] Level 5:colcon.colcon_core.verb:set package 'exia_control' build argument 'catkin_cmake_args' from command line to 'None'
+[0.361s] Level 5:colcon.colcon_core.verb:set package 'exia_control' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.361s] DEBUG:colcon.colcon_core.verb:Building package 'exia_control' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/zech/exia_ws/build/exia_control', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/zech/exia_ws/install/exia_control', 'merge_install': False, 'path': '/home/zech/exia_ws/src/exia_control', 'symlink_install': False, 'test_result_base': None}
+[0.361s] INFO:colcon.colcon_core.executor:Executing jobs using 'parallel' executor
+[0.362s] DEBUG:colcon.colcon_parallel_executor.executor.parallel:run_until_complete
+[0.362s] INFO:colcon.colcon_ros.task.ament_cmake.build:Building ROS package in '/home/zech/exia_ws/src/exia_msgs' with build type 'ament_cmake'
+[0.362s] INFO:colcon.colcon_cmake.task.cmake.build:Building CMake package in '/home/zech/exia_ws/src/exia_msgs'
+[0.363s] ERROR:colcon.colcon_core.event_reactor:Exception in event handler extension 'console_start_end': [Errno 32] Broken pipe
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/colcon_core/event_reactor.py", line 78, in _notify_observers
+    retval = observer(event)
+  File "/usr/lib/python3/dist-packages/colcon_core/event_handler/console_start_end.py", line 41, in __call__
+    print(Style.SectionStart(msg), flush=True)
+BrokenPipeError: [Errno 32] Broken pipe
+
+[0.365s] INFO:colcon.colcon_core.plugin_system:Skipping extension 'colcon_core.shell.bat': Not used on non-Windows systems
+[0.365s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.365s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
+[0.371s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/zech/exia_ws/build/exia_msgs': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/zech/exia_ws/install/exia_control:/home/zech/exia_ws/install/exia_driver:/opt/ros/humble VIRTUAL_ENV_PROMPT=(.venv) /usr/bin/cmake --build /home/zech/exia_ws/build/exia_msgs -- -j20 -l20
+[2.170s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/zech/exia_ws/build/exia_msgs' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/zech/exia_ws/install/exia_control:/home/zech/exia_ws/install/exia_driver:/opt/ros/humble VIRTUAL_ENV_PROMPT=(.venv) /usr/bin/cmake --build /home/zech/exia_ws/build/exia_msgs -- -j20 -l20
+[2.176s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/zech/exia_ws/build/exia_msgs': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/zech/exia_ws/install/exia_control:/home/zech/exia_ws/install/exia_driver:/opt/ros/humble VIRTUAL_ENV_PROMPT=(.venv) /usr/bin/cmake --install /home/zech/exia_ws/build/exia_msgs
+[2.226s] Level 1:colcon.colcon_core.environment:create_environment_scripts_only(exia_msgs)
+[2.227s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/zech/exia_ws/build/exia_msgs' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/zech/exia_ws/install/exia_control:/home/zech/exia_ws/install/exia_driver:/opt/ros/humble VIRTUAL_ENV_PROMPT=(.venv) /usr/bin/cmake --install /home/zech/exia_ws/build/exia_msgs
+[2.232s] Level 1:colcon.colcon_core.environment:checking '/home/zech/exia_ws/install/exia_msgs' for CMake module files
+[2.232s] Level 1:colcon.colcon_core.environment:checking '/home/zech/exia_ws/install/exia_msgs' for CMake config files
+[2.233s] Level 1:colcon.colcon_core.shell:create_environment_hook('exia_msgs', 'cmake_prefix_path')
+[2.233s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/zech/exia_ws/install/exia_msgs/share/exia_msgs/hook/cmake_prefix_path.ps1'
+[2.234s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/zech/exia_ws/install/exia_msgs/share/exia_msgs/hook/cmake_prefix_path.dsv'
+[2.234s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/zech/exia_ws/install/exia_msgs/share/exia_msgs/hook/cmake_prefix_path.sh'
+[2.235s] Level 1:colcon.colcon_core.environment:checking '/home/zech/exia_ws/install/exia_msgs/lib'
+[2.235s] Level 1:colcon.colcon_core.shell:create_environment_hook('exia_msgs', 'ld_library_path_lib')
+[2.235s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/zech/exia_ws/install/exia_msgs/share/exia_msgs/hook/ld_library_path_lib.ps1'
+[2.236s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/zech/exia_ws/install/exia_msgs/share/exia_msgs/hook/ld_library_path_lib.dsv'
+[2.236s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/zech/exia_ws/install/exia_msgs/share/exia_msgs/hook/ld_library_path_lib.sh'
+[2.236s] Level 1:colcon.colcon_core.environment:checking '/home/zech/exia_ws/install/exia_msgs/bin'
+[2.236s] Level 1:colcon.colcon_core.environment:checking '/home/zech/exia_ws/install/exia_msgs/lib/pkgconfig/exia_msgs.pc'
+[2.236s] Level 1:colcon.colcon_core.environment:checking '/home/zech/exia_ws/install/exia_msgs/lib/python3.10/site-packages'
+[2.236s] Level 1:colcon.colcon_core.environment:checking '/home/zech/exia_ws/install/exia_msgs/bin'
+[2.236s] INFO:colcon.colcon_core.shell:Creating package script '/home/zech/exia_ws/install/exia_msgs/share/exia_msgs/package.ps1'
+[2.237s] INFO:colcon.colcon_core.shell:Creating package descriptor '/home/zech/exia_ws/install/exia_msgs/share/exia_msgs/package.dsv'
+[2.237s] INFO:colcon.colcon_core.shell:Creating package script '/home/zech/exia_ws/install/exia_msgs/share/exia_msgs/package.sh'
+[2.238s] INFO:colcon.colcon_core.shell:Creating package script '/home/zech/exia_ws/install/exia_msgs/share/exia_msgs/package.bash'
+[2.238s] INFO:colcon.colcon_core.shell:Creating package script '/home/zech/exia_ws/install/exia_msgs/share/exia_msgs/package.zsh'
+[2.239s] Level 1:colcon.colcon_core.environment:create_file_with_runtime_dependencies(/home/zech/exia_ws/install/exia_msgs/share/colcon-core/packages/exia_msgs)
+[2.239s] Level 1:colcon.colcon_core.environment:create_environment_scripts_only(exia_msgs)
+[2.239s] Level 1:colcon.colcon_core.environment:checking '/home/zech/exia_ws/install/exia_msgs' for CMake module files
+[2.239s] Level 1:colcon.colcon_core.environment:checking '/home/zech/exia_ws/install/exia_msgs' for CMake config files
+[2.240s] Level 1:colcon.colcon_core.shell:create_environment_hook('exia_msgs', 'cmake_prefix_path')
+[2.240s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/zech/exia_ws/install/exia_msgs/share/exia_msgs/hook/cmake_prefix_path.ps1'
+[2.240s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/zech/exia_ws/install/exia_msgs/share/exia_msgs/hook/cmake_prefix_path.dsv'
+[2.240s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/zech/exia_ws/install/exia_msgs/share/exia_msgs/hook/cmake_prefix_path.sh'
+[2.240s] Level 1:colcon.colcon_core.environment:checking '/home/zech/exia_ws/install/exia_msgs/lib'
+[2.240s] Level 1:colcon.colcon_core.shell:create_environment_hook('exia_msgs', 'ld_library_path_lib')
+[2.240s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/zech/exia_ws/install/exia_msgs/share/exia_msgs/hook/ld_library_path_lib.ps1'
+[2.241s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/zech/exia_ws/install/exia_msgs/share/exia_msgs/hook/ld_library_path_lib.dsv'
+[2.241s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/zech/exia_ws/install/exia_msgs/share/exia_msgs/hook/ld_library_path_lib.sh'
+[2.241s] Level 1:colcon.colcon_core.environment:checking '/home/zech/exia_ws/install/exia_msgs/bin'
+[2.241s] Level 1:colcon.colcon_core.environment:checking '/home/zech/exia_ws/install/exia_msgs/lib/pkgconfig/exia_msgs.pc'
+[2.241s] Level 1:colcon.colcon_core.environment:checking '/home/zech/exia_ws/install/exia_msgs/lib/python3.10/site-packages'
+[2.241s] Level 1:colcon.colcon_core.environment:checking '/home/zech/exia_ws/install/exia_msgs/bin'
+[2.241s] INFO:colcon.colcon_core.shell:Creating package script '/home/zech/exia_ws/install/exia_msgs/share/exia_msgs/package.ps1'
+[2.242s] INFO:colcon.colcon_core.shell:Creating package descriptor '/home/zech/exia_ws/install/exia_msgs/share/exia_msgs/package.dsv'
+[2.242s] INFO:colcon.colcon_core.shell:Creating package script '/home/zech/exia_ws/install/exia_msgs/share/exia_msgs/package.sh'
+[2.242s] INFO:colcon.colcon_core.shell:Creating package script '/home/zech/exia_ws/install/exia_msgs/share/exia_msgs/package.bash'
+[2.242s] INFO:colcon.colcon_core.shell:Creating package script '/home/zech/exia_ws/install/exia_msgs/share/exia_msgs/package.zsh'
+[2.242s] Level 1:colcon.colcon_core.environment:create_file_with_runtime_dependencies(/home/zech/exia_ws/install/exia_msgs/share/colcon-core/packages/exia_msgs)
+[2.243s] INFO:colcon.colcon_ros.task.ament_python.build:Building ROS package in '/home/zech/exia_ws/src/exia_control' with build type 'ament_python'
+[2.243s] Level 1:colcon.colcon_core.shell:create_environment_hook('exia_control', 'ament_prefix_path')
+[2.243s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/zech/exia_ws/install/exia_control/share/exia_control/hook/ament_prefix_path.ps1'
+[2.243s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/zech/exia_ws/install/exia_control/share/exia_control/hook/ament_prefix_path.dsv'
+[2.243s] ERROR:colcon.colcon_core.event_reactor:Exception in event handler extension 'console_start_end': [Errno 32] Broken pipe
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/colcon_core/event_reactor.py", line 78, in _notify_observers
+    retval = observer(event)
+  File "/usr/lib/python3/dist-packages/colcon_core/event_handler/console_start_end.py", line 72, in __call__
+    print(Style.SectionEnd(msg), file=writable, flush=True)
+BrokenPipeError: [Errno 32] Broken pipe
+
+[2.243s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/zech/exia_ws/install/exia_control/share/exia_control/hook/ament_prefix_path.sh'
+[2.244s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[2.244s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
+[2.244s] ERROR:colcon.colcon_core.event_reactor:Exception in event handler extension 'console_start_end': [Errno 32] Broken pipe
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/colcon_core/event_reactor.py", line 78, in _notify_observers
+    retval = observer(event)
+  File "/usr/lib/python3/dist-packages/colcon_core/event_handler/console_start_end.py", line 41, in __call__
+    print(Style.SectionStart(msg), flush=True)
+BrokenPipeError: [Errno 32] Broken pipe
+
+[2.370s] INFO:colcon.colcon_core.task.python.build:Building Python package in '/home/zech/exia_ws/src/exia_control'
+[2.370s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[2.370s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
+[2.620s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/zech/exia_ws/src/exia_control': CMAKE_PREFIX_PATH=/home/zech/exia_ws/install/exia_msgs:/home/zech/exia_ws/install/exia_bringup:/home/zech/exia_ws/install/exia_ground_description:/home/zech/ros2_ws/install/eclipse_diffdrive:/home/zech/ros2_ws/install/eclipse_ackermann PYTHONPATH=/home/zech/exia_ws/build/exia_control/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/zech/exia_ws/install/exia_control/lib/python3.10/site-packages:${PYTHONPATH} VIRTUAL_ENV_PROMPT=(.venv) /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/exia_control build --build-base /home/zech/exia_ws/build/exia_control/build install --record /home/zech/exia_ws/build/exia_control/install.log --single-version-externally-managed install_data
+[2.759s] Level 1:colcon.colcon_core.environment:checking '/home/zech/exia_ws/install/exia_control' for CMake module files
+[2.759s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/zech/exia_ws/src/exia_control' returned '0': CMAKE_PREFIX_PATH=/home/zech/exia_ws/install/exia_msgs:/home/zech/exia_ws/install/exia_bringup:/home/zech/exia_ws/install/exia_ground_description:/home/zech/ros2_ws/install/eclipse_diffdrive:/home/zech/ros2_ws/install/eclipse_ackermann PYTHONPATH=/home/zech/exia_ws/build/exia_control/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/zech/exia_ws/install/exia_control/lib/python3.10/site-packages:${PYTHONPATH} VIRTUAL_ENV_PROMPT=(.venv) /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/exia_control build --build-base /home/zech/exia_ws/build/exia_control/build install --record /home/zech/exia_ws/build/exia_control/install.log --single-version-externally-managed install_data
+[2.759s] Level 1:colcon.colcon_core.environment:checking '/home/zech/exia_ws/install/exia_control' for CMake config files
+[2.760s] Level 1:colcon.colcon_core.environment:checking '/home/zech/exia_ws/install/exia_control/lib'
+[2.760s] Level 1:colcon.colcon_core.environment:checking '/home/zech/exia_ws/install/exia_control/bin'
+[2.760s] Level 1:colcon.colcon_core.environment:checking '/home/zech/exia_ws/install/exia_control/lib/pkgconfig/exia_control.pc'
+[2.760s] Level 1:colcon.colcon_core.environment:checking '/home/zech/exia_ws/install/exia_control/lib/python3.10/site-packages'
+[2.760s] Level 1:colcon.colcon_core.shell:create_environment_hook('exia_control', 'pythonpath')
+[2.761s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/zech/exia_ws/install/exia_control/share/exia_control/hook/pythonpath.ps1'
+[2.761s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/zech/exia_ws/install/exia_control/share/exia_control/hook/pythonpath.dsv'
+[2.761s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/zech/exia_ws/install/exia_control/share/exia_control/hook/pythonpath.sh'
+[2.762s] Level 1:colcon.colcon_core.environment:checking '/home/zech/exia_ws/install/exia_control/bin'
+[2.762s] Level 1:colcon.colcon_core.environment:create_environment_scripts_only(exia_control)
+[2.762s] INFO:colcon.colcon_core.shell:Creating package script '/home/zech/exia_ws/install/exia_control/share/exia_control/package.ps1'
+[2.763s] INFO:colcon.colcon_core.shell:Creating package descriptor '/home/zech/exia_ws/install/exia_control/share/exia_control/package.dsv'
+[2.763s] INFO:colcon.colcon_core.shell:Creating package script '/home/zech/exia_ws/install/exia_control/share/exia_control/package.sh'
+[2.763s] INFO:colcon.colcon_core.shell:Creating package script '/home/zech/exia_ws/install/exia_control/share/exia_control/package.bash'
+[2.764s] INFO:colcon.colcon_core.shell:Creating package script '/home/zech/exia_ws/install/exia_control/share/exia_control/package.zsh'
+[2.764s] Level 1:colcon.colcon_core.environment:create_file_with_runtime_dependencies(/home/zech/exia_ws/install/exia_control/share/colcon-core/packages/exia_control)
+[2.764s] DEBUG:colcon.colcon_parallel_executor.executor.parallel:closing loop
+[2.764s] DEBUG:colcon.colcon_parallel_executor.executor.parallel:loop closed
+[2.764s] ERROR:colcon.colcon_core.event_reactor:Exception in event handler extension 'console_start_end': [Errno 32] Broken pipe
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/colcon_core/event_reactor.py", line 78, in _notify_observers
+    retval = observer(event)
+  File "/usr/lib/python3/dist-packages/colcon_core/event_handler/console_start_end.py", line 72, in __call__
+    print(Style.SectionEnd(msg), file=writable, flush=True)
+BrokenPipeError: [Errno 32] Broken pipe
+
+[2.764s] DEBUG:colcon.colcon_parallel_executor.executor.parallel:run_until_complete finished with '0'
+[2.764s] DEBUG:colcon.colcon_core.event_reactor:joining thread
+[2.767s] INFO:colcon.colcon_core.plugin_system:Skipping extension 'colcon_notification.desktop_notification.terminal_notifier': Not used on non-Darwin systems
+[2.767s] INFO:colcon.colcon_core.plugin_system:Skipping extension 'colcon_notification.desktop_notification.win32': Not used on non-Windows systems
+[2.767s] INFO:colcon.colcon_notification.desktop_notification:Sending desktop notification using 'notify2'
+[2.778s] DEBUG:colcon.colcon_core.event_reactor:joined thread
+[2.778s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/zech/exia_ws/install/local_setup.ps1'
+[2.779s] INFO:colcon.colcon_core.shell:Creating prefix util module '/home/zech/exia_ws/install/_local_setup_util_ps1.py'
+[2.780s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/zech/exia_ws/install/setup.ps1'
+[2.781s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/zech/exia_ws/install/local_setup.sh'
+[2.781s] INFO:colcon.colcon_core.shell:Creating prefix util module '/home/zech/exia_ws/install/_local_setup_util_sh.py'
+[2.782s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/zech/exia_ws/install/setup.sh'
+[2.783s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/zech/exia_ws/install/local_setup.bash'
+[2.783s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/zech/exia_ws/install/setup.bash'
+[2.784s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/zech/exia_ws/install/local_setup.zsh'
+[2.785s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/zech/exia_ws/install/setup.zsh'

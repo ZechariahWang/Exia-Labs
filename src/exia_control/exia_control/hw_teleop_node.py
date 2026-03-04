@@ -3,11 +3,7 @@
 import sys
 import time
 import signal
-import atexit
 import threading
-import termios
-import tty
-import select
 import subprocess
 import os
 
@@ -19,8 +15,12 @@ from geometry_msgs.msg import Twist
 from sensor_msgs.msg import NavSatFix, Imu, Joy
 from std_msgs.msg import Int32
 
+# curl -fsSL  https://www.phidgets.com/downloads/setup_linux | sudo bash
+# sudo apt install -y libphidget22 libphidget22-dev
+
+
 try:
-    from Phidget22.Devices.DCMotor import DCMotor
+    from Phidget22.Devices.MotorPositionController import MotorPositionController
     from Phidget22.PhidgetException import PhidgetException
     PHIDGETS_AVAILABLE = True
 except ImportError:
@@ -60,12 +60,7 @@ GEAR_PWM_NEUTRAL                     = 6.94
 GEAR_PWM_HIGH                        = 8.61
 GEAR_PWM                             = {0: GEAR_PWM_REVERSE, 1: GEAR_PWM_NEUTRAL, 2: GEAR_PWM_HIGH}
 
-KEY_WINDOW_INITIAL                   = 0.6
-KEY_WINDOW_REPEAT                    = 0.15
-KEY_REPEAT_GAP                       = 0.12
-RAMP_RATE                            = 1.8
 SPRING_RATE                          = 4.0
-STEER_RAMP_RATE                      = 2.5
 STEER_SPRING_RATE                    = 5.0
 
 CMD_VEL_MAX_SPEED                    = 5.0
@@ -76,6 +71,22 @@ CMD_VEL_WHEELBASE                    = 1.3
 LSS_SEND_DEADBAND                    = 8
 LSS_SEND_MIN_INTERVAL                = 0.025
 LSS_SERVO_SPEED                      = 600
+
+DEFAULT_SERIAL_PORT                  = '/dev/lss_controller'
+DEFAULT_SERIAL_BAUD                  = 115200
+DEFAULT_PHIDGETS_HUB_PORT            = 0
+DEFAULT_MOTOR_DEGREES_AT_MAX_STEER   = 2160.0
+DEFAULT_STEERING_KP                  = 400.0
+DEFAULT_STEERING_KI                  = 0.0
+DEFAULT_STEERING_KD                  = 150.0
+DEFAULT_STEERING_VELOCITY_LIMIT      = 10000.0
+DEFAULT_STEERING_ACCELERATION        = 50000.0
+DEFAULT_STEERING_DEAD_BAND           = 2.0
+DEFAULT_STEERING_CURRENT_LIMIT       = 3.0
+DEFAULT_REMOTE_MODE                  = False
+DEFAULT_LAUNCH_SENSORS               = True
+DEFAULT_GUI                          = False
+DEFAULT_BLUE                         = False
 
 # clamp val
 def _clamp(value, lo, hi):
@@ -110,15 +121,21 @@ class HwTeleopNode(Node):
     def __init__(self):
         super().__init__('hw_teleop_node')
 
-        self.declare_parameter('serial_port', '/dev/lss_controller')
-        self.declare_parameter('serial_baud', 115200)
-        self.declare_parameter('phidgets_hub_port', 0)
-        self.declare_parameter('steering_max_duty', 0.3)
-        self.declare_parameter('steering_current_limit', 3.0)
-        self.declare_parameter('remote_mode', False)
-        self.declare_parameter('launch_sensors', True)
-        self.declare_parameter('gui', False)
-        self.declare_parameter('blue', False)
+        self.declare_parameter('serial_port', DEFAULT_SERIAL_PORT)
+        self.declare_parameter('serial_baud', DEFAULT_SERIAL_BAUD)
+        self.declare_parameter('phidgets_hub_port', DEFAULT_PHIDGETS_HUB_PORT)
+        self.declare_parameter('motor_degrees_at_max_steer', DEFAULT_MOTOR_DEGREES_AT_MAX_STEER)
+        self.declare_parameter('steering_kp', DEFAULT_STEERING_KP)
+        self.declare_parameter('steering_ki', DEFAULT_STEERING_KI)
+        self.declare_parameter('steering_kd', DEFAULT_STEERING_KD)
+        self.declare_parameter('steering_velocity_limit', DEFAULT_STEERING_VELOCITY_LIMIT)
+        self.declare_parameter('steering_acceleration', DEFAULT_STEERING_ACCELERATION)
+        self.declare_parameter('steering_dead_band', DEFAULT_STEERING_DEAD_BAND)
+        self.declare_parameter('steering_current_limit', DEFAULT_STEERING_CURRENT_LIMIT)
+        self.declare_parameter('remote_mode', DEFAULT_REMOTE_MODE)
+        self.declare_parameter('launch_sensors', DEFAULT_LAUNCH_SENSORS)
+        self.declare_parameter('gui', DEFAULT_GUI)
+        self.declare_parameter('blue', DEFAULT_BLUE)
         self.declare_parameter('gear_pwm_pin', GEAR_PWM_PIN)
         self.declare_parameter('gear_pwm_reverse', GEAR_PWM_REVERSE)
         self.declare_parameter('gear_pwm_neutral', GEAR_PWM_NEUTRAL)
@@ -138,10 +155,11 @@ class HwTeleopNode(Node):
         self._gear_pwm = None
         self._gear_ok = False
 
-        self._dc_motor = None
+        self._phidgets_controller = None
         self._motor_ok = False
         self._motor_lock = threading.Lock()
-        self._max_duty = self.get_parameter('steering_max_duty').value
+        self._motor_degrees_at_max_steer = self.get_parameter('motor_degrees_at_max_steer').value
+        self._phidgets_runaway_count = 0
 
         self._throttle_ramp = 0.0
         self._brake_ramp = 0.0
@@ -149,19 +167,17 @@ class HwTeleopNode(Node):
 
         self._throttle_f = SmoothFilter(LSS_THROTTLE_NEUTRAL, tau=0.04)
         self._brake_f = SmoothFilter(LSS_BRAKE_RELEASED, tau=0.03)
-        self._steer_f = SmoothFilter(0.0, tau=0.04)
 
         self._gear = 1
+        self._gear_lock = threading.Lock()
+        self._last_gear_shift_time = 0.0
         self._last_tick_t = time.monotonic()
 
         self._last_sent_throttle = None
         self._last_sent_brake = None
-        self._last_sent_duty = None
         self._last_send_time_throttle = 0.0
         self._last_send_time_brake = 0.0
 
-        self._key_times = {'w': 0.0, 's': 0.0, 'a': 0.0, 'd': 0.0}
-        self._key_repeating = {'w': False, 's': False, 'a': False, 'd': False}
         self._estop = False
         self._gps_lat = None
         self._gps_lon = None
@@ -169,8 +185,6 @@ class HwTeleopNode(Node):
         self._imu_roll = None
         self._imu_pitch = None
 
-        self.running = True
-        self.old_settings = None
         self._interactive = sys.stdin.isatty()
 
         self._gnss_proc = None
@@ -231,19 +245,12 @@ class HwTeleopNode(Node):
 
         self._gui_mode = self.get_parameter('gui').value and DEARPYGUI_AVAILABLE
 
-        if self._gui_mode:
-            signal.signal(signal.SIGINT, self._signal_handler)
-            signal.signal(signal.SIGTERM, self._signal_handler)
-        elif self._interactive:
-            self._setup_terminal()
-            self.key_thread = threading.Thread(target=self._key_reader, daemon=True)
-            self.key_thread.start()
-        else:
-            self.get_logger().info('Headless mode — no terminal, accepting radio/joy input only')
-            signal.signal(signal.SIGINT, self._signal_handler)
-            signal.signal(signal.SIGTERM, self._signal_handler)
+        signal.signal(signal.SIGINT, self._signal_handler)
+        signal.signal(signal.SIGTERM, self._signal_handler)
 
         self.create_timer(0.02, self._tick)
+        if not self._remote_mode:
+            self.create_timer(2.0, self._reconnect_check)
 
     """
     Subprocess Launchers: this is basically just for the sensors
@@ -273,7 +280,7 @@ class HwTeleopNode(Node):
                 ['ros2', 'run', 'septentrio_gnss_driver',
                  'septentrio_gnss_driver_node',
                  '--ros-args', '--params-file', params_file],
-                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             self.get_logger().info(f'GPS driver started (pid={self._gnss_proc.pid})')
         except Exception as e:
             self.get_logger().warn(f'Failed to start GPS driver: {e}')
@@ -292,7 +299,7 @@ class HwTeleopNode(Node):
             self._lidar_proc = subprocess.Popen(
                 ['ros2', 'launch', 'velodyne',
                  'velodyne-all-nodes-VLP32C-launch.py'],
-                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             self.get_logger().info(f'Lidar driver started (pid={self._lidar_proc.pid})')
         except Exception as e:
             self.get_logger().warn(f'Failed to start lidar driver: {e}')
@@ -352,8 +359,14 @@ class HwTeleopNode(Node):
         except Exception as e:
             self.get_logger().warn(f'Failed to start robot_state_publisher: {e}')
 
-    # Open serial port to LLS servo bus: resets motors to default pos
     def _init_lss(self):
+        if self.serial_conn is not None:
+            try:
+                self.serial_conn.close()
+            except Exception:
+                pass
+            self.serial_conn = None
+        self._lss_ok = False
         try:
             import serial
             port = self.get_parameter('serial_port').value
@@ -361,8 +374,7 @@ class HwTeleopNode(Node):
             self.serial_conn = serial.Serial(port=port, baudrate=baud, timeout=0.1)
             time.sleep(0.5)
             self.serial_conn.reset_input_buffer()
-        except Exception as e:
-            self.get_logger().warn(f'LSS serial failed: {e}')
+        except Exception:
             self.serial_conn = None
             return
 
@@ -404,64 +416,89 @@ class HwTeleopNode(Node):
         except Exception:
             return False
 
-    # send serial command func
     def _send_lss(self, cmd):
         if self.serial_conn is None:
             return
         try:
             self.serial_conn.write(cmd.encode())
-            self.serial_conn.flush() # yes
+            self.serial_conn.flush()
         except Exception:
-            pass
+            self._lss_ok = False
+            try:
+                self.serial_conn.close()
+            except Exception:
+                pass
+            self.serial_conn = None
 
-    # for steering motor
+    # for steering motor (position control via DCC1000 + HKT22 encoder)
     def _init_phidgets(self):
         if not PHIDGETS_AVAILABLE:
             self.get_logger().warn('Phidget22 not installed — steering unavailable')
             return
         try:
-            ch = DCMotor()
+            ch = MotorPositionController()
             ch.setHubPort(self.get_parameter('phidgets_hub_port').value)
             ch.setIsHubPortDevice(False)
             ch.setOnAttachHandler(self._on_attach)
             ch.setOnDetachHandler(self._on_detach)
-            self._dc_motor = ch
+            self._phidgets_controller = ch
             ch.open()
-            self.get_logger().info('DCMotor channel opened, waiting for attach...')
+            self.get_logger().info('MotorPositionController channel opened, waiting for attach...')
         except PhidgetException as e:
             self.get_logger().warn(f'Phidgets init failed: {e}')
 
     def _on_attach(self, sender):
         try:
+            sender.setRescaleFactor(360.0 / (300 * 4 * 4.25))
             sender.setCurrentLimit(self.get_parameter('steering_current_limit').value)
-            sender.setAcceleration(sender.getMaxAcceleration())
+            sender.setVelocityLimit(self.get_parameter('steering_velocity_limit').value)
+            sender.setAcceleration(self.get_parameter('steering_acceleration').value)
+            sender.setDeadBand(self.get_parameter('steering_dead_band').value)
+            sender.setKp(self.get_parameter('steering_kp').value)
+            sender.setKi(self.get_parameter('steering_ki').value)
+            sender.setKd(self.get_parameter('steering_kd').value)
+            sender.addPositionOffset(-sender.getPosition())
             sender.enableFailsafe(500)
-            sender.setTargetVelocity(0.0)
+            sender.setEngaged(True)
             with self._motor_lock:
                 self._motor_ok = True
+                self._phidgets_runaway_count = 0
             self.get_logger().info(
-                f'DCMotor attached (max_duty={self._max_duty}, '
+                f'MotorPositionController attached (max_degrees={self._motor_degrees_at_max_steer}, '
                 f'current_limit={self.get_parameter("steering_current_limit").value}A)')
         except PhidgetException as e:
-            self.get_logger().error(f'DCMotor config failed: {e}')
+            self.get_logger().error(f'MotorPositionController config failed: {e}')
 
     def _on_detach(self, sender):
         with self._motor_lock:
             self._motor_ok = False
-        self.get_logger().warn('DCMotor detached')
+        self.get_logger().warn('MotorPositionController detached')
 
-    def _set_duty(self, duty):
+    def _set_steering_position(self, normalized):
         with self._motor_lock:
             if not self._motor_ok:
                 return
         try:
-            self._dc_motor.setTargetVelocity(duty)
+            target = normalized * self._motor_degrees_at_max_steer
+            self._phidgets_controller.setTargetPosition(target)
+            self._phidgets_controller.resetFailsafe()
+            duty = abs(self._phidgets_controller.getDutyCycle())
+            if duty > 0.95:
+                self._phidgets_runaway_count += 1
+                if self._phidgets_runaway_count > 25:
+                    self.get_logger().error('Steering motor runaway detected — disengaging')
+                    self._phidgets_controller.setEngaged(False)
+                    with self._motor_lock:
+                        self._motor_ok = False
+            else:
+                self._phidgets_runaway_count = 0
         except PhidgetException:
             pass
 
     def _init_gear_servo(self):
         if not JETSON_GPIO_AVAILABLE:
-            self.get_logger().warn('Jetson.GPIO not available — gear servo unavailable')
+            return
+        if self._gear_ok:
             return
         try:
             pin = self.get_parameter('gear_pwm_pin').value
@@ -475,6 +512,40 @@ class HwTeleopNode(Node):
                 f'(R={self._gear_pwm_map[0]}% N={self._gear_pwm_map[1]}% H={self._gear_pwm_map[2]}%)')
         except Exception as e:
             self.get_logger().warn(f'Gear servo init failed: {e}')
+
+    def _reconnect_check(self):
+        if not self._lss_ok:
+            self._init_lss()
+            if self._lss_ok:
+                self.get_logger().info('LSS reconnected')
+
+        if not self._gear_ok:
+            self._init_gear_servo()
+            if self._gear_ok:
+                self.get_logger().info('Gear servo reconnected')
+
+        with self._motor_lock:
+            motor_ok = self._motor_ok
+        if not motor_ok and self._phidgets_controller is None:
+            self._init_phidgets()
+
+    def _request_gear(self, target, force=False):
+        with self._gear_lock:
+            if target == self._gear:
+                return
+            now = time.monotonic()
+            if not force:
+                if now - self._last_gear_shift_time < 0.3:
+                    return
+                if target != 1 and self._throttle_ramp > 0.05:
+                    return
+            if self._gear == 0 and target == 2:
+                return
+            if self._gear == 2 and target == 0:
+                return
+            self._gear = target
+            self._last_gear_shift_time = now
+        self._set_gear(target)
 
     def _set_gear(self, gear_index):
         if self._remote_mode:
@@ -530,47 +601,39 @@ class HwTeleopNode(Node):
         if has_input:
             self._joy_active = True
             self._joy_last_time = time.monotonic()
-            if self._estop:
-                self._estop = False
         else:
             self._joy_active = False
 
         if msg.buttons[0]:
-            self._gear = 0
-            self._set_gear(0)
+            self._request_gear(0)
         elif msg.buttons[2]:
-            self._gear = 2
-            self._set_gear(2)
-        elif msg.buttons[3]:
-            self._gear = 1
-            self._set_gear(1)
+            self._request_gear(2)
+        elif msg.buttons[3]: # neutral
+            self._request_gear(1)
+            if self._estop:
+                self._estop = False
 
         if msg.buttons[1]:
             self._safe_stop()
 
-    # recieves commad velocity from radio
     def _remote_teleop_cb(self, msg):
+        if self._estop:
+            return
         self._throttle_ramp = _clamp(msg.linear.x, 0.0, 1.0)
         self._brake_ramp = _clamp(msg.linear.y, 0.0, 1.0)
         self._steer_ramp = _clamp(msg.angular.z, -1.0, 1.0)
         self._remote_last_time = time.monotonic()
-        if self._estop:
-            self._estop = False
 
-    # receives gear shift radiio data
     def _remote_gear_cb(self, msg):
         gear = _clamp(msg.data, 0, 2)
-        self._gear = gear
-        self._set_gear(gear)
-
-    def _key_active(self, key):
-        window = KEY_WINDOW_REPEAT if self._key_repeating[key] else KEY_WINDOW_INITIAL
-        return (time.monotonic() - self._key_times[key]) < window
+        self._request_gear(gear, force=(gear == 1))
 
     def _publish_cmd_vel(self):
-        if self._gear == 2:
+        with self._gear_lock:
+            gear = self._gear
+        if gear == 2:
             speed = self._throttle_ramp * CMD_VEL_MAX_SPEED
-        elif self._gear == 0:
+        elif gear == 0:
             speed = -self._throttle_ramp * CMD_VEL_MAX_REVERSE
         else:
             speed = 0.0
@@ -595,15 +658,6 @@ class HwTeleopNode(Node):
         dt = now - self._last_tick_t
         self._last_tick_t = now
 
-        if not self._remote_mode:
-            with self._motor_lock:
-                motor_ok = self._motor_ok
-            if motor_ok:
-                try:
-                    self._dc_motor.resetFailsafe()
-                except PhidgetException:
-                    pass
-
         if self._estop:
             self._print_hud()
             return
@@ -616,38 +670,14 @@ class HwTeleopNode(Node):
             self._brake_ramp = self._joy_brake
             self._steer_ramp = self._joy_steer
         elif not remote_active:
-            if self._key_active('w'):
-                self._throttle_ramp = _clamp(self._throttle_ramp + RAMP_RATE * dt, 0.0, 1.0)
-            else:
-                self._throttle_ramp = _clamp(self._throttle_ramp - SPRING_RATE * dt, 0.0, 1.0)
-
-            if self._key_active('s'):
-                self._brake_ramp = _clamp(self._brake_ramp + RAMP_RATE * dt, 0.0, 1.0)
-            else:
-                self._brake_ramp = _clamp(self._brake_ramp - SPRING_RATE * dt, 0.0, 1.0)
-
-            a_active = self._key_active('a')
-            d_active = self._key_active('d')
-            if a_active and d_active:
-                if self._key_times['a'] >= self._key_times['d']:
-                    self._steer_ramp = _clamp(
-                        self._steer_ramp + STEER_RAMP_RATE * dt, -1.0, 1.0)
-                else:
-                    self._steer_ramp = _clamp(
-                        self._steer_ramp - STEER_RAMP_RATE * dt, -1.0, 1.0)
-            elif a_active:
+            self._throttle_ramp = _clamp(self._throttle_ramp - SPRING_RATE * dt, 0.0, 1.0)
+            self._brake_ramp = _clamp(self._brake_ramp - SPRING_RATE * dt, 0.0, 1.0)
+            if self._steer_ramp > 0.0:
                 self._steer_ramp = _clamp(
-                    self._steer_ramp + STEER_RAMP_RATE * dt, -1.0, 1.0)
-            elif d_active:
+                    self._steer_ramp - STEER_SPRING_RATE * dt, 0.0, 1.0)
+            elif self._steer_ramp < 0.0:
                 self._steer_ramp = _clamp(
-                    self._steer_ramp - STEER_RAMP_RATE * dt, -1.0, 1.0)
-            else:
-                if self._steer_ramp > 0.0:
-                    self._steer_ramp = _clamp(
-                        self._steer_ramp - STEER_SPRING_RATE * dt, 0.0, 1.0)
-                elif self._steer_ramp < 0.0:
-                    self._steer_ramp = _clamp(
-                        self._steer_ramp + STEER_SPRING_RATE * dt, -1.0, 0.0)
+                    self._steer_ramp + STEER_SPRING_RATE * dt, -1.0, 0.0)
 
         self._publish_cmd_vel()
 
@@ -662,11 +692,11 @@ class HwTeleopNode(Node):
 
         thr_target = _lerp(LSS_THROTTLE_NEUTRAL, LSS_THROTTLE_MAX, self._throttle_ramp)
         brk_target = _lerp(LSS_BRAKE_RELEASED, LSS_BRAKE_ENGAGED, self._brake_ramp)
-        steer_target = self._steer_ramp * self._max_duty
 
         thr_val = self._throttle_f.update(thr_target, dt)
         brk_val = self._brake_f.update(brk_target, dt)
-        duty_val = self._steer_f.update(steer_target, dt)
+
+        self._set_steering_position(self._steer_ramp)
 
         thr_int = int(round(thr_val))
         thr_at_neutral = (thr_int == LSS_THROTTLE_NEUTRAL)
@@ -692,11 +722,6 @@ class HwTeleopNode(Node):
             self._last_sent_brake = brk_int
             self._last_send_time_brake = now
 
-        duty_round = round(duty_val, 4)
-        if self._last_sent_duty is None or abs(duty_round - self._last_sent_duty) >= 0.005:
-            self._set_duty(duty_round)
-            self._last_sent_duty = duty_round
-
         self._print_hud()
 
     def _safe_stop(self):
@@ -704,6 +729,7 @@ class HwTeleopNode(Node):
         self._throttle_ramp = 0.0
         self._brake_ramp = 1.0
         self._steer_ramp = 0.0
+        self._request_gear(1, force=True)
         stop_msg = Twist()
         self._cmd_vel_pub.publish(stop_msg)
         if self._remote_mode:
@@ -715,71 +741,16 @@ class HwTeleopNode(Node):
         else:
             self._throttle_f.snap(LSS_THROTTLE_NEUTRAL)
             self._brake_f.snap(LSS_BRAKE_ENGAGED)
-            self._steer_f.snap(0.0)
             self._last_sent_throttle = None
             self._last_sent_brake = None
-            self._last_sent_duty = None
             self._send_lss(f'#{LSS_THROTTLE_ID}D{LSS_THROTTLE_NEUTRAL}\r')
             self._send_lss(f'#{LSS_BRAKE_ID}D{LSS_BRAKE_ENGAGED}\r')
-            self._set_duty(0.0)
+            self._set_steering_position(0.0)
         self._print_hud()
 
-    def _setup_terminal(self):
-        self.old_settings = termios.tcgetattr(sys.stdin)
-        tty.setcbreak(sys.stdin.fileno())
-        atexit.register(self._restore_terminal)
-        signal.signal(signal.SIGINT, self._signal_handler)
-        signal.signal(signal.SIGTERM, self._signal_handler)
-
-    def _restore_terminal(self):
-        if self.old_settings is not None:
-            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self.old_settings)
-            self.old_settings = None
-
     def _signal_handler(self, _sig, _frame):
-        self.running = False
         self._safe_stop()
-        if self._interactive:
-            self._restore_terminal()
         raise SystemExit(0)
-
-    def _key_reader(self):
-        while self.running:
-            try:
-                if not select.select([sys.stdin], [], [], 0.05)[0]:
-                    continue
-                ch = sys.stdin.read(1)
-
-                if ch == '\x1b':
-                    if select.select([sys.stdin], [], [], 0.01)[0]:
-                        sys.stdin.read(1)
-                        if select.select([sys.stdin], [], [], 0.01)[0]:
-                            sys.stdin.read(1)
-                    continue
-
-                lower = ch.lower()
-
-                if lower in self._key_times:
-                    now_k = time.monotonic()
-                    gap = now_k - self._key_times[lower]
-                    if gap < KEY_REPEAT_GAP:
-                        self._key_repeating[lower] = True
-                    elif gap > KEY_WINDOW_INITIAL:
-                        self._key_repeating[lower] = False
-                    self._key_times[lower] = now_k
-                    if self._estop:
-                        self._estop = False
-
-                elif ch in ('1', '2', '3'):
-                    self._gear = int(ch) - 1
-                    self._set_gear(self._gear)
-
-                elif ch == ' ':
-                    self._safe_stop()
-
-            except Exception:
-                if not self.running:
-                    break
 
     def _throttle_pct(self):
         return int(self._throttle_ramp * 100)
@@ -843,7 +814,6 @@ class HwTeleopNode(Node):
         sys.stdout.flush()
 
     def destroy_node(self):
-        self.running = False
         self._safe_stop()
 
         for proc in [self._gnss_proc, self._imu_proc, self._lidar_proc,
@@ -866,12 +836,13 @@ class HwTeleopNode(Node):
                 except Exception:
                     pass
 
-            if self._dc_motor is not None:
+            if self._phidgets_controller is not None:
                 try:
                     with self._motor_lock:
                         if self._motor_ok:
-                            self._dc_motor.setTargetVelocity(0.0)
-                    self._dc_motor.close()
+                            self._phidgets_controller.setTargetPosition(0.0)
+                            self._phidgets_controller.setEngaged(False)
+                    self._phidgets_controller.close()
                 except PhidgetException:
                     pass
 
@@ -882,7 +853,6 @@ class HwTeleopNode(Node):
                 except Exception:
                     pass
 
-        self._restore_terminal()
         sys.stdout.write('\n')
 
         if self._blue_loop is not None:
@@ -968,26 +938,6 @@ def main(args=None):
             if rclpy.ok():
                 rclpy.shutdown()
     else:
-        if sys.stdin.isatty():
-            remote = '--ros-args' in sys.argv and 'remote_mode:=true' in ' '.join(sys.argv)
-            if remote:
-                print('Exia Remote Teleop (Base Station)')
-                print('----------------------------------')
-            else:
-                print('Exia Hardware Teleop')
-                print('--------------------')
-            print('  W       : throttle (hold)')
-            print('  S       : brake (hold)')
-            print('  A/D     : steer left/right (hold)')
-            print('  1/2/3   : gear Reverse/Neutral/High')
-            print('  Space   : e-stop')
-            print('  Ctrl+C  : quit')
-            print()
-            print('  All controls spring back on release.')
-            print()
-            print()
-            print()
-
         try:
             rclpy.spin(node)
         except (KeyboardInterrupt, SystemExit):

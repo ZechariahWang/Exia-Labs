@@ -1,0 +1,34 @@
+[0.307s] Invoking command in '/home/zech/exia_ws/src/exia_control': PYTHONPATH=/home/zech/exia_ws/build/exia_control/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/zech/exia_ws/install/exia_control/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/exia_control build --build-base /home/zech/exia_ws/build/exia_control/build install --record /home/zech/exia_ws/build/exia_control/install.log --single-version-externally-managed install_data
+[0.420s] running egg_info
+[0.420s] writing ../../build/exia_control/exia_control.egg-info/PKG-INFO
+[0.420s] writing dependency_links to ../../build/exia_control/exia_control.egg-info/dependency_links.txt
+[0.420s] writing entry points to ../../build/exia_control/exia_control.egg-info/entry_points.txt
+[0.420s] writing requirements to ../../build/exia_control/exia_control.egg-info/requires.txt
+[0.420s] writing top-level names to ../../build/exia_control/exia_control.egg-info/top_level.txt
+[0.421s] reading manifest file '../../build/exia_control/exia_control.egg-info/SOURCES.txt'
+[0.421s] writing manifest file '../../build/exia_control/exia_control.egg-info/SOURCES.txt'
+[0.421s] running build
+[0.421s] running build_py
+[0.421s] copying exia_control/ackermann_drive_node.py -> /home/zech/exia_ws/build/exia_control/build/lib/exia_control
+[0.422s] copying exia_control/dynamic_navigator_node.py -> /home/zech/exia_ws/build/exia_control/build/lib/exia_control
+[0.422s] copying exia_control/navigation/path_validator.py -> /home/zech/exia_ws/build/exia_control/build/lib/exia_control/navigation
+[0.422s] running install
+[0.422s] running install_lib
+[0.422s] copying /home/zech/exia_ws/build/exia_control/build/lib/exia_control/ackermann_drive_node.py -> /home/zech/exia_ws/install/exia_control/lib/python3.10/site-packages/exia_control
+[0.422s] copying /home/zech/exia_ws/build/exia_control/build/lib/exia_control/navigation/path_validator.py -> /home/zech/exia_ws/install/exia_control/lib/python3.10/site-packages/exia_control/navigation
+[0.423s] copying /home/zech/exia_ws/build/exia_control/build/lib/exia_control/dynamic_navigator_node.py -> /home/zech/exia_ws/install/exia_control/lib/python3.10/site-packages/exia_control
+[0.423s] byte-compiling /home/zech/exia_ws/install/exia_control/lib/python3.10/site-packages/exia_control/ackermann_drive_node.py to ackermann_drive_node.cpython-310.pyc
+[0.424s] byte-compiling /home/zech/exia_ws/install/exia_control/lib/python3.10/site-packages/exia_control/navigation/path_validator.py to path_validator.cpython-310.pyc
+[0.425s] byte-compiling /home/zech/exia_ws/install/exia_control/lib/python3.10/site-packages/exia_control/dynamic_navigator_node.py to dynamic_navigator_node.cpython-310.pyc
+[0.428s] running install_data
+[0.428s] copying package.xml -> /home/zech/exia_ws/install/exia_control/share/exia_control
+[0.428s] running install_egg_info
+[0.428s] removing '/home/zech/exia_ws/install/exia_control/lib/python3.10/site-packages/exia_control-1.0.0-py3.10.egg-info' (and everything under it)
+[0.429s] Copying ../../build/exia_control/exia_control.egg-info to /home/zech/exia_ws/install/exia_control/lib/python3.10/site-packages/exia_control-1.0.0-py3.10.egg-info
+[0.429s] running install_scripts
+[0.440s] Installing ackermann_drive_node script to /home/zech/exia_ws/install/exia_control/lib/exia_control
+[0.440s] Installing drive_forward_test_node script to /home/zech/exia_ws/install/exia_control/lib/exia_control
+[0.440s] Installing dynamic_navigator_node script to /home/zech/exia_ws/install/exia_control/lib/exia_control
+[0.440s] Installing turn_to_heading_test_node script to /home/zech/exia_ws/install/exia_control/lib/exia_control
+[0.440s] writing list of installed files to '/home/zech/exia_ws/build/exia_control/install.log'
+[0.452s] Invoked command in '/home/zech/exia_ws/src/exia_control' returned '0': PYTHONPATH=/home/zech/exia_ws/build/exia_control/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/zech/exia_ws/install/exia_control/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/exia_control build --build-base /home/zech/exia_ws/build/exia_control/build install --record /home/zech/exia_ws/build/exia_control/install.log --single-version-externally-managed install_data

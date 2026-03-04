@@ -1,0 +1,144 @@
+[0.009s] Invoking command in '/home/zech/exia_ws/build/exia_msgs': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/zech/exia_ws/install/exia_driver:/home/zech/exia_ws/install/exia_control:/opt/ros/humble VIRTUAL_ENV_PROMPT=(.venv) /usr/bin/cmake --build /home/zech/exia_ws/build/exia_msgs -- -j20 -l20
+[0.062s] [  3%] Built target exia_msgs__cpp
+[0.065s] [ 12%] Built target exia_msgs__rosidl_generator_c
+[0.072s] [ 12%] Built target ament_cmake_python_copy_exia_msgs
+[0.082s] [ 22%] Built target exia_msgs__rosidl_typesupport_cpp
+[0.083s] [ 32%] Built target exia_msgs__rosidl_typesupport_c
+[0.084s] [ 41%] Built target exia_msgs__rosidl_typesupport_introspection_cpp
+[0.085s] [ 51%] Built target exia_msgs__rosidl_typesupport_fastrtps_cpp
+[0.086s] [ 61%] Built target exia_msgs__rosidl_typesupport_fastrtps_c
+[0.086s] [ 70%] Built target exia_msgs__rosidl_typesupport_introspection_c
+[0.103s] [ 70%] Built target exia_msgs
+[0.117s] [ 74%] Built target exia_msgs__py
+[0.132s] [ 80%] Built target exia_msgs__rosidl_generator_py
+[0.146s] [ 87%] Built target exia_msgs__rosidl_typesupport_introspection_c__pyext
+[0.149s] [100%] Built target exia_msgs__rosidl_typesupport_fastrtps_c__pyext
+[0.149s] [100%] Built target exia_msgs__rosidl_typesupport_c__pyext
+[0.203s] running egg_info
+[0.203s] writing exia_msgs.egg-info/PKG-INFO
+[0.204s] writing dependency_links to exia_msgs.egg-info/dependency_links.txt
+[0.204s] writing top-level names to exia_msgs.egg-info/top_level.txt
+[0.205s] reading manifest file 'exia_msgs.egg-info/SOURCES.txt'
+[0.205s] writing manifest file 'exia_msgs.egg-info/SOURCES.txt'
+[0.222s] [100%] Built target ament_cmake_python_build_exia_msgs_egg
+[0.230s] Invoked command in '/home/zech/exia_ws/build/exia_msgs' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/zech/exia_ws/install/exia_driver:/home/zech/exia_ws/install/exia_control:/opt/ros/humble VIRTUAL_ENV_PROMPT=(.venv) /usr/bin/cmake --build /home/zech/exia_ws/build/exia_msgs -- -j20 -l20
+[0.238s] Invoking command in '/home/zech/exia_ws/build/exia_msgs': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/zech/exia_ws/install/exia_driver:/home/zech/exia_ws/install/exia_control:/opt/ros/humble VIRTUAL_ENV_PROMPT=(.venv) /usr/bin/cmake --install /home/zech/exia_ws/build/exia_msgs
+[0.249s] -- Install configuration: ""
+[0.249s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/ament_index/resource_index/rosidl_interfaces/exia_msgs
+[0.249s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs
+[0.249s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg
+[0.249s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/rosidl_generator_c__visibility_control.h
+[0.249s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/navigation_goal.h
+[0.250s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail
+[0.250s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail/navigation_goal__functions.c
+[0.250s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail/navigation_goal__type_support.h
+[0.250s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail/navigation_goal__struct.h
+[0.250s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail/navigation_goal__functions.h
+[0.250s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/environment/library_path.sh
+[0.250s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/environment/library_path.dsv
+[0.250s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/lib/libexia_msgs__rosidl_generator_c.so
+[0.250s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs
+[0.250s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg
+[0.250s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/rosidl_typesupport_fastrtps_c__visibility_control.h
+[0.250s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail
+[0.250s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail/navigation_goal__rosidl_typesupport_fastrtps_c.h
+[0.250s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/lib/libexia_msgs__rosidl_typesupport_fastrtps_c.so
+[0.250s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs
+[0.251s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg
+[0.251s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/rosidl_typesupport_introspection_c__visibility_control.h
+[0.251s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail
+[0.251s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail/navigation_goal__rosidl_typesupport_introspection_c.h
+[0.251s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail/navigation_goal__type_support.c
+[0.251s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/lib/libexia_msgs__rosidl_typesupport_introspection_c.so
+[0.251s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/lib/libexia_msgs__rosidl_typesupport_c.so
+[0.251s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs
+[0.251s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg
+[0.251s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/rosidl_generator_cpp__visibility_control.hpp
+[0.251s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/navigation_goal.hpp
+[0.251s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail
+[0.251s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail/navigation_goal__struct.hpp
+[0.251s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail/navigation_goal__traits.hpp
+[0.251s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail/navigation_goal__type_support.hpp
+[0.252s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail/navigation_goal__builder.hpp
+[0.252s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs
+[0.252s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg
+[0.252s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/rosidl_typesupport_fastrtps_cpp__visibility_control.h
+[0.252s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail
+[0.252s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail/navigation_goal__rosidl_typesupport_fastrtps_cpp.hpp
+[0.252s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail/dds_fastrtps
+[0.252s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/lib/libexia_msgs__rosidl_typesupport_fastrtps_cpp.so
+[0.252s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs
+[0.252s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg
+[0.252s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail
+[0.252s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail/navigation_goal__rosidl_typesupport_introspection_cpp.hpp
+[0.252s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail/navigation_goal__type_support.cpp
+[0.252s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/lib/libexia_msgs__rosidl_typesupport_introspection_cpp.so
+[0.252s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/lib/libexia_msgs__rosidl_typesupport_cpp.so
+[0.252s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/environment/pythonpath.sh
+[0.253s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/environment/pythonpath.dsv
+[0.253s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs-1.0.0-py3.10.egg-info
+[0.253s] -- Installing: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs-1.0.0-py3.10.egg-info/SOURCES.txt
+[0.253s] -- Installing: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs-1.0.0-py3.10.egg-info/dependency_links.txt
+[0.253s] -- Installing: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs-1.0.0-py3.10.egg-info/PKG-INFO
+[0.253s] -- Installing: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs-1.0.0-py3.10.egg-info/top_level.txt
+[0.253s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs
+[0.253s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/exia_msgs_s__rosidl_typesupport_fastrtps_c.cpython-310-x86_64-linux-gnu.so
+[0.253s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/_exia_msgs_s.ep.rosidl_typesupport_fastrtps_c.c
+[0.253s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/__init__.py
+[0.253s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/libexia_msgs__rosidl_generator_py.so
+[0.253s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/exia_msgs_s__rosidl_typesupport_c.cpython-310-x86_64-linux-gnu.so
+[0.253s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/_exia_msgs_s.ep.rosidl_typesupport_c.c
+[0.253s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/msg
+[0.253s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/msg/_navigation_goal_s.c
+[0.253s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/msg/__init__.py
+[0.253s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/msg/_navigation_goal.py
+[0.254s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/exia_msgs_s__rosidl_typesupport_introspection_c.cpython-310-x86_64-linux-gnu.so
+[0.254s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/_exia_msgs_s.ep.rosidl_typesupport_introspection_c.c
+[0.276s] Listing '/home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs'...
+[0.276s] Listing '/home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/msg'...
+[0.278s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/exia_msgs_s__rosidl_typesupport_fastrtps_c.cpython-310-x86_64-linux-gnu.so
+[0.278s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/exia_msgs_s__rosidl_typesupport_introspection_c.cpython-310-x86_64-linux-gnu.so
+[0.278s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/exia_msgs_s__rosidl_typesupport_c.cpython-310-x86_64-linux-gnu.so
+[0.278s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/lib/libexia_msgs__rosidl_generator_py.so
+[0.278s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/msg/NavigationGoal.idl
+[0.278s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/msg/NavigationGoal.msg
+[0.278s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/ament_index/resource_index/package_run_dependencies/exia_msgs
+[0.278s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/ament_index/resource_index/parent_prefix_path/exia_msgs
+[0.279s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/environment/ament_prefix_path.sh
+[0.279s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/environment/ament_prefix_path.dsv
+[0.279s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/environment/path.sh
+[0.279s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/environment/path.dsv
+[0.279s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/local_setup.bash
+[0.279s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/local_setup.sh
+[0.279s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/local_setup.zsh
+[0.279s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/local_setup.dsv
+[0.279s] -- Installing: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/package.dsv
+[0.279s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/ament_index/resource_index/packages/exia_msgs
+[0.279s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/export_exia_msgs__rosidl_generator_cExport.cmake
+[0.279s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/export_exia_msgs__rosidl_generator_cExport-noconfig.cmake
+[0.279s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/export_exia_msgs__rosidl_typesupport_fastrtps_cExport.cmake
+[0.279s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/export_exia_msgs__rosidl_typesupport_fastrtps_cExport-noconfig.cmake
+[0.279s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/exia_msgs__rosidl_typesupport_introspection_cExport.cmake
+[0.279s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/exia_msgs__rosidl_typesupport_introspection_cExport-noconfig.cmake
+[0.279s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/exia_msgs__rosidl_typesupport_cExport.cmake
+[0.279s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/exia_msgs__rosidl_typesupport_cExport-noconfig.cmake
+[0.279s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/export_exia_msgs__rosidl_generator_cppExport.cmake
+[0.279s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/export_exia_msgs__rosidl_typesupport_fastrtps_cppExport.cmake
+[0.279s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/export_exia_msgs__rosidl_typesupport_fastrtps_cppExport-noconfig.cmake
+[0.279s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/exia_msgs__rosidl_typesupport_introspection_cppExport.cmake
+[0.279s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/exia_msgs__rosidl_typesupport_introspection_cppExport-noconfig.cmake
+[0.279s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/exia_msgs__rosidl_typesupport_cppExport.cmake
+[0.279s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/exia_msgs__rosidl_typesupport_cppExport-noconfig.cmake
+[0.279s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/export_exia_msgs__rosidl_generator_pyExport.cmake
+[0.279s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/export_exia_msgs__rosidl_generator_pyExport-noconfig.cmake
+[0.279s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/rosidl_cmake-extras.cmake
+[0.279s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/ament_cmake_export_include_directories-extras.cmake
+[0.279s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/ament_cmake_export_libraries-extras.cmake
+[0.279s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/ament_cmake_export_targets-extras.cmake
+[0.279s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/rosidl_cmake_export_typesupport_targets-extras.cmake
+[0.279s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/ament_cmake_export_dependencies-extras.cmake
+[0.279s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/rosidl_cmake_export_typesupport_libraries-extras.cmake
+[0.280s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/exia_msgsConfig.cmake
+[0.280s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/exia_msgsConfig-version.cmake
+[0.280s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/package.xml
+[0.281s] Invoked command in '/home/zech/exia_ws/build/exia_msgs' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/zech/exia_ws/install/exia_driver:/home/zech/exia_ws/install/exia_control:/opt/ros/humble VIRTUAL_ENV_PROMPT=(.venv) /usr/bin/cmake --install /home/zech/exia_ws/build/exia_msgs

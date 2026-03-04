@@ -1,0 +1,20 @@
+[0.251s] Invoking command in '/home/zech/exia_ws/build/exia_msgs': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/zech/exia_ws/install/exia_driver:/home/zech/exia_ws/install/exia_control:/opt/ros/humble /usr/bin/cmake --build /home/zech/exia_ws/build/exia_msgs -- -j20 -l20
+[0.276s] Invoked command in '/home/zech/exia_ws/build/exia_msgs' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/zech/exia_ws/install/exia_driver:/home/zech/exia_ws/install/exia_control:/opt/ros/humble /usr/bin/cmake --build /home/zech/exia_ws/build/exia_msgs -- -j20 -l20
+[0.285s] Invoking command in '/home/zech/exia_ws/build/exia_msgs': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/zech/exia_ws/install/exia_driver:/home/zech/exia_ws/install/exia_control:/opt/ros/humble /usr/bin/cmake --install /home/zech/exia_ws/build/exia_msgs
+[0.290s] -- Install configuration: ""
+[0.290s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/ament_index/resource_index/package_run_dependencies/exia_msgs
+[0.290s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/ament_index/resource_index/parent_prefix_path/exia_msgs
+[0.290s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/environment/ament_prefix_path.sh
+[0.290s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/environment/ament_prefix_path.dsv
+[0.290s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/environment/path.sh
+[0.290s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/environment/path.dsv
+[0.290s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/local_setup.bash
+[0.290s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/local_setup.sh
+[0.290s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/local_setup.zsh
+[0.290s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/local_setup.dsv
+[0.290s] -- Installing: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/package.dsv
+[0.290s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/ament_index/resource_index/packages/exia_msgs
+[0.290s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/exia_msgsConfig.cmake
+[0.290s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/exia_msgsConfig-version.cmake
+[0.290s] -- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/package.xml
+[0.291s] Invoked command in '/home/zech/exia_ws/build/exia_msgs' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/zech/exia_ws/install/exia_driver:/home/zech/exia_ws/install/exia_control:/opt/ros/humble /usr/bin/cmake --install /home/zech/exia_ws/build/exia_msgs

@@ -1,0 +1,45 @@
+[0.007s] Invoking command in '/home/zech/exia_ws/build/exia_msgs': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/zech/exia_ws/install/exia_driver:/home/zech/exia_ws/install/exia_control:/opt/ros/humble /usr/bin/cmake --build /home/zech/exia_ws/build/exia_msgs -- -j20 -l20
+[0.036s] Consolidate compiler generated dependencies of target exia_msgs__rosidl_generator_c
+[0.045s] [  6%] Built target exia_msgs__cpp
+[0.045s] [ 12%] Built target exia_msgs__rosidl_generator_c
+[0.054s] [ 12%] Built target ament_cmake_python_copy_exia_msgs
+[0.055s] Consolidate compiler generated dependencies of target exia_msgs__rosidl_typesupport_fastrtps_c
+[0.055s] Consolidate compiler generated dependencies of target exia_msgs__rosidl_typesupport_fastrtps_cpp
+[0.060s] Consolidate compiler generated dependencies of target exia_msgs__rosidl_typesupport_cpp
+[0.060s] Consolidate compiler generated dependencies of target exia_msgs__rosidl_typesupport_introspection_cpp
+[0.067s] Consolidate compiler generated dependencies of target exia_msgs__rosidl_typesupport_c
+[0.067s] Consolidate compiler generated dependencies of target exia_msgs__rosidl_typesupport_introspection_c
+[0.071s] [ 22%] Built target exia_msgs__rosidl_typesupport_fastrtps_c
+[0.071s] [ 32%] Built target exia_msgs__rosidl_typesupport_fastrtps_cpp
+[0.074s] [ 41%] Built target exia_msgs__rosidl_typesupport_cpp
+[0.075s] [ 51%] Built target exia_msgs__rosidl_typesupport_c
+[0.076s] [ 61%] Built target exia_msgs__rosidl_typesupport_introspection_cpp
+[0.076s] [ 70%] Built target exia_msgs__rosidl_typesupport_introspection_c
+[0.090s] [ 70%] Built target exia_msgs
+[0.103s] [ 74%] Generating Python code for ROS interfaces
+[0.178s] running egg_info
+[0.178s] writing exia_msgs.egg-info/PKG-INFO
+[0.179s] writing dependency_links to exia_msgs.egg-info/dependency_links.txt
+[0.179s] writing top-level names to exia_msgs.egg-info/top_level.txt
+[0.180s] reading manifest file 'exia_msgs.egg-info/SOURCES.txt'
+[0.180s] writing manifest file 'exia_msgs.egg-info/SOURCES.txt'
+[0.196s] [ 74%] Built target ament_cmake_python_build_exia_msgs_egg
+[0.203s] Error processing idl file: /home/zech/exia_ws/build/exia_msgs/rosidl_adapter/exia_msgs/msg/NavigationGoal.idl
+[0.203s] Traceback (most recent call last):
+[0.203s]   File "/opt/ros/humble/share/rosidl_generator_py/cmake/../../../lib/rosidl_generator_py/rosidl_generator_py", line 40, in <module>
+[0.204s]     sys.exit(main())
+[0.204s]   File "/opt/ros/humble/share/rosidl_generator_py/cmake/../../../lib/rosidl_generator_py/rosidl_generator_py", line 36, in main
+[0.204s]     generate_py(args.generator_arguments_file, args.typesupport_impls.split(';'))
+[0.204s]   File "/opt/ros/humble/local/lib/python3.10/dist-packages/rosidl_generator_py/generate_py_impl.py", line 61, in generate_py
+[0.204s]     generated_files = generate_files(generator_arguments_file, mapping)
+[0.204s]   File "/opt/ros/humble/local/lib/python3.10/dist-packages/rosidl_cmake/__init__.py", line 96, in generate_files
+[0.204s]     raise(e)
+[0.204s]   File "/opt/ros/humble/local/lib/python3.10/dist-packages/rosidl_cmake/__init__.py", line 87, in generate_files
+[0.204s]     expand_template(
+[0.204s]   File "/opt/ros/humble/local/lib/python3.10/dist-packages/rosidl_cmake/__init__.py", line 131, in expand_template
+[0.204s]     em.BUFFERED_OPT: True,
+[0.204s] AttributeError: module 'em' has no attribute 'BUFFERED_OPT'
+[0.212s] gmake[2]: *** [exia_msgs__py/CMakeFiles/exia_msgs__py.dir/build.make:91: rosidl_generator_py/exia_msgs/_exia_msgs_s.ep.rosidl_typesupport_fastrtps_c.c] Error 1
+[0.212s] gmake[1]: *** [CMakeFiles/Makefile2:590: exia_msgs__py/CMakeFiles/exia_msgs__py.dir/all] Error 2
+[0.212s] gmake: *** [Makefile:146: all] Error 2
+[0.214s] Invoked command in '/home/zech/exia_ws/build/exia_msgs' returned '2': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/zech/exia_ws/install/exia_driver:/home/zech/exia_ws/install/exia_control:/opt/ros/humble /usr/bin/cmake --build /home/zech/exia_ws/build/exia_msgs -- -j20 -l20

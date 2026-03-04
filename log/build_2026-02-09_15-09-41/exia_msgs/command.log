@@ -1,0 +1,2 @@
+Invoking command in '/home/zech/exia_ws/build/exia_msgs': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/zech/exia_ws/install/exia_driver:/home/zech/exia_ws/install/exia_control:/opt/ros/humble /usr/bin/cmake --build /home/zech/exia_ws/build/exia_msgs -- -j20 -l20
+Invoked command in '/home/zech/exia_ws/build/exia_msgs' returned '2': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/zech/exia_ws/install/exia_driver:/home/zech/exia_ws/install/exia_control:/opt/ros/humble /usr/bin/cmake --build /home/zech/exia_ws/build/exia_msgs -- -j20 -l20

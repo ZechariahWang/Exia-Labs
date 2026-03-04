@@ -1,0 +1,25 @@
+[0.452s] Invoking command in '/home/zech/exia_ws/src/exia_control': CMAKE_PREFIX_PATH=/home/zech/exia_ws/install/exia_msgs:/home/zech/exia_ws/install/exia_bringup:/home/zech/exia_ws/install/exia_ground_description:/home/zech/ros2_ws/install/eclipse_diffdrive:/home/zech/ros2_ws/install/eclipse_ackermann PYTHONPATH=/home/zech/exia_ws/build/exia_control/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/zech/exia_ws/install/exia_control/lib/python3.10/site-packages:${PYTHONPATH} VIRTUAL_ENV_PROMPT=(.venv) /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/exia_control build --build-base /home/zech/exia_ws/build/exia_control/build install --record /home/zech/exia_ws/build/exia_control/install.log --single-version-externally-managed install_data
+[0.569s] running egg_info
+[0.569s] writing ../../build/exia_control/exia_control.egg-info/PKG-INFO
+[0.569s] writing dependency_links to ../../build/exia_control/exia_control.egg-info/dependency_links.txt
+[0.569s] writing entry points to ../../build/exia_control/exia_control.egg-info/entry_points.txt
+[0.569s] writing requirements to ../../build/exia_control/exia_control.egg-info/requires.txt
+[0.569s] writing top-level names to ../../build/exia_control/exia_control.egg-info/top_level.txt
+[0.570s] reading manifest file '../../build/exia_control/exia_control.egg-info/SOURCES.txt'
+[0.571s] writing manifest file '../../build/exia_control/exia_control.egg-info/SOURCES.txt'
+[0.571s] running build
+[0.571s] running build_py
+[0.571s] running install
+[0.571s] running install_lib
+[0.572s] running install_data
+[0.572s] running install_egg_info
+[0.573s] removing '/home/zech/exia_ws/install/exia_control/lib/python3.10/site-packages/exia_control-1.0.0-py3.10.egg-info' (and everything under it)
+[0.573s] Copying ../../build/exia_control/exia_control.egg-info to /home/zech/exia_ws/install/exia_control/lib/python3.10/site-packages/exia_control-1.0.0-py3.10.egg-info
+[0.574s] running install_scripts
+[0.586s] Installing ackermann_drive_node script to /home/zech/exia_ws/install/exia_control/lib/exia_control
+[0.586s] Installing dynamic_navigator_node script to /home/zech/exia_ws/install/exia_control/lib/exia_control
+[0.586s] Installing hw_teleop script to /home/zech/exia_ws/install/exia_control/lib/exia_control
+[0.586s] Installing nav_to script to /home/zech/exia_ws/install/exia_control/lib/exia_control
+[0.586s] Installing teleop script to /home/zech/exia_ws/install/exia_control/lib/exia_control
+[0.586s] writing list of installed files to '/home/zech/exia_ws/build/exia_control/install.log'
+[0.601s] Invoked command in '/home/zech/exia_ws/src/exia_control' returned '0': CMAKE_PREFIX_PATH=/home/zech/exia_ws/install/exia_msgs:/home/zech/exia_ws/install/exia_bringup:/home/zech/exia_ws/install/exia_ground_description:/home/zech/ros2_ws/install/eclipse_diffdrive:/home/zech/ros2_ws/install/eclipse_ackermann PYTHONPATH=/home/zech/exia_ws/build/exia_control/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/zech/exia_ws/install/exia_control/lib/python3.10/site-packages:${PYTHONPATH} VIRTUAL_ENV_PROMPT=(.venv) /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/exia_control build --build-base /home/zech/exia_ws/build/exia_control/build install --record /home/zech/exia_ws/build/exia_control/install.log --single-version-externally-managed install_data

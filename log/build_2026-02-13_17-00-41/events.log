@@ -1,0 +1,244 @@
+[0.000000] (-) TimerEvent: {}
+[0.000331] (-) JobUnselected: {'identifier': 'exia_bringup'}
+[0.000509] (-) JobUnselected: {'identifier': 'exia_control'}
+[0.000690] (-) JobUnselected: {'identifier': 'exia_driver'}
+[0.000850] (exia_msgs) JobQueued: {'identifier': 'exia_msgs', 'dependencies': OrderedDict()}
+[0.000872] (exia_msgs) JobStarted: {'identifier': 'exia_msgs'}
+[0.005550] (exia_msgs) JobProgress: {'identifier': 'exia_msgs', 'progress': 'cmake'}
+[0.006263] (exia_msgs) JobProgress: {'identifier': 'exia_msgs', 'progress': 'build'}
+[0.006844] (exia_msgs) Command: {'cmd': ['/usr/bin/cmake', '--build', '/home/zech/exia_ws/build/exia_msgs', '--', '-j20', '-l20'], 'cwd': '/home/zech/exia_ws/build/exia_msgs', 'env': OrderedDict([('GZ_SIM_SYSTEM_PLUGIN_PATH', ':/usr/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu'), ('GJS_DEBUG_TOPICS', 'JS ERROR;JS LOG'), ('PYTHON_BASIC_REPL', '1'), ('LESSOPEN', '| /usr/bin/lesspipe %s'), ('IGN_IP', '127.0.0.1'), ('LANGUAGE', 'en_CA:en'), ('USER', 'zech'), ('CLAUDE_CODE_ENTRYPOINT', 'cli'), ('GIT_EDITOR', 'true'), ('XDG_SESSION_TYPE', 'wayland'), ('GIT_ASKPASS', '/usr/share/code/resources/app/extensions/git/dist/askpass.sh'), ('SHLVL', '2'), ('LD_LIBRARY_PATH', '/home/zech/exia_ws/install/exia_msgs/lib:/usr/lib/x86_64-linux-gnu/gazebo-11/plugins:/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/x86_64-linux-gnu:/opt/ros/humble/lib'), ('HOME', '/home/zech'), ('CHROME_DESKTOP', 'code.desktop'), ('TERM_PROGRAM_VERSION', '1.108.2'), ('DESKTOP_SESSION', 'ubuntu'), ('NVM_BIN', '/home/zech/.nvm/versions/node/v22.17.0/bin'), ('NVM_INC', '/home/zech/.nvm/versions/node/v22.17.0/include/node'), ('GIO_LAUNCHED_DESKTOP_FILE', '/usr/share/applications/code.desktop'), ('GNOME_SHELL_SESSION_MODE', 'ubuntu'), ('GTK_MODULES', 'gail:atk-bridge'), ('GK_GL_PATH', '/tmp/gitkraken/gitlens/gitlens-ipc-server-11078-46219.json'), ('VSCODE_GIT_ASKPASS_MAIN', '/usr/share/code/resources/app/extensions/git/dist/askpass-main.js'), ('teammateMode', 'auto'), ('VSCODE_GIT_ASKPASS_NODE', '/usr/share/code/code'), ('MANAGERPID', '2048'), ('PYDEVD_DISABLE_FILE_VALIDATION', '1'), ('SYSTEMD_EXEC_PID', '2223'), ('BUNDLED_DEBUGPY_PATH', '/home/zech/.vscode/extensions/ms-python.debugpy-2025.18.0-linux-x64/bundled/libs/debugpy'), ('IM_CONFIG_CHECK_ENV', '1'), ('VSCODE_PYTHON_AUTOACTIVATE_GUARD', '1'), ('DBUS_SESSION_BUS_ADDRESS', 'unix:path=/run/user/1000/bus'), ('COLORTERM', 'truecolor'), ('GIO_LAUNCHED_DESKTOP_FILE_PID', '11078'), ('NVM_DIR', '/home/zech/.nvm'), ('IM_CONFIG_PHASE', '1'), ('WAYLAND_DISPLAY', 'wayland-0'), ('COLCON_PREFIX_PATH', '/home/zech/exia_ws/install:/home/zech/ros2_ws/install'), ('LOGNAME', 'zech'), ('JOURNAL_STREAM', '8:10615'), ('_', '/usr/bin/colcon'), ('CLAUDE_CODE_SSE_PORT', '24387'), ('XDG_SESSION_CLASS', 'user'), ('USERNAME', 'zech'), ('TERM', 'xterm-256color'), ('OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE', 'delta'), ('GNOME_DESKTOP_SESSION_ID', 'this-is-deprecated'), ('FC_FONTATIONS', '1'), ('PATH', '/home/zech/exia_ws/.venv/bin:/home/zech/.local/bin:/home/zech/.local/bin:/home/zech/.local/bin:/opt/ros/humble/bin:/home/zech/.nvm/versions/node/v22.17.0/bin:/home/zech/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/snap/bin:/usr/bin:/home/zech/.vscode/extensions/ms-python.debugpy-2025.18.0-linux-x64/bundled/scripts/noConfigScripts:/usr/bin'), ('SESSION_MANAGER', 'local/zech-computer:@/tmp/.ICE-unix/2193,unix/zech-computer:/tmp/.ICE-unix/2193'), ('INVOCATION_ID', 'be362f22040b4f48bc57dee2e3c38317'), ('COREPACK_ENABLE_AUTO_PIN', '0'), ('XDG_MENU_PREFIX', 'gnome-'), ('GNOME_SETUP_DISPLAY', ':1'), ('XDG_RUNTIME_DIR', '/run/user/1000'), ('GDK_BACKEND', 'wayland'), ('DISPLAY', ':0'), ('VSCODE_DEBUGPY_ADAPTER_ENDPOINTS', '/home/zech/.vscode/extensions/ms-python.debugpy-2025.18.0-linux-x64/.noConfigDebugAdapterEndpoints/endpoint-b3d3bac02d72846a.txt'), ('NoDefaultCurrentDirectoryInExePath', '1'), ('LANG', 'en_US.UTF-8'), ('XDG_CURRENT_DESKTOP', 'ubuntu:GNOME'), ('PYTHONSTARTUP', '/home/zech/.config/Code/User/workspaceStorage/a1f437ecc95cc925aea043aa452acd8c/ms-python.python/pythonrc.py'), ('VIRTUAL_ENV_PROMPT', '(.venv)'), ('XMODIFIERS', '@im=ibus'), ('XDG_SESSION_DESKTOP', 'ubuntu'), ('XAUTHORITY', '/run/user/1000/.mutter-Xwaylandauth.EECOK3'), ('LS_COLORS', 'rs=0:di=01;34:ln=01;36:mh=00:pi=40;33:so=01;35:do=01;35:bd=40;33;01:cd=40;33;01:or=40;31;01:mi=00:su=37;41:sg=30;43:ca=30;41:tw=30;42:ow=34;42:st=37;44:ex=01;32:*.tar=01;31:*.tgz=01;31:*.arc=01;31:*.arj=01;31:*.taz=01;31:*.lha=01;31:*.lz4=01;31:*.lzh=01;31:*.lzma=01;31:*.tlz=01;31:*.txz=01;31:*.tzo=01;31:*.t7z=01;31:*.zip=01;31:*.z=01;31:*.dz=01;31:*.gz=01;31:*.lrz=01;31:*.lz=01;31:*.lzo=01;31:*.xz=01;31:*.zst=01;31:*.tzst=01;31:*.bz2=01;31:*.bz=01;31:*.tbz=01;31:*.tbz2=01;31:*.tz=01;31:*.deb=01;31:*.rpm=01;31:*.jar=01;31:*.war=01;31:*.ear=01;31:*.sar=01;31:*.rar=01;31:*.alz=01;31:*.ace=01;31:*.zoo=01;31:*.cpio=01;31:*.7z=01;31:*.rz=01;31:*.cab=01;31:*.wim=01;31:*.swm=01;31:*.dwm=01;31:*.esd=01;31:*.jpg=01;35:*.jpeg=01;35:*.mjpg=01;35:*.mjpeg=01;35:*.gif=01;35:*.bmp=01;35:*.pbm=01;35:*.pgm=01;35:*.ppm=01;35:*.tga=01;35:*.xbm=01;35:*.xpm=01;35:*.tif=01;35:*.tiff=01;35:*.png=01;35:*.svg=01;35:*.svgz=01;35:*.mng=01;35:*.pcx=01;35:*.mov=01;35:*.mpg=01;35:*.mpeg=01;35:*.m2v=01;35:*.mkv=01;35:*.webm=01;35:*.webp=01;35:*.ogm=01;35:*.mp4=01;35:*.m4v=01;35:*.mp4v=01;35:*.vob=01;35:*.qt=01;35:*.nuv=01;35:*.wmv=01;35:*.asf=01;35:*.rm=01;35:*.rmvb=01;35:*.flc=01;35:*.avi=01;35:*.fli=01;35:*.flv=01;35:*.gl=01;35:*.dl=01;35:*.xcf=01;35:*.xwd=01;35:*.yuv=01;35:*.cgm=01;35:*.emf=01;35:*.ogv=01;35:*.ogx=01;35:*.aac=00;36:*.au=00;36:*.flac=00;36:*.m4a=00;36:*.mid=00;36:*.midi=00;36:*.mka=00;36:*.mp3=00;36:*.mpc=00;36:*.ogg=00;36:*.ra=00;36:*.wav=00;36:*.oga=00;36:*.opus=00;36:*.spx=00;36:*.xspf=00;36:'), ('VSCODE_GIT_IPC_HANDLE', '/run/user/1000/vscode-git-6a5fef3e97.sock'), ('TERM_PROGRAM', 'vscode'), ('SSH_AGENT_LAUNCHER', 'gnome-keyring'), ('SSH_AUTH_SOCK', '/run/user/1000/keyring/ssh'), ('AMENT_PREFIX_PATH', '/home/zech/exia_ws/install/exia_bringup:/home/zech/exia_ws/install/exia_driver:/home/zech/exia_ws/install/exia_control:/home/zech/exia_ws/install/exia_msgs:/home/zech/exia_ws/install/exia_ground_description:/home/zech/ros2_ws/install/eclipse_diffdrive:/home/zech/ros2_ws/install/eclipse_ackermann:/opt/ros/humble'), ('SHELL', '/bin/bash'), ('QT_ACCESSIBILITY', '1'), ('GDMSESSION', 'ubuntu'), ('LESSCLOSE', '/usr/bin/lesspipe %s %s'), ('GK_GL_ADDR', 'http://127.0.0.1:46219'), ('CLAUDECODE', '1'), ('GJS_DEBUG_OUTPUT', 'stderr'), ('VIRTUAL_ENV', '/home/zech/exia_ws/.venv'), ('VSCODE_GIT_ASKPASS_EXTRA_ARGS', ''), ('QT_IM_MODULE', 'ibus'), ('PWD', '/home/zech/exia_ws/build/exia_msgs'), ('ENABLE_IDE_INTEGRATION', 'true'), ('TURTLEBOT3_MODEL', 'burger'), ('LC_ALL', 'en_US.UTF-8'), ('XDG_CONFIG_DIRS', '/etc/xdg/xdg-ubuntu:/etc/xdg'), ('NVM_CD_FLAGS', ''), ('XDG_DATA_DIRS', '/usr/share/ubuntu:/usr/local/share/:/usr/share/:/var/lib/snapd/desktop'), ('PYTHONPATH', '/home/zech/exia_ws/install/exia_driver/lib/python3.10/site-packages:/home/zech/exia_ws/install/exia_control/lib/python3.10/site-packages:/home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages:/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages'), ('COLCON', '1'), ('CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS', '1'), ('CMAKE_PREFIX_PATH', '/home/zech/exia_ws/install/exia_bringup:/home/zech/exia_ws/install/exia_msgs:/home/zech/exia_ws/install/exia_ground_description:/home/zech/ros2_ws/install/eclipse_diffdrive:/home/zech/ros2_ws/install/eclipse_ackermann:/home/zech/exia_ws/install/exia_driver:/home/zech/exia_ws/install/exia_control:/opt/ros/humble')]), 'shell': False}
+[0.027124] (exia_msgs) StdoutLine: {'line': b'-- Found ament_cmake: 1.3.12 (/opt/ros/humble/share/ament_cmake/cmake)\n'}
+[0.099975] (-) TimerEvent: {}
+[0.123684] (exia_msgs) StdoutLine: {'line': b'-- Found rosidl_default_generators: 1.2.0 (/opt/ros/humble/share/rosidl_default_generators/cmake)\n'}
+[0.125524] (exia_msgs) StdoutLine: {'line': b'-- Using all available rosidl_typesupport_c: rosidl_typesupport_fastrtps_c;rosidl_typesupport_introspection_c\n'}
+[0.128167] (exia_msgs) StdoutLine: {'line': b'-- Found rosidl_adapter: 3.1.8 (/opt/ros/humble/share/rosidl_adapter/cmake)\n'}
+[0.162523] (exia_msgs) StdoutLine: {'line': b'-- Using all available rosidl_typesupport_cpp: rosidl_typesupport_fastrtps_cpp;rosidl_typesupport_introspection_cpp\n'}
+[0.200094] (-) TimerEvent: {}
+[0.300258] (-) TimerEvent: {}
+[0.349728] (exia_msgs) StdoutLine: {'line': b'-- Found ament_cmake_ros: 0.10.0 (/opt/ros/humble/share/ament_cmake_ros/cmake)\n'}
+[0.400384] (-) TimerEvent: {}
+[0.471761] (exia_msgs) StdoutLine: {'line': b'-- Using all available rosidl_typesupport_c: rosidl_typesupport_fastrtps_c;rosidl_typesupport_introspection_c\n'}
+[0.500462] (-) TimerEvent: {}
+[0.600659] (-) TimerEvent: {}
+[0.629945] (exia_msgs) StdoutLine: {'line': b'-- Using all available rosidl_typesupport_cpp: rosidl_typesupport_fastrtps_cpp;rosidl_typesupport_introspection_cpp\n'}
+[0.642399] (exia_msgs) StdoutLine: {'line': b'-- Found python_cmake_module: 0.10.0 (/opt/ros/humble/share/python_cmake_module/cmake)\n'}
+[0.660303] (exia_msgs) StdoutLine: {'line': b'-- Using PYTHON_EXECUTABLE: /home/zech/exia_ws/.venv/bin/python3\n'}
+[0.660464] (exia_msgs) StdoutLine: {'line': b'-- Using PYTHON_INCLUDE_DIRS: /usr/include/python3.10\n'}
+[0.660520] (exia_msgs) StdoutLine: {'line': b'-- Using PYTHON_LIBRARIES: /usr/lib/x86_64-linux-gnu/libpython3.10.so\n'}
+[0.675129] (exia_msgs) StdoutLine: {'line': b'-- Configuring done\n'}
+[0.690832] (exia_msgs) StdoutLine: {'line': b'-- Generating done\n'}
+[0.696071] (exia_msgs) StdoutLine: {'line': b'-- Build files have been written to: /home/zech/exia_ws/build/exia_msgs\n'}
+[0.700736] (-) TimerEvent: {}
+[0.712487] (exia_msgs) StdoutLine: {'line': b'[  3%] Generating C code for ROS interfaces\n'}
+[0.719874] (exia_msgs) StdoutLine: {'line': b'[  6%] Generating C++ code for ROS interfaces\n'}
+[0.729220] (exia_msgs) StdoutLine: {'line': b'[  6%] Built target ament_cmake_python_copy_exia_msgs\n'}
+[0.800819] (-) TimerEvent: {}
+[0.850979] (exia_msgs) StdoutLine: {'line': b'running egg_info\n'}
+[0.851341] (exia_msgs) StdoutLine: {'line': b'writing exia_msgs.egg-info/PKG-INFO\n'}
+[0.851580] (exia_msgs) StdoutLine: {'line': b'writing dependency_links to exia_msgs.egg-info/dependency_links.txt\n'}
+[0.851638] (exia_msgs) StdoutLine: {'line': b'writing top-level names to exia_msgs.egg-info/top_level.txt\n'}
+[0.852693] (exia_msgs) StdoutLine: {'line': b"reading manifest file 'exia_msgs.egg-info/SOURCES.txt'\n"}
+[0.852973] (exia_msgs) StdoutLine: {'line': b"writing manifest file 'exia_msgs.egg-info/SOURCES.txt'\n"}
+[0.857862] (exia_msgs) StdoutLine: {'line': b'Consolidate compiler generated dependencies of target exia_msgs__rosidl_generator_c\n'}
+[0.862223] (exia_msgs) StdoutLine: {'line': b'[  6%] Built target exia_msgs__cpp\n'}
+[0.865606] (exia_msgs) StdoutLine: {'line': b'[  9%] Building C object CMakeFiles/exia_msgs__rosidl_generator_c.dir/rosidl_generator_c/exia_msgs/msg/detail/navigation_goal__functions.c.o\n'}
+[0.868045] (exia_msgs) StdoutLine: {'line': b'[ 12%] Generating C++ introspection for ROS interfaces\n'}
+[0.868221] (exia_msgs) StdoutLine: {'line': b'[ 16%] Generating C++ type support for eProsima Fast-RTPS\n'}
+[0.868767] (exia_msgs) StdoutLine: {'line': b'[ 16%] Built target ament_cmake_python_build_exia_msgs_egg\n'}
+[0.870434] (exia_msgs) StdoutLine: {'line': b'[ 19%] Generating C++ type support dispatch for ROS interfaces\n'}
+[0.900922] (-) TimerEvent: {}
+[0.916343] (exia_msgs) StdoutLine: {'line': b'[ 22%] Linking C shared library libexia_msgs__rosidl_generator_c.so\n'}
+[0.946771] (exia_msgs) StdoutLine: {'line': b'[ 22%] Built target exia_msgs__rosidl_generator_c\n'}
+[0.955074] (exia_msgs) StdoutLine: {'line': b'[ 32%] Generating C type support for eProsima Fast-RTPS\n'}
+[0.955225] (exia_msgs) StdoutLine: {'line': b'[ 32%] Generating C introspection for ROS interfaces\n'}
+[0.955288] (exia_msgs) StdoutLine: {'line': b'[ 32%] Generating C type support dispatch for ROS interfaces\n'}
+[1.000102] (exia_msgs) StdoutLine: {'line': b'Consolidate compiler generated dependencies of target exia_msgs__rosidl_typesupport_cpp\n'}
+[1.000989] (-) TimerEvent: {}
+[1.001913] (exia_msgs) StdoutLine: {'line': b'Consolidate compiler generated dependencies of target exia_msgs__rosidl_typesupport_introspection_cpp\n'}
+[1.007452] (exia_msgs) StdoutLine: {'line': b'Consolidate compiler generated dependencies of target exia_msgs__rosidl_typesupport_fastrtps_cpp\n'}
+[1.009287] (exia_msgs) StdoutLine: {'line': b'[ 35%] Building CXX object CMakeFiles/exia_msgs__rosidl_typesupport_cpp.dir/rosidl_typesupport_cpp/exia_msgs/msg/navigation_goal__type_support.cpp.o\n'}
+[1.010378] (exia_msgs) StdoutLine: {'line': b'[ 38%] Building CXX object CMakeFiles/exia_msgs__rosidl_typesupport_introspection_cpp.dir/rosidl_typesupport_introspection_cpp/exia_msgs/msg/detail/navigation_goal__type_support.cpp.o\n'}
+[1.014879] (exia_msgs) StdoutLine: {'line': b'[ 41%] Building CXX object CMakeFiles/exia_msgs__rosidl_typesupport_fastrtps_cpp.dir/rosidl_typesupport_fastrtps_cpp/exia_msgs/msg/detail/dds_fastrtps/navigation_goal__type_support.cpp.o\n'}
+[1.089208] (exia_msgs) StdoutLine: {'line': b'Consolidate compiler generated dependencies of target exia_msgs__rosidl_typesupport_c\n'}
+[1.097770] (exia_msgs) StdoutLine: {'line': b'[ 45%] Building CXX object CMakeFiles/exia_msgs__rosidl_typesupport_c.dir/rosidl_typesupport_c/exia_msgs/msg/navigation_goal__type_support.cpp.o\n'}
+[1.097936] (exia_msgs) StdoutLine: {'line': b'Consolidate compiler generated dependencies of target exia_msgs__rosidl_typesupport_introspection_c\n'}
+[1.101092] (-) TimerEvent: {}
+[1.104340] (exia_msgs) StdoutLine: {'line': b'[ 48%] Building C object CMakeFiles/exia_msgs__rosidl_typesupport_introspection_c.dir/rosidl_typesupport_introspection_c/exia_msgs/msg/detail/navigation_goal__type_support.c.o\n'}
+[1.104553] (exia_msgs) StdoutLine: {'line': b'Consolidate compiler generated dependencies of target exia_msgs__rosidl_typesupport_fastrtps_c\n'}
+[1.114642] (exia_msgs) StdoutLine: {'line': b'[ 51%] Building CXX object CMakeFiles/exia_msgs__rosidl_typesupport_fastrtps_c.dir/rosidl_typesupport_fastrtps_c/exia_msgs/msg/detail/navigation_goal__type_support_c.cpp.o\n'}
+[1.126374] (exia_msgs) StdoutLine: {'line': b'[ 54%] Linking CXX shared library libexia_msgs__rosidl_typesupport_c.so\n'}
+[1.133559] (exia_msgs) StdoutLine: {'line': b'[ 58%] Linking C shared library libexia_msgs__rosidl_typesupport_introspection_c.so\n'}
+[1.157864] (exia_msgs) StdoutLine: {'line': b'[ 58%] Built target exia_msgs__rosidl_typesupport_introspection_c\n'}
+[1.159949] (exia_msgs) StdoutLine: {'line': b'[ 58%] Built target exia_msgs__rosidl_typesupport_c\n'}
+[1.181185] (exia_msgs) StdoutLine: {'line': b'[ 61%] Linking CXX shared library libexia_msgs__rosidl_typesupport_cpp.so\n'}
+[1.201274] (-) TimerEvent: {}
+[1.206842] (exia_msgs) StdoutLine: {'line': b'[ 61%] Built target exia_msgs__rosidl_typesupport_cpp\n'}
+[1.239437] (exia_msgs) StdoutLine: {'line': b'[ 64%] Linking CXX shared library libexia_msgs__rosidl_typesupport_introspection_cpp.so\n'}
+[1.242229] (exia_msgs) StdoutLine: {'line': b'[ 67%] Linking CXX shared library libexia_msgs__rosidl_typesupport_fastrtps_cpp.so\n'}
+[1.279401] (exia_msgs) StdoutLine: {'line': b'[ 67%] Built target exia_msgs__rosidl_typesupport_introspection_cpp\n'}
+[1.288400] (exia_msgs) StdoutLine: {'line': b'[ 67%] Built target exia_msgs__rosidl_typesupport_fastrtps_cpp\n'}
+[1.289351] (exia_msgs) StdoutLine: {'line': b'[ 70%] Linking CXX shared library libexia_msgs__rosidl_typesupport_fastrtps_c.so\n'}
+[1.301392] (-) TimerEvent: {}
+[1.336851] (exia_msgs) StdoutLine: {'line': b'[ 70%] Built target exia_msgs__rosidl_typesupport_fastrtps_c\n'}
+[1.358309] (exia_msgs) StdoutLine: {'line': b'[ 70%] Built target exia_msgs\n'}
+[1.379296] (exia_msgs) StdoutLine: {'line': b'[ 74%] Generating Python code for ROS interfaces\n'}
+[1.401494] (-) TimerEvent: {}
+[1.501820] (-) TimerEvent: {}
+[1.567030] (exia_msgs) StdoutLine: {'line': b'[ 74%] Built target exia_msgs__py\n'}
+[1.575013] (exia_msgs) StdoutLine: {'line': b'Consolidate compiler generated dependencies of target exia_msgs__rosidl_generator_py\n'}
+[1.590246] (exia_msgs) StdoutLine: {'line': b'[ 77%] Building C object CMakeFiles/exia_msgs__rosidl_generator_py.dir/rosidl_generator_py/exia_msgs/msg/_navigation_goal_s.c.o\n'}
+[1.601971] (-) TimerEvent: {}
+[1.669149] (exia_msgs) StdoutLine: {'line': b'[ 80%] Linking C shared library rosidl_generator_py/exia_msgs/libexia_msgs__rosidl_generator_py.so\n'}
+[1.696897] (exia_msgs) StdoutLine: {'line': b'[ 80%] Built target exia_msgs__rosidl_generator_py\n'}
+[1.702061] (-) TimerEvent: {}
+[1.705391] (exia_msgs) StdoutLine: {'line': b'Consolidate compiler generated dependencies of target exia_msgs__rosidl_typesupport_c__pyext\n'}
+[1.705521] (exia_msgs) StdoutLine: {'line': b'Consolidate compiler generated dependencies of target exia_msgs__rosidl_typesupport_fastrtps_c__pyext\n'}
+[1.706961] (exia_msgs) StdoutLine: {'line': b'Consolidate compiler generated dependencies of target exia_msgs__rosidl_typesupport_introspection_c__pyext\n'}
+[1.713366] (exia_msgs) StdoutLine: {'line': b'[ 83%] Building C object CMakeFiles/exia_msgs__rosidl_typesupport_fastrtps_c__pyext.dir/rosidl_generator_py/exia_msgs/_exia_msgs_s.ep.rosidl_typesupport_fastrtps_c.c.o\n'}
+[1.713582] (exia_msgs) StdoutLine: {'line': b'[ 87%] Building C object CMakeFiles/exia_msgs__rosidl_typesupport_introspection_c__pyext.dir/rosidl_generator_py/exia_msgs/_exia_msgs_s.ep.rosidl_typesupport_introspection_c.c.o\n'}
+[1.714076] (exia_msgs) StdoutLine: {'line': b'[ 90%] Building C object CMakeFiles/exia_msgs__rosidl_typesupport_c__pyext.dir/rosidl_generator_py/exia_msgs/_exia_msgs_s.ep.rosidl_typesupport_c.c.o\n'}
+[1.763845] (exia_msgs) StdoutLine: {'line': b'[100%] Linking C shared library rosidl_generator_py/exia_msgs/exia_msgs_s__rosidl_typesupport_c.cpython-310-x86_64-linux-gnu.so\n'}
+[1.764003] (exia_msgs) StdoutLine: {'line': b'[100%] Linking C shared library rosidl_generator_py/exia_msgs/exia_msgs_s__rosidl_typesupport_introspection_c.cpython-310-x86_64-linux-gnu.so\n'}
+[1.764070] (exia_msgs) StdoutLine: {'line': b'[100%] Linking C shared library rosidl_generator_py/exia_msgs/exia_msgs_s__rosidl_typesupport_fastrtps_c.cpython-310-x86_64-linux-gnu.so\n'}
+[1.784237] (exia_msgs) StdoutLine: {'line': b'[100%] Built target exia_msgs__rosidl_typesupport_introspection_c__pyext\n'}
+[1.786437] (exia_msgs) StdoutLine: {'line': b'[100%] Built target exia_msgs__rosidl_typesupport_c__pyext\n'}
+[1.790466] (exia_msgs) StdoutLine: {'line': b'[100%] Built target exia_msgs__rosidl_typesupport_fastrtps_c__pyext\n'}
+[1.797656] (exia_msgs) CommandEnded: {'returncode': 0}
+[1.798606] (exia_msgs) JobProgress: {'identifier': 'exia_msgs', 'progress': 'install'}
+[1.802155] (-) TimerEvent: {}
+[1.804765] (exia_msgs) Command: {'cmd': ['/usr/bin/cmake', '--install', '/home/zech/exia_ws/build/exia_msgs'], 'cwd': '/home/zech/exia_ws/build/exia_msgs', 'env': OrderedDict([('GZ_SIM_SYSTEM_PLUGIN_PATH', ':/usr/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu'), ('GJS_DEBUG_TOPICS', 'JS ERROR;JS LOG'), ('PYTHON_BASIC_REPL', '1'), ('LESSOPEN', '| /usr/bin/lesspipe %s'), ('IGN_IP', '127.0.0.1'), ('LANGUAGE', 'en_CA:en'), ('USER', 'zech'), ('CLAUDE_CODE_ENTRYPOINT', 'cli'), ('GIT_EDITOR', 'true'), ('XDG_SESSION_TYPE', 'wayland'), ('GIT_ASKPASS', '/usr/share/code/resources/app/extensions/git/dist/askpass.sh'), ('SHLVL', '2'), ('LD_LIBRARY_PATH', '/home/zech/exia_ws/install/exia_msgs/lib:/usr/lib/x86_64-linux-gnu/gazebo-11/plugins:/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/x86_64-linux-gnu:/opt/ros/humble/lib'), ('HOME', '/home/zech'), ('CHROME_DESKTOP', 'code.desktop'), ('TERM_PROGRAM_VERSION', '1.108.2'), ('DESKTOP_SESSION', 'ubuntu'), ('NVM_BIN', '/home/zech/.nvm/versions/node/v22.17.0/bin'), ('NVM_INC', '/home/zech/.nvm/versions/node/v22.17.0/include/node'), ('GIO_LAUNCHED_DESKTOP_FILE', '/usr/share/applications/code.desktop'), ('GNOME_SHELL_SESSION_MODE', 'ubuntu'), ('GTK_MODULES', 'gail:atk-bridge'), ('GK_GL_PATH', '/tmp/gitkraken/gitlens/gitlens-ipc-server-11078-46219.json'), ('VSCODE_GIT_ASKPASS_MAIN', '/usr/share/code/resources/app/extensions/git/dist/askpass-main.js'), ('teammateMode', 'auto'), ('VSCODE_GIT_ASKPASS_NODE', '/usr/share/code/code'), ('MANAGERPID', '2048'), ('PYDEVD_DISABLE_FILE_VALIDATION', '1'), ('SYSTEMD_EXEC_PID', '2223'), ('BUNDLED_DEBUGPY_PATH', '/home/zech/.vscode/extensions/ms-python.debugpy-2025.18.0-linux-x64/bundled/libs/debugpy'), ('IM_CONFIG_CHECK_ENV', '1'), ('VSCODE_PYTHON_AUTOACTIVATE_GUARD', '1'), ('DBUS_SESSION_BUS_ADDRESS', 'unix:path=/run/user/1000/bus'), ('COLORTERM', 'truecolor'), ('GIO_LAUNCHED_DESKTOP_FILE_PID', '11078'), ('NVM_DIR', '/home/zech/.nvm'), ('IM_CONFIG_PHASE', '1'), ('WAYLAND_DISPLAY', 'wayland-0'), ('COLCON_PREFIX_PATH', '/home/zech/exia_ws/install:/home/zech/ros2_ws/install'), ('LOGNAME', 'zech'), ('JOURNAL_STREAM', '8:10615'), ('_', '/usr/bin/colcon'), ('CLAUDE_CODE_SSE_PORT', '24387'), ('XDG_SESSION_CLASS', 'user'), ('USERNAME', 'zech'), ('TERM', 'xterm-256color'), ('OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE', 'delta'), ('GNOME_DESKTOP_SESSION_ID', 'this-is-deprecated'), ('FC_FONTATIONS', '1'), ('PATH', '/home/zech/exia_ws/.venv/bin:/home/zech/.local/bin:/home/zech/.local/bin:/home/zech/.local/bin:/opt/ros/humble/bin:/home/zech/.nvm/versions/node/v22.17.0/bin:/home/zech/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/snap/bin:/usr/bin:/home/zech/.vscode/extensions/ms-python.debugpy-2025.18.0-linux-x64/bundled/scripts/noConfigScripts:/usr/bin'), ('SESSION_MANAGER', 'local/zech-computer:@/tmp/.ICE-unix/2193,unix/zech-computer:/tmp/.ICE-unix/2193'), ('INVOCATION_ID', 'be362f22040b4f48bc57dee2e3c38317'), ('COREPACK_ENABLE_AUTO_PIN', '0'), ('XDG_MENU_PREFIX', 'gnome-'), ('GNOME_SETUP_DISPLAY', ':1'), ('XDG_RUNTIME_DIR', '/run/user/1000'), ('GDK_BACKEND', 'wayland'), ('DISPLAY', ':0'), ('VSCODE_DEBUGPY_ADAPTER_ENDPOINTS', '/home/zech/.vscode/extensions/ms-python.debugpy-2025.18.0-linux-x64/.noConfigDebugAdapterEndpoints/endpoint-b3d3bac02d72846a.txt'), ('NoDefaultCurrentDirectoryInExePath', '1'), ('LANG', 'en_US.UTF-8'), ('XDG_CURRENT_DESKTOP', 'ubuntu:GNOME'), ('PYTHONSTARTUP', '/home/zech/.config/Code/User/workspaceStorage/a1f437ecc95cc925aea043aa452acd8c/ms-python.python/pythonrc.py'), ('VIRTUAL_ENV_PROMPT', '(.venv)'), ('XMODIFIERS', '@im=ibus'), ('XDG_SESSION_DESKTOP', 'ubuntu'), ('XAUTHORITY', '/run/user/1000/.mutter-Xwaylandauth.EECOK3'), ('LS_COLORS', 'rs=0:di=01;34:ln=01;36:mh=00:pi=40;33:so=01;35:do=01;35:bd=40;33;01:cd=40;33;01:or=40;31;01:mi=00:su=37;41:sg=30;43:ca=30;41:tw=30;42:ow=34;42:st=37;44:ex=01;32:*.tar=01;31:*.tgz=01;31:*.arc=01;31:*.arj=01;31:*.taz=01;31:*.lha=01;31:*.lz4=01;31:*.lzh=01;31:*.lzma=01;31:*.tlz=01;31:*.txz=01;31:*.tzo=01;31:*.t7z=01;31:*.zip=01;31:*.z=01;31:*.dz=01;31:*.gz=01;31:*.lrz=01;31:*.lz=01;31:*.lzo=01;31:*.xz=01;31:*.zst=01;31:*.tzst=01;31:*.bz2=01;31:*.bz=01;31:*.tbz=01;31:*.tbz2=01;31:*.tz=01;31:*.deb=01;31:*.rpm=01;31:*.jar=01;31:*.war=01;31:*.ear=01;31:*.sar=01;31:*.rar=01;31:*.alz=01;31:*.ace=01;31:*.zoo=01;31:*.cpio=01;31:*.7z=01;31:*.rz=01;31:*.cab=01;31:*.wim=01;31:*.swm=01;31:*.dwm=01;31:*.esd=01;31:*.jpg=01;35:*.jpeg=01;35:*.mjpg=01;35:*.mjpeg=01;35:*.gif=01;35:*.bmp=01;35:*.pbm=01;35:*.pgm=01;35:*.ppm=01;35:*.tga=01;35:*.xbm=01;35:*.xpm=01;35:*.tif=01;35:*.tiff=01;35:*.png=01;35:*.svg=01;35:*.svgz=01;35:*.mng=01;35:*.pcx=01;35:*.mov=01;35:*.mpg=01;35:*.mpeg=01;35:*.m2v=01;35:*.mkv=01;35:*.webm=01;35:*.webp=01;35:*.ogm=01;35:*.mp4=01;35:*.m4v=01;35:*.mp4v=01;35:*.vob=01;35:*.qt=01;35:*.nuv=01;35:*.wmv=01;35:*.asf=01;35:*.rm=01;35:*.rmvb=01;35:*.flc=01;35:*.avi=01;35:*.fli=01;35:*.flv=01;35:*.gl=01;35:*.dl=01;35:*.xcf=01;35:*.xwd=01;35:*.yuv=01;35:*.cgm=01;35:*.emf=01;35:*.ogv=01;35:*.ogx=01;35:*.aac=00;36:*.au=00;36:*.flac=00;36:*.m4a=00;36:*.mid=00;36:*.midi=00;36:*.mka=00;36:*.mp3=00;36:*.mpc=00;36:*.ogg=00;36:*.ra=00;36:*.wav=00;36:*.oga=00;36:*.opus=00;36:*.spx=00;36:*.xspf=00;36:'), ('VSCODE_GIT_IPC_HANDLE', '/run/user/1000/vscode-git-6a5fef3e97.sock'), ('TERM_PROGRAM', 'vscode'), ('SSH_AGENT_LAUNCHER', 'gnome-keyring'), ('SSH_AUTH_SOCK', '/run/user/1000/keyring/ssh'), ('AMENT_PREFIX_PATH', '/home/zech/exia_ws/install/exia_bringup:/home/zech/exia_ws/install/exia_driver:/home/zech/exia_ws/install/exia_control:/home/zech/exia_ws/install/exia_msgs:/home/zech/exia_ws/install/exia_ground_description:/home/zech/ros2_ws/install/eclipse_diffdrive:/home/zech/ros2_ws/install/eclipse_ackermann:/opt/ros/humble'), ('SHELL', '/bin/bash'), ('QT_ACCESSIBILITY', '1'), ('GDMSESSION', 'ubuntu'), ('LESSCLOSE', '/usr/bin/lesspipe %s %s'), ('GK_GL_ADDR', 'http://127.0.0.1:46219'), ('CLAUDECODE', '1'), ('GJS_DEBUG_OUTPUT', 'stderr'), ('VIRTUAL_ENV', '/home/zech/exia_ws/.venv'), ('VSCODE_GIT_ASKPASS_EXTRA_ARGS', ''), ('QT_IM_MODULE', 'ibus'), ('PWD', '/home/zech/exia_ws/build/exia_msgs'), ('ENABLE_IDE_INTEGRATION', 'true'), ('TURTLEBOT3_MODEL', 'burger'), ('LC_ALL', 'en_US.UTF-8'), ('XDG_CONFIG_DIRS', '/etc/xdg/xdg-ubuntu:/etc/xdg'), ('NVM_CD_FLAGS', ''), ('XDG_DATA_DIRS', '/usr/share/ubuntu:/usr/local/share/:/usr/share/:/var/lib/snapd/desktop'), ('PYTHONPATH', '/home/zech/exia_ws/install/exia_driver/lib/python3.10/site-packages:/home/zech/exia_ws/install/exia_control/lib/python3.10/site-packages:/home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages:/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages'), ('COLCON', '1'), ('CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS', '1'), ('CMAKE_PREFIX_PATH', '/home/zech/exia_ws/install/exia_bringup:/home/zech/exia_ws/install/exia_msgs:/home/zech/exia_ws/install/exia_ground_description:/home/zech/ros2_ws/install/eclipse_diffdrive:/home/zech/ros2_ws/install/eclipse_ackermann:/home/zech/exia_ws/install/exia_driver:/home/zech/exia_ws/install/exia_control:/opt/ros/humble')]), 'shell': False}
+[1.810280] (exia_msgs) StdoutLine: {'line': b'-- Install configuration: ""\n'}
+[1.810425] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/ament_index/resource_index/rosidl_interfaces/exia_msgs\n'}
+[1.810470] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs\n'}
+[1.810509] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg\n'}
+[1.810544] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/rosidl_generator_c__visibility_control.h\n'}
+[1.810583] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/navigation_goal.h\n'}
+[1.810812] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail\n'}
+[1.810956] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail/navigation_goal__functions.c\n'}
+[1.811009] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail/navigation_goal__type_support.h\n'}
+[1.811047] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail/navigation_goal__struct.h\n'}
+[1.811142] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail/navigation_goal__functions.h\n'}
+[1.811184] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/environment/library_path.sh\n'}
+[1.811218] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/environment/library_path.dsv\n'}
+[1.811248] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/lib/libexia_msgs__rosidl_generator_c.so\n'}
+[1.811279] (exia_msgs) StdoutLine: {'line': b'-- Set runtime path of "/home/zech/exia_ws/install/exia_msgs/lib/libexia_msgs__rosidl_generator_c.so" to ""\n'}
+[1.811312] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs\n'}
+[1.811444] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg\n'}
+[1.811485] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/rosidl_typesupport_fastrtps_c__visibility_control.h\n'}
+[1.811519] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail\n'}
+[1.811550] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail/navigation_goal__rosidl_typesupport_fastrtps_c.h\n'}
+[1.811586] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/lib/libexia_msgs__rosidl_typesupport_fastrtps_c.so\n'}
+[1.811683] (exia_msgs) StdoutLine: {'line': b'-- Set runtime path of "/home/zech/exia_ws/install/exia_msgs/lib/libexia_msgs__rosidl_typesupport_fastrtps_c.so" to ""\n'}
+[1.811720] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs\n'}
+[1.811750] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg\n'}
+[1.811779] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/rosidl_typesupport_introspection_c__visibility_control.h\n'}
+[1.811840] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail\n'}
+[1.811870] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail/navigation_goal__rosidl_typesupport_introspection_c.h\n'}
+[1.811899] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail/navigation_goal__type_support.c\n'}
+[1.812079] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/lib/libexia_msgs__rosidl_typesupport_introspection_c.so\n'}
+[1.812108] (exia_msgs) StdoutLine: {'line': b'-- Set runtime path of "/home/zech/exia_ws/install/exia_msgs/lib/libexia_msgs__rosidl_typesupport_introspection_c.so" to ""\n'}
+[1.812137] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/lib/libexia_msgs__rosidl_typesupport_c.so\n'}
+[1.812306] (exia_msgs) StdoutLine: {'line': b'-- Set runtime path of "/home/zech/exia_ws/install/exia_msgs/lib/libexia_msgs__rosidl_typesupport_c.so" to ""\n'}
+[1.812338] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs\n'}
+[1.812367] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg\n'}
+[1.812397] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/rosidl_generator_cpp__visibility_control.hpp\n'}
+[1.812427] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/navigation_goal.hpp\n'}
+[1.812643] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail\n'}
+[1.812675] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail/navigation_goal__struct.hpp\n'}
+[1.812704] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail/navigation_goal__traits.hpp\n'}
+[1.812733] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail/navigation_goal__type_support.hpp\n'}
+[1.812760] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail/navigation_goal__builder.hpp\n'}
+[1.812787] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs\n'}
+[1.812814] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg\n'}
+[1.812843] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/rosidl_typesupport_fastrtps_cpp__visibility_control.h\n'}
+[1.812871] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail\n'}
+[1.812898] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail/navigation_goal__rosidl_typesupport_fastrtps_cpp.hpp\n'}
+[1.812926] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail/dds_fastrtps\n'}
+[1.813037] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/lib/libexia_msgs__rosidl_typesupport_fastrtps_cpp.so\n'}
+[1.813070] (exia_msgs) StdoutLine: {'line': b'-- Set runtime path of "/home/zech/exia_ws/install/exia_msgs/lib/libexia_msgs__rosidl_typesupport_fastrtps_cpp.so" to ""\n'}
+[1.813098] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs\n'}
+[1.813127] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg\n'}
+[1.813205] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail\n'}
+[1.813233] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail/navigation_goal__rosidl_typesupport_introspection_cpp.hpp\n'}
+[1.813261] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/include/exia_msgs/exia_msgs/msg/detail/navigation_goal__type_support.cpp\n'}
+[1.813291] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/lib/libexia_msgs__rosidl_typesupport_introspection_cpp.so\n'}
+[1.813379] (exia_msgs) StdoutLine: {'line': b'-- Set runtime path of "/home/zech/exia_ws/install/exia_msgs/lib/libexia_msgs__rosidl_typesupport_introspection_cpp.so" to ""\n'}
+[1.813410] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/lib/libexia_msgs__rosidl_typesupport_cpp.so\n'}
+[1.813625] (exia_msgs) StdoutLine: {'line': b'-- Set runtime path of "/home/zech/exia_ws/install/exia_msgs/lib/libexia_msgs__rosidl_typesupport_cpp.so" to ""\n'}
+[1.813654] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/environment/pythonpath.sh\n'}
+[1.813805] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/environment/pythonpath.dsv\n'}
+[1.813831] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs-1.0.0-py3.10.egg-info\n'}
+[1.813857] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs-1.0.0-py3.10.egg-info/SOURCES.txt\n'}
+[1.813882] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs-1.0.0-py3.10.egg-info/dependency_links.txt\n'}
+[1.813907] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs-1.0.0-py3.10.egg-info/PKG-INFO\n'}
+[1.813931] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs-1.0.0-py3.10.egg-info/top_level.txt\n'}
+[1.813955] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs\n'}
+[1.813980] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/exia_msgs_s__rosidl_typesupport_fastrtps_c.cpython-310-x86_64-linux-gnu.so\n'}
+[1.814142] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/_exia_msgs_s.ep.rosidl_typesupport_fastrtps_c.c\n'}
+[1.814167] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/__init__.py\n'}
+[1.814192] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/libexia_msgs__rosidl_generator_py.so\n'}
+[1.814216] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/exia_msgs_s__rosidl_typesupport_c.cpython-310-x86_64-linux-gnu.so\n'}
+[1.814240] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/_exia_msgs_s.ep.rosidl_typesupport_c.c\n'}
+[1.814263] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/msg\n'}
+[1.814287] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/msg/_navigation_goal_s.c\n'}
+[1.814310] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/msg/__init__.py\n'}
+[1.814334] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/msg/_navigation_goal.py\n'}
+[1.814409] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/exia_msgs_s__rosidl_typesupport_introspection_c.cpython-310-x86_64-linux-gnu.so\n'}
+[1.814434] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/_exia_msgs_s.ep.rosidl_typesupport_introspection_c.c\n'}
+[1.835020] (exia_msgs) StdoutLine: {'line': b"Listing '/home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs'...\n"}
+[1.835221] (exia_msgs) StdoutLine: {'line': b"Compiling '/home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/__init__.py'...\n"}
+[1.835488] (exia_msgs) StdoutLine: {'line': b"Listing '/home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/msg'...\n"}
+[1.835588] (exia_msgs) StdoutLine: {'line': b"Compiling '/home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/msg/__init__.py'...\n"}
+[1.835670] (exia_msgs) StdoutLine: {'line': b"Compiling '/home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/msg/_navigation_goal.py'...\n"}
+[1.837639] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/exia_msgs_s__rosidl_typesupport_fastrtps_c.cpython-310-x86_64-linux-gnu.so\n'}
+[1.837793] (exia_msgs) StdoutLine: {'line': b'-- Set runtime path of "/home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/exia_msgs_s__rosidl_typesupport_fastrtps_c.cpython-310-x86_64-linux-gnu.so" to ""\n'}
+[1.837907] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/exia_msgs_s__rosidl_typesupport_introspection_c.cpython-310-x86_64-linux-gnu.so\n'}
+[1.838015] (exia_msgs) StdoutLine: {'line': b'-- Set runtime path of "/home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/exia_msgs_s__rosidl_typesupport_introspection_c.cpython-310-x86_64-linux-gnu.so" to ""\n'}
+[1.838153] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/exia_msgs_s__rosidl_typesupport_c.cpython-310-x86_64-linux-gnu.so\n'}
+[1.838211] (exia_msgs) StdoutLine: {'line': b'-- Set runtime path of "/home/zech/exia_ws/install/exia_msgs/local/lib/python3.10/dist-packages/exia_msgs/exia_msgs_s__rosidl_typesupport_c.cpython-310-x86_64-linux-gnu.so" to ""\n'}
+[1.838306] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/lib/libexia_msgs__rosidl_generator_py.so\n'}
+[1.838496] (exia_msgs) StdoutLine: {'line': b'-- Set runtime path of "/home/zech/exia_ws/install/exia_msgs/lib/libexia_msgs__rosidl_generator_py.so" to ""\n'}
+[1.838554] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/msg/NavigationGoal.idl\n'}
+[1.838614] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/msg/NavigationGoal.msg\n'}
+[1.838802] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/ament_index/resource_index/package_run_dependencies/exia_msgs\n'}
+[1.838862] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/share/ament_index/resource_index/parent_prefix_path/exia_msgs\n'}
+[1.838919] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/environment/ament_prefix_path.sh\n'}
+[1.838971] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/environment/ament_prefix_path.dsv\n'}
+[1.839026] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/environment/path.sh\n'}
+[1.839159] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/environment/path.dsv\n'}
+[1.839216] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/local_setup.bash\n'}
+[1.839395] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/local_setup.sh\n'}
+[1.839446] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/local_setup.zsh\n'}
+[1.839497] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/local_setup.dsv\n'}
+[1.839548] (exia_msgs) StdoutLine: {'line': b'-- Installing: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/package.dsv\n'}
+[1.839608] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/ament_index/resource_index/packages/exia_msgs\n'}
+[1.839661] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/export_exia_msgs__rosidl_generator_cExport.cmake\n'}
+[1.839712] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/export_exia_msgs__rosidl_generator_cExport-noconfig.cmake\n'}
+[1.839762] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/export_exia_msgs__rosidl_typesupport_fastrtps_cExport.cmake\n'}
+[1.839813] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/export_exia_msgs__rosidl_typesupport_fastrtps_cExport-noconfig.cmake\n'}
+[1.839864] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/exia_msgs__rosidl_typesupport_introspection_cExport.cmake\n'}
+[1.839915] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/exia_msgs__rosidl_typesupport_introspection_cExport-noconfig.cmake\n'}
+[1.839966] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/exia_msgs__rosidl_typesupport_cExport.cmake\n'}
+[1.840018] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/exia_msgs__rosidl_typesupport_cExport-noconfig.cmake\n'}
+[1.840070] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/export_exia_msgs__rosidl_generator_cppExport.cmake\n'}
+[1.840122] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/export_exia_msgs__rosidl_typesupport_fastrtps_cppExport.cmake\n'}
+[1.840178] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/export_exia_msgs__rosidl_typesupport_fastrtps_cppExport-noconfig.cmake\n'}
+[1.840283] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/exia_msgs__rosidl_typesupport_introspection_cppExport.cmake\n'}
+[1.840396] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/exia_msgs__rosidl_typesupport_introspection_cppExport-noconfig.cmake\n'}
+[1.840451] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/exia_msgs__rosidl_typesupport_cppExport.cmake\n'}
+[1.840506] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/exia_msgs__rosidl_typesupport_cppExport-noconfig.cmake\n'}
+[1.840610] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/export_exia_msgs__rosidl_generator_pyExport.cmake\n'}
+[1.840885] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/export_exia_msgs__rosidl_generator_pyExport-noconfig.cmake\n'}
+[1.841108] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/rosidl_cmake-extras.cmake\n'}
+[1.841163] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/ament_cmake_export_include_directories-extras.cmake\n'}
+[1.841218] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/ament_cmake_export_libraries-extras.cmake\n'}
+[1.841273] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/ament_cmake_export_targets-extras.cmake\n'}
+[1.841324] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/rosidl_cmake_export_typesupport_targets-extras.cmake\n'}
+[1.841375] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/ament_cmake_export_dependencies-extras.cmake\n'}
+[1.841443] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/rosidl_cmake_export_typesupport_libraries-extras.cmake\n'}
+[1.841498] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/exia_msgsConfig.cmake\n'}
+[1.841553] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/cmake/exia_msgsConfig-version.cmake\n'}
+[1.841639] (exia_msgs) StdoutLine: {'line': b'-- Up-to-date: /home/zech/exia_ws/install/exia_msgs/share/exia_msgs/package.xml\n'}
+[1.842113] (exia_msgs) CommandEnded: {'returncode': 0}
+[1.851912] (exia_msgs) JobEnded: {'identifier': 'exia_msgs', 'rc': 0}
+[1.852298] (-) EventReactorShutdown: {}

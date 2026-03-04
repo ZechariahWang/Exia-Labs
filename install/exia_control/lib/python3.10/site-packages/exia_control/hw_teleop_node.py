@@ -19,8 +19,12 @@ from geometry_msgs.msg import Twist
 from sensor_msgs.msg import NavSatFix, Imu, Joy
 from std_msgs.msg import Int32
 
+# curl -fsSL  https://www.phidgets.com/downloads/setup_linux | sudo bash
+# sudo apt install -y libphidget22 libphidget22-dev
+
+
 try:
-    from Phidget22.Devices.DCMotor import DCMotor
+    from Phidget22.Devices.MotorPositionController import MotorPositionController
     from Phidget22.PhidgetException import PhidgetException
     PHIDGETS_AVAILABLE = True
 except ImportError:
@@ -113,7 +117,13 @@ class HwTeleopNode(Node):
         self.declare_parameter('serial_port', '/dev/lss_controller')
         self.declare_parameter('serial_baud', 115200)
         self.declare_parameter('phidgets_hub_port', 0)
-        self.declare_parameter('steering_max_duty', 0.3)
+        self.declare_parameter('motor_degrees_at_max_steer', 2160.0)
+        self.declare_parameter('steering_kp', 400.0)
+        self.declare_parameter('steering_ki', 0.0)
+        self.declare_parameter('steering_kd', 150.0)
+        self.declare_parameter('steering_velocity_limit', 10000.0)
+        self.declare_parameter('steering_acceleration', 50000.0)
+        self.declare_parameter('steering_dead_band', 2.0)
         self.declare_parameter('steering_current_limit', 3.0)
         self.declare_parameter('remote_mode', False)
         self.declare_parameter('launch_sensors', True)
@@ -138,10 +148,11 @@ class HwTeleopNode(Node):
         self._gear_pwm = None
         self._gear_ok = False
 
-        self._dc_motor = None
+        self._phidgets_controller = None
         self._motor_ok = False
         self._motor_lock = threading.Lock()
-        self._max_duty = self.get_parameter('steering_max_duty').value
+        self._motor_degrees_at_max_steer = self.get_parameter('motor_degrees_at_max_steer').value
+        self._phidgets_runaway_count = 0
 
         self._throttle_ramp = 0.0
         self._brake_ramp = 0.0
@@ -149,14 +160,12 @@ class HwTeleopNode(Node):
 
         self._throttle_f = SmoothFilter(LSS_THROTTLE_NEUTRAL, tau=0.04)
         self._brake_f = SmoothFilter(LSS_BRAKE_RELEASED, tau=0.03)
-        self._steer_f = SmoothFilter(0.0, tau=0.04)
 
         self._gear = 1
         self._last_tick_t = time.monotonic()
 
         self._last_sent_throttle = None
         self._last_sent_brake = None
-        self._last_sent_duty = None
         self._last_send_time_throttle = 0.0
         self._last_send_time_brake = 0.0
 
@@ -414,48 +423,68 @@ class HwTeleopNode(Node):
         except Exception:
             pass
 
-    # for steering motor
+    # for steering motor (position control via DCC1000 + HKT22 encoder)
     def _init_phidgets(self):
         if not PHIDGETS_AVAILABLE:
             self.get_logger().warn('Phidget22 not installed — steering unavailable')
             return
         try:
-            ch = DCMotor()
+            ch = MotorPositionController()
             ch.setHubPort(self.get_parameter('phidgets_hub_port').value)
             ch.setIsHubPortDevice(False)
             ch.setOnAttachHandler(self._on_attach)
             ch.setOnDetachHandler(self._on_detach)
-            self._dc_motor = ch
+            self._phidgets_controller = ch
             ch.open()
-            self.get_logger().info('DCMotor channel opened, waiting for attach...')
+            self.get_logger().info('MotorPositionController channel opened, waiting for attach...')
         except PhidgetException as e:
             self.get_logger().warn(f'Phidgets init failed: {e}')
 
     def _on_attach(self, sender):
         try:
+            sender.setRescaleFactor(360.0 / (300 * 4 * 4.25))
             sender.setCurrentLimit(self.get_parameter('steering_current_limit').value)
-            sender.setAcceleration(sender.getMaxAcceleration())
+            sender.setVelocityLimit(self.get_parameter('steering_velocity_limit').value)
+            sender.setAcceleration(self.get_parameter('steering_acceleration').value)
+            sender.setDeadBand(self.get_parameter('steering_dead_band').value)
+            sender.setKp(self.get_parameter('steering_kp').value)
+            sender.setKi(self.get_parameter('steering_ki').value)
+            sender.setKd(self.get_parameter('steering_kd').value)
+            sender.addPositionOffset(-sender.getPosition())
             sender.enableFailsafe(500)
-            sender.setTargetVelocity(0.0)
+            sender.setEngaged(True)
             with self._motor_lock:
                 self._motor_ok = True
+                self._phidgets_runaway_count = 0
             self.get_logger().info(
-                f'DCMotor attached (max_duty={self._max_duty}, '
+                f'MotorPositionController attached (max_degrees={self._motor_degrees_at_max_steer}, '
                 f'current_limit={self.get_parameter("steering_current_limit").value}A)')
         except PhidgetException as e:
-            self.get_logger().error(f'DCMotor config failed: {e}')
+            self.get_logger().error(f'MotorPositionController config failed: {e}')
 
     def _on_detach(self, sender):
         with self._motor_lock:
             self._motor_ok = False
-        self.get_logger().warn('DCMotor detached')
+        self.get_logger().warn('MotorPositionController detached')
 
-    def _set_duty(self, duty):
+    def _set_steering_position(self, normalized):
         with self._motor_lock:
             if not self._motor_ok:
                 return
         try:
-            self._dc_motor.setTargetVelocity(duty)
+            target = normalized * self._motor_degrees_at_max_steer
+            self._phidgets_controller.setTargetPosition(target)
+            self._phidgets_controller.resetFailsafe()
+            duty = abs(self._phidgets_controller.getDutyCycle())
+            if duty > 0.95:
+                self._phidgets_runaway_count += 1
+                if self._phidgets_runaway_count > 25:
+                    self.get_logger().error('Steering motor runaway detected — disengaging')
+                    self._phidgets_controller.setEngaged(False)
+                    with self._motor_lock:
+                        self._motor_ok = False
+            else:
+                self._phidgets_runaway_count = 0
         except PhidgetException:
             pass
 
@@ -595,15 +624,6 @@ class HwTeleopNode(Node):
         dt = now - self._last_tick_t
         self._last_tick_t = now
 
-        if not self._remote_mode:
-            with self._motor_lock:
-                motor_ok = self._motor_ok
-            if motor_ok:
-                try:
-                    self._dc_motor.resetFailsafe()
-                except PhidgetException:
-                    pass
-
         if self._estop:
             self._print_hud()
             return
@@ -662,11 +682,11 @@ class HwTeleopNode(Node):
 
         thr_target = _lerp(LSS_THROTTLE_NEUTRAL, LSS_THROTTLE_MAX, self._throttle_ramp)
         brk_target = _lerp(LSS_BRAKE_RELEASED, LSS_BRAKE_ENGAGED, self._brake_ramp)
-        steer_target = self._steer_ramp * self._max_duty
 
         thr_val = self._throttle_f.update(thr_target, dt)
         brk_val = self._brake_f.update(brk_target, dt)
-        duty_val = self._steer_f.update(steer_target, dt)
+
+        self._set_steering_position(self._steer_ramp)
 
         thr_int = int(round(thr_val))
         thr_at_neutral = (thr_int == LSS_THROTTLE_NEUTRAL)
@@ -692,11 +712,6 @@ class HwTeleopNode(Node):
             self._last_sent_brake = brk_int
             self._last_send_time_brake = now
 
-        duty_round = round(duty_val, 4)
-        if self._last_sent_duty is None or abs(duty_round - self._last_sent_duty) >= 0.005:
-            self._set_duty(duty_round)
-            self._last_sent_duty = duty_round
-
         self._print_hud()
 
     def _safe_stop(self):
@@ -715,13 +730,11 @@ class HwTeleopNode(Node):
         else:
             self._throttle_f.snap(LSS_THROTTLE_NEUTRAL)
             self._brake_f.snap(LSS_BRAKE_ENGAGED)
-            self._steer_f.snap(0.0)
             self._last_sent_throttle = None
             self._last_sent_brake = None
-            self._last_sent_duty = None
             self._send_lss(f'#{LSS_THROTTLE_ID}D{LSS_THROTTLE_NEUTRAL}\r')
             self._send_lss(f'#{LSS_BRAKE_ID}D{LSS_BRAKE_ENGAGED}\r')
-            self._set_duty(0.0)
+            self._set_steering_position(0.0)
         self._print_hud()
 
     def _setup_terminal(self):
@@ -866,12 +879,13 @@ class HwTeleopNode(Node):
                 except Exception:
                     pass
 
-            if self._dc_motor is not None:
+            if self._phidgets_controller is not None:
                 try:
                     with self._motor_lock:
                         if self._motor_ok:
-                            self._dc_motor.setTargetVelocity(0.0)
-                    self._dc_motor.close()
+                            self._phidgets_controller.setTargetPosition(0.0)
+                            self._phidgets_controller.setEngaged(False)
+                    self._phidgets_controller.close()
                 except PhidgetException:
                     pass
 

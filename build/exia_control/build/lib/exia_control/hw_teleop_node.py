@@ -152,6 +152,8 @@ class HwTeleopNode(Node):
 
         self.serial_conn = None
         self._lss_ok = False
+        self._lss_pending = None
+        self._lss_open_time = 0.0
         self._gear_pwm = None
         self._gear_ok = False
 
@@ -367,16 +369,30 @@ class HwTeleopNode(Node):
                 pass
             self.serial_conn = None
         self._lss_ok = False
+        self._lss_pending = None
         try:
             import serial
             port = self.get_parameter('serial_port').value
             baud = self.get_parameter('serial_baud').value
-            self.serial_conn = serial.Serial(port=port, baudrate=baud, timeout=0.1)
-            time.sleep(0.5)
-            self.serial_conn.reset_input_buffer()
+            self._lss_pending = serial.Serial(port=port, baudrate=baud, timeout=0.1)
+            self._lss_open_time = time.monotonic()
         except Exception:
-            self.serial_conn = None
+            self._lss_pending = None
+
+    def _init_lss_finish(self):
+        conn = self._lss_pending
+        self._lss_pending = None
+        if conn is None:
             return
+        try:
+            conn.reset_input_buffer()
+        except Exception:
+            try:
+                conn.close()
+            except Exception:
+                pass
+            return
+        self.serial_conn = conn
 
         servo_ok = {}
         for sid, name in [(LSS_THROTTLE_ID, 'throttle'), (LSS_BRAKE_ID, 'brake')]:
@@ -472,33 +488,33 @@ class HwTeleopNode(Node):
     def _on_detach(self, sender):
         with self._motor_lock:
             self._motor_ok = False
+            self._phidgets_controller = None
         try:
             sender.close()
         except Exception:
             pass
-        self._phidgets_controller = None
         self.get_logger().warn('MotorPositionController detached')
 
     def _set_steering_position(self, normalized):
         with self._motor_lock:
-            if not self._motor_ok:
+            if not self._motor_ok or self._phidgets_controller is None:
                 return
-        try:
-            target = normalized * self._motor_degrees_at_max_steer
-            self._phidgets_controller.setTargetPosition(target)
-            self._phidgets_controller.resetFailsafe()
-            duty = abs(self._phidgets_controller.getDutyCycle())
-            if duty > 0.95:
-                self._phidgets_runaway_count += 1
-                if self._phidgets_runaway_count > 25:
-                    self.get_logger().error('Steering motor runaway detected — disengaging')
-                    self._phidgets_controller.setEngaged(False)
-                    with self._motor_lock:
+            ctrl = self._phidgets_controller
+            try:
+                target = normalized * self._motor_degrees_at_max_steer
+                ctrl.setTargetPosition(target)
+                ctrl.resetFailsafe()
+                duty = abs(ctrl.getDutyCycle())
+                if duty > 0.95:
+                    self._phidgets_runaway_count += 1
+                    if self._phidgets_runaway_count > 25:
+                        self.get_logger().error('Steering motor runaway detected — disengaging')
+                        ctrl.setEngaged(False)
                         self._motor_ok = False
-            else:
-                self._phidgets_runaway_count = 0
-        except PhidgetException:
-            pass
+                else:
+                    self._phidgets_runaway_count = 0
+            except Exception:
+                pass
 
     def _init_gear_servo(self):
         if not JETSON_GPIO_AVAILABLE:
@@ -519,7 +535,7 @@ class HwTeleopNode(Node):
             self.get_logger().warn(f'Gear servo init failed: {e}')
 
     def _reconnect_check(self):
-        if not self._lss_ok:
+        if not self._lss_ok and self._lss_pending is None:
             self._init_lss()
             if self._lss_ok:
                 self.get_logger().info('LSS reconnected')
@@ -662,6 +678,9 @@ class HwTeleopNode(Node):
         now = time.monotonic()
         dt = now - self._last_tick_t
         self._last_tick_t = now
+
+        if self._lss_pending is not None and now - self._lss_open_time >= 0.5:
+            self._init_lss_finish()
 
         if self._estop:
             if not self._remote_mode:
@@ -838,6 +857,12 @@ class HwTeleopNode(Node):
                     proc.kill()
 
         if not self._remote_mode:
+            if self._lss_pending is not None:
+                try:
+                    self._lss_pending.close()
+                except Exception:
+                    pass
+                self._lss_pending = None
             if self.serial_conn is not None:
                 try:
                     self._send_lss(f'#{LSS_BRAKE_ID}H\r')
@@ -847,15 +872,18 @@ class HwTeleopNode(Node):
                 except Exception:
                     pass
 
-            if self._phidgets_controller is not None:
-                try:
-                    with self._motor_lock:
+            with self._motor_lock:
+                ctrl = self._phidgets_controller
+                if ctrl is not None:
+                    try:
                         if self._motor_ok:
-                            self._phidgets_controller.setTargetPosition(0.0)
-                            self._phidgets_controller.setEngaged(False)
-                    self._phidgets_controller.close()
-                except PhidgetException:
-                    pass
+                            ctrl.setTargetPosition(0.0)
+                            ctrl.setEngaged(False)
+                        self._motor_ok = False
+                        self._phidgets_controller = None
+                        ctrl.close()
+                    except Exception:
+                        pass
 
             if self._gear_pwm is not None:
                 try:

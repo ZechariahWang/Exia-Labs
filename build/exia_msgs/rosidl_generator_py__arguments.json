@@ -1,9 +1,9 @@
 {
   "package_name": "exia_msgs",
-  "output_dir": "/home/zech/exia_ws/build/exia_msgs/rosidl_generator_py/exia_msgs",
+  "output_dir": "/home/exialabsargus/exia_ws/build/exia_msgs/rosidl_generator_py/exia_msgs",
   "template_dir": "/opt/ros/humble/share/rosidl_generator_py/cmake/../resource",
   "idl_tuples": [
-    "/home/zech/exia_ws/build/exia_msgs/rosidl_adapter/exia_msgs:msg/NavigationGoal.idl"
+    "/home/exialabsargus/exia_ws/build/exia_msgs/rosidl_adapter/exia_msgs:msg/NavigationGoal.idl"
   ],
   "target_dependencies": [
     "/opt/ros/humble/share/rosidl_generator_py/cmake/../../../lib/rosidl_generator_py/rosidl_generator_py",
@@ -19,6 +19,6 @@
     "/opt/ros/humble/share/rosidl_generator_py/cmake/../resource/_msg.py.em",
     "/opt/ros/humble/share/rosidl_generator_py/cmake/../resource/_srv_pkg_typesupport_entry_point.c.em",
     "/opt/ros/humble/share/rosidl_generator_py/cmake/../resource/_srv.py.em",
-    "/home/zech/exia_ws/build/exia_msgs/rosidl_adapter/exia_msgs/msg/NavigationGoal.idl"
+    "/home/exialabsargus/exia_ws/build/exia_msgs/rosidl_adapter/exia_msgs/msg/NavigationGoal.idl"
   ]
 }

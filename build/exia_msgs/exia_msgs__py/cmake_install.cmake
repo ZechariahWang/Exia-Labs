@@ -1,8 +1,8 @@
-# Install script for directory: /home/zech/exia_ws/build/exia_msgs/exia_msgs__py
+# Install script for directory: /home/exialabsargus/exia_ws/build/exia_msgs/exia_msgs__py
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
-  set(CMAKE_INSTALL_PREFIX "/home/zech/exia_ws/install/exia_msgs")
+  set(CMAKE_INSTALL_PREFIX "/home/exialabsargus/exia_ws/install/exia_msgs")
 endif()
 string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
 

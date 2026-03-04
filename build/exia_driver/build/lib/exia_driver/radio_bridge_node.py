@@ -167,6 +167,8 @@ class RadioBridge(Node):
         self._key_dir = self.get_parameter('key_dir').value
 
         self._serial = None
+        self._serial_pending = None
+        self._serial_open_time = 0.0
         self._serial_lock = threading.Lock()
         self._serial_buffer = ''
         self._last_reconnect_attempt = 0.0
@@ -232,8 +234,9 @@ class RadioBridge(Node):
 
     def _open_serial(self):
         self._reset_handshake_state()
+        self._serial_pending = None
         try:
-            self._serial = serial.Serial(
+            self._serial_pending = serial.Serial(
                 port=self._serial_port,
                 baudrate=self._serial_baud,
                 timeout=0.01,
@@ -241,13 +244,11 @@ class RadioBridge(Node):
                 dsrdtr=False,
                 write_timeout=0.1,
             )
-            time.sleep(3.0)
-            self._serial.reset_input_buffer()
-            self._serial_buffer = ''
-            self.get_logger().info(f'Serial connected: {self._serial_port}')
+            self._serial_open_time = time.monotonic()
+            self.get_logger().info(f'Serial opened: {self._serial_port}, settling...')
         except Exception as e:
             self.get_logger().error(f'Serial connection failed: {e}')
-            self._serial = None
+            self._serial_pending = None
 
     def _serial_write_raw(self, data):
         if self._serial is None:
@@ -288,6 +289,29 @@ class RadioBridge(Node):
 
     def _serial_read_timer(self):
         if self._serial is None:
+            if self._serial_pending is not None:
+                if not os.path.exists(self._serial_port):
+                    try:
+                        self._serial_pending.close()
+                    except Exception:
+                        pass
+                    self._serial_pending = None
+                    return
+                if time.monotonic() - self._serial_open_time >= 3.0:
+                    try:
+                        self._serial_pending.reset_input_buffer()
+                    except Exception:
+                        try:
+                            self._serial_pending.close()
+                        except Exception:
+                            pass
+                        self._serial_pending = None
+                        return
+                    self._serial_buffer = ''
+                    self._serial = self._serial_pending
+                    self._serial_pending = None
+                    self.get_logger().info(f'Serial ready: {self._serial_port}')
+                return
             now = time.monotonic()
             if now - self._last_reconnect_attempt >= SERIAL_RECONNECT_INTERVAL:
                 self._last_reconnect_attempt = now
@@ -1152,11 +1176,12 @@ class RadioBridge(Node):
         self._serial_write('S', payload)
 
     def destroy_node(self):
-        if self._serial is not None:
-            try:
-                self._serial.close()
-            except Exception:
-                pass
+        for conn in [self._serial, self._serial_pending]:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
         super().destroy_node()
 
 

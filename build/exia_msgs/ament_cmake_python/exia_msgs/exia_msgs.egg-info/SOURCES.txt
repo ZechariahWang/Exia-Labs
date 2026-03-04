@@ -4,3 +4,5 @@ exia_msgs.egg-info/PKG-INFO
 exia_msgs.egg-info/SOURCES.txt
 exia_msgs.egg-info/dependency_links.txt
 exia_msgs.egg-info/top_level.txt
+exia_msgs/msg/__init__.py
+exia_msgs/msg/_navigation_goal.py

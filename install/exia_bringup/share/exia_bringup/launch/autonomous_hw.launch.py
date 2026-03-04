@@ -226,6 +226,9 @@ def generate_launch_description():
         name='gps_transform_node',
         output='screen',
         parameters=[gps_params_file, {'use_sim_time': False, 'require_rtk': use_rtk}],
+        remappings=[
+            ('/gps/fix', '/navsatfix'),
+        ],
     )
 
     ekf_localization_node = Node(
@@ -258,9 +261,6 @@ def generate_launch_description():
         name='septentrio_gnss',
         output='screen',
         parameters=[septentrio_params_file, {'use_sim_time': False}],
-        remappings=[
-            ('navsatfix', '/gps/fix'),
-        ],
     )
 
     imu_node = Node(
@@ -281,18 +281,6 @@ def generate_launch_description():
             '--roll', '0', '--pitch', '0', '--yaw', '0',
             '--frame-id', 'lidar_link', '--child-frame-id', 'velodyne',
         ],
-    )
-
-    hw_teleop_node = Node(
-        package='exia_control',
-        executable='hw_teleop_node',
-        name='hw_teleop_node',
-        output='screen',
-        parameters=[{
-            'use_sim_time': False,
-            'serial_port': serial_port,
-            'launch_sensors': False,
-        }],
     )
 
     radio_bridge_node = Node(
@@ -335,6 +323,5 @@ def generate_launch_description():
         septentrio_gnss_node,
         imu_node,
         lidar_tf_publisher,
-        hw_teleop_node,
         radio_bridge_node,
     ])

@@ -44,7 +44,8 @@ try:
 except ImportError:
     BLUE_AVAILABLE = False
 
-LSS_THROTTLE_ID                      = 1 # test
+# Need to assign manually using scripts
+LSS_THROTTLE_ID                      = 1 
 LSS_BRAKE_ID                         = 2
 
 LSS_THROTTLE_NEUTRAL                 = 5
@@ -474,8 +475,11 @@ class HwTeleopNode(Node):
             sender.setKi(self.get_parameter('steering_ki').value)
             sender.setKd(self.get_parameter('steering_kd').value)
             sender.addPositionOffset(-sender.getPosition())
-            sender.enableFailsafe(500)
             sender.setEngaged(True)
+            try:
+                sender.enableFailsafe(500)
+            except Exception:
+                pass
             with self._motor_lock:
                 self._motor_ok = True
                 self._phidgets_runaway_count = 0

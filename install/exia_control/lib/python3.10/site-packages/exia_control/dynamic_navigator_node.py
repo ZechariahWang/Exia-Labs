@@ -37,7 +37,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 
 from geometry_msgs.msg import Twist, PoseStamped, Quaternion
 from nav_msgs.msg import Odometry, OccupancyGrid, Path
-from sensor_msgs.msg import LaserScan
+from sensor_msgs.msg import LaserScan, NavSatFix
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
 from visualization_msgs.msg import Marker, MarkerArray
@@ -281,6 +281,8 @@ class DynamicNavigator(Node):
         self._goal_uses_gps = False
         self.gps_odom_sub = self.create_subscription(
             Odometry, '/gps/odom', self._gps_odom_callback, 10)
+        self.navsatfix_sub = self.create_subscription(
+            NavSatFix, '/navsatfix', self._navsatfix_callback, 10)
 
         # create publishers
         self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
@@ -401,6 +403,30 @@ class DynamicNavigator(Node):
                     f'GPS->map offset initialized: '
                     f'({self._gps_to_map_offset_x:.2f}, {self._gps_to_map_offset_y:.2f})'
                 )
+            elif not self.lock_gps_map_offset:
+                self._gps_to_map_offset_x = observed_offset_x
+                self._gps_to_map_offset_y = observed_offset_y
+
+    def _navsatfix_callback(self, msg: NavSatFix):
+        if not math.isfinite(msg.latitude) or not math.isfinite(msg.longitude):
+            return
+        x, y = gps_to_local(msg.latitude, msg.longitude, self.origin_lat, self.origin_lon)
+        with self._pose_lock:
+            self._gps_x = x
+            self._gps_y = y
+            if not self._gps_available:
+                self._gps_available = True
+                self.get_logger().info(
+                    f'GPS fix active: ({msg.latitude:.6f}, {msg.longitude:.6f}) -> ({x:.2f}, {y:.2f})')
+            observed_offset_x = self.robot_x - x
+            observed_offset_y = self.robot_y - y
+            if not self._gps_offset_initialized:
+                self._gps_to_map_offset_x = observed_offset_x
+                self._gps_to_map_offset_y = observed_offset_y
+                self._gps_offset_initialized = True
+                self.get_logger().info(
+                    f'GPS->map offset initialized: '
+                    f'({self._gps_to_map_offset_x:.2f}, {self._gps_to_map_offset_y:.2f})')
             elif not self.lock_gps_map_offset:
                 self._gps_to_map_offset_x = observed_offset_x
                 self._gps_to_map_offset_y = observed_offset_y

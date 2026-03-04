@@ -29,7 +29,9 @@ def _coords_text_to_geojson(coords_text: str) -> dict:
 def create_dashboard(node, blue_state=None, blue_config_store=None, blue_service=None):
     global _panel, _node_ref, _blue_status_panel, _blue_config_panel
     _node_ref = node
-    _panel = TelemetryPanel()
+    def _clear_estop():
+        node._estop = False
+    _panel = TelemetryPanel(on_estop=node._safe_stop, on_clear_estop=_clear_estop)
 
     has_blue = blue_state is not None and blue_config_store is not None and blue_service is not None
 

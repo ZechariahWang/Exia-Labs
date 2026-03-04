@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import math
 import time
+import signal
 import threading
 import rclpy
 from rclpy.node import Node
@@ -17,17 +18,53 @@ try:
 except ImportError:
     PHIDGETS_AVAILABLE = False
 
-LSS_THROTTLE_ID = 1
-LSS_BRAKE_ID = 2
-LSS_GEAR_ID = 3
+try:
+    import Jetson.GPIO as GPIO
+    JETSON_GPIO_AVAILABLE = True
+except Exception:
+    JETSON_GPIO_AVAILABLE = False
 
-LSS_THROTTLE_NEUTRAL = -900
-LSS_THROTTLE_MAX = -150
-LSS_BRAKE_RELEASED = 900
-LSS_BRAKE_ENGAGED = -100
-LSS_GEAR_REVERSE = -330
-LSS_GEAR_NEUTRAL = -100
-LSS_GEAR_HIGH = 200
+LSS_THROTTLE_ID                      = 1
+LSS_BRAKE_ID                         = 2
+
+LSS_THROTTLE_NEUTRAL                 = 5
+LSS_THROTTLE_MAX                     = 550
+LSS_BRAKE_RELEASED                   = 0
+LSS_BRAKE_ENGAGED                    = -100
+
+LSS_SEND_DEADBAND                    = 8
+LSS_SEND_MIN_INTERVAL                = 0.025
+LSS_SERVO_SPEED                      = 600
+
+GEAR_PWM_PIN                         = 32
+GEAR_PWM_FREQ                        = 50
+GEAR_PWM_REVERSE                     = 5.67
+GEAR_PWM_NEUTRAL                     = 6.94
+GEAR_PWM_HIGH                        = 8.61
+GEAR_PWM                             = {0: GEAR_PWM_REVERSE, 1: GEAR_PWM_NEUTRAL, 2: GEAR_PWM_HIGH}
+
+DEFAULT_PUBLISH_TF                   = True
+DEFAULT_HARDWARE_MODE                = False
+DEFAULT_SERIAL_PORT                  = '/dev/lss_controller'
+DEFAULT_SERIAL_BAUD                  = 115200
+DEFAULT_USE_PHIDGETS                 = True
+DEFAULT_PHIDGETS_HUB_PORT            = 0
+DEFAULT_MOTOR_DEGREES_AT_MAX_STEER   = 2160.0
+DEFAULT_STEERING_KP                  = 400.0
+DEFAULT_STEERING_KI                  = 0.0
+DEFAULT_STEERING_KD                  = 150.0
+DEFAULT_STEERING_VELOCITY_LIMIT      = 10000.0
+DEFAULT_STEERING_ACCELERATION        = 50000.0
+DEFAULT_STEERING_DEAD_BAND           = 2.0
+DEFAULT_STEERING_CURRENT_LIMIT       = 3.0
+
+
+def _clamp(value, lo, hi):
+    return max(lo, min(hi, value))
+
+
+def _lerp(a, b, t):
+    return a + (b - a) * t
 
 
 class AckermannDriveNode(Node):
@@ -44,25 +81,23 @@ class AckermannDriveNode(Node):
     GEAR_HIGH = 2
     GEAR_SHIFT_DELAY = 0.3
 
-    GEAR_LSS_POSITIONS = {0: LSS_GEAR_REVERSE, 1: LSS_GEAR_NEUTRAL, 2: LSS_GEAR_HIGH}
-
     def __init__(self):
         super().__init__('ackermann_drive_node')
 
-        self.declare_parameter('publish_tf', True)
-        self.declare_parameter('hardware_mode', False)
-        self.declare_parameter('serial_port', '/dev/lss_controller')
-        self.declare_parameter('serial_baud', 115200)
-        self.declare_parameter('use_phidgets', True)
-        self.declare_parameter('phidgets_hub_port', 0)
-        self.declare_parameter('motor_degrees_at_max_steer', 2160.0)
-        self.declare_parameter('steering_kp', 400.0)
-        self.declare_parameter('steering_ki', 0.0)
-        self.declare_parameter('steering_kd', 150.0)
-        self.declare_parameter('steering_velocity_limit', 10000.0)
-        self.declare_parameter('steering_acceleration', 50000.0)
-        self.declare_parameter('steering_dead_band', 2.0)
-        self.declare_parameter('steering_current_limit', 3.0)
+        self.declare_parameter('publish_tf', DEFAULT_PUBLISH_TF)
+        self.declare_parameter('hardware_mode', DEFAULT_HARDWARE_MODE)
+        self.declare_parameter('serial_port', DEFAULT_SERIAL_PORT)
+        self.declare_parameter('serial_baud', DEFAULT_SERIAL_BAUD)
+        self.declare_parameter('use_phidgets', DEFAULT_USE_PHIDGETS)
+        self.declare_parameter('phidgets_hub_port', DEFAULT_PHIDGETS_HUB_PORT)
+        self.declare_parameter('motor_degrees_at_max_steer', DEFAULT_MOTOR_DEGREES_AT_MAX_STEER)
+        self.declare_parameter('steering_kp', DEFAULT_STEERING_KP)
+        self.declare_parameter('steering_ki', DEFAULT_STEERING_KI)
+        self.declare_parameter('steering_kd', DEFAULT_STEERING_KD)
+        self.declare_parameter('steering_velocity_limit', DEFAULT_STEERING_VELOCITY_LIMIT)
+        self.declare_parameter('steering_acceleration', DEFAULT_STEERING_ACCELERATION)
+        self.declare_parameter('steering_dead_band', DEFAULT_STEERING_DEAD_BAND)
+        self.declare_parameter('steering_current_limit', DEFAULT_STEERING_CURRENT_LIMIT)
 
         self.publish_tf = self.get_parameter('publish_tf').value
         self.hardware_mode = self.get_parameter('hardware_mode').value
@@ -79,109 +114,120 @@ class AckermannDriveNode(Node):
         self._current_gear = self.GEAR_NEUTRAL
         self._target_gear = self.GEAR_NEUTRAL
         self._gear_shift_time = 0.0
+        self._gear_pwm = None
+        self._gear_ok = False
 
         self.serial_conn = None
-        self._lss_connected = False
-        self._last_throttle_lss = None
-        self._last_brake_lss = None
-        self._last_gear_lss = None
+        self._lss_ok = False
+        self._lss_pending = None
+        self._lss_open_time = 0.0
+        self._last_sent_throttle = None
+        self._last_sent_brake = None
+        self._last_send_time_throttle = 0.0
+        self._last_send_time_brake = 0.0
 
         self._phidgets_controller = None
-        self._phidgets_connected = False
-        self._phidgets_lock = threading.Lock()
+        self._motor_ok = False
+        self._motor_lock = threading.Lock()
         self._phidgets_runaway_count = 0
         self._motor_degrees_at_max_steer = self.get_parameter('motor_degrees_at_max_steer').value
 
+        self._estop = False
+
         if self.hardware_mode:
             self._init_lss()
+            self._init_gear_servo()
             if self.get_parameter('use_phidgets').value:
                 self._init_phidgets()
 
         self.last_time = self.get_clock().now()
 
         self.cmd_vel_sub = self.create_subscription(
-            Twist,
-            '/cmd_vel',
-            self.cmd_vel_callback,
-            10
-        )
+            Twist, '/cmd_vel', self.cmd_vel_callback, 10)
 
         qos = QoSProfile(
             reliability=ReliabilityPolicy.RELIABLE,
             durability=DurabilityPolicy.VOLATILE,
-            depth=10
-        )
+            depth=10)
 
         self.steering_pub = self.create_publisher(
-            Float64MultiArray,
-            '/steering_controller/commands',
-            qos
-        )
-
+            Float64MultiArray, '/steering_controller/commands', qos)
         self.throttle_pub = self.create_publisher(
-            Float64MultiArray,
-            '/throttle_controller/commands',
-            qos
-        )
-
-        self.odom_pub = self.create_publisher(
-            Odometry,
-            '/odom',
-            qos
-        )
+            Float64MultiArray, '/throttle_controller/commands', qos)
+        self.odom_pub = self.create_publisher(Odometry, '/odom', qos)
 
         if self.publish_tf:
             self.tf_broadcaster = TransformBroadcaster(self)
 
+        signal.signal(signal.SIGINT, self._signal_handler)
+        signal.signal(signal.SIGTERM, self._signal_handler)
+
         self.control_timer = self.create_timer(0.02, self.control_loop)
+        if self.hardware_mode:
+            self.create_timer(2.0, self._reconnect_check)
 
         mode_str = 'HARDWARE' if self.hardware_mode else 'SIMULATION'
         self.get_logger().info(f'Ackermann drive node started ({mode_str})')
 
     def _init_lss(self):
+        if self.serial_conn is not None:
+            try:
+                self.serial_conn.close()
+            except Exception:
+                pass
+            self.serial_conn = None
+        self._lss_ok = False
+        self._lss_pending = None
         try:
             import serial
             port = self.get_parameter('serial_port').value
             baud = self.get_parameter('serial_baud').value
-            self.serial_conn = serial.Serial(port=port, baudrate=baud, timeout=0.1)
-            time.sleep(0.5)
-            self.serial_conn.reset_input_buffer()
-        except Exception as e:
-            self.get_logger().error(f'LSS serial init failed: {e}')
-            self.serial_conn = None
-            return
+            self._lss_pending = serial.Serial(port=port, baudrate=baud, timeout=0.1)
+            self._lss_open_time = time.monotonic()
+        except Exception:
+            self._lss_pending = None
 
-        detected = []
-        for servo_id in [LSS_THROTTLE_ID, LSS_BRAKE_ID, LSS_GEAR_ID]:
-            if self._query_lss_servo(servo_id):
-                detected.append(servo_id)
-                self.get_logger().info(f'LSS servo {servo_id} detected')
+    def _init_lss_finish(self):
+        conn = self._lss_pending
+        self._lss_pending = None
+        if conn is None:
+            return
+        try:
+            conn.reset_input_buffer()
+        except Exception:
+            try:
+                conn.close()
+            except Exception:
+                pass
+            return
+        self.serial_conn = conn
+
+        servo_ok = {}
+        for sid, name in [(LSS_THROTTLE_ID, 'throttle'), (LSS_BRAKE_ID, 'brake')]:
+            if self._query_servo(sid):
+                self.get_logger().info(f'LSS servo {sid} ({name}): OK')
+                self._send_lss(f'#{sid}SD{LSS_SERVO_SPEED}\r')
+                servo_ok[sid] = True
             else:
-                self.get_logger().warn(f'LSS servo {servo_id} not responding')
+                self.get_logger().warn(f'LSS servo {sid} ({name}): no response')
+                servo_ok[sid] = False
 
-        if LSS_BRAKE_ID not in detected:
-            self.get_logger().error('Brake servo not detected — LSS control disabled')
-            self._lss_connected = False
+        if not servo_ok.get(LSS_THROTTLE_ID):
+            self.get_logger().error('Throttle servo not responding — LSS disabled')
             return
 
+        self._lss_ok = True
         self._send_lss(f'#{LSS_THROTTLE_ID}D{LSS_THROTTLE_NEUTRAL}\r')
         self._send_lss(f'#{LSS_BRAKE_ID}D{LSS_BRAKE_RELEASED}\r')
-        self._send_lss(f'#{LSS_GEAR_ID}D{LSS_GEAR_NEUTRAL}\r')
+        self._last_sent_throttle = None
+        self._last_sent_brake = None
 
-        self._last_throttle_lss = LSS_THROTTLE_NEUTRAL
-        self._last_brake_lss = LSS_BRAKE_RELEASED
-        self._last_gear_lss = LSS_GEAR_NEUTRAL
-
-        self._lss_connected = True
-        self.get_logger().info(f'LSS bus ready — {len(detected)}/3 servos detected')
-
-    def _query_lss_servo(self, servo_id):
+    def _query_servo(self, servo_id):
         if self.serial_conn is None:
             return False
         try:
             self.serial_conn.reset_input_buffer()
-            cmd = f'#{servo_id}QS\r'
-            self.serial_conn.write(cmd.encode('utf-8'))
+            self.serial_conn.write(f'#{servo_id}QS\r'.encode())
             self.serial_conn.flush()
             time.sleep(0.05)
             response = b''
@@ -200,29 +246,48 @@ class AckermannDriveNode(Node):
         if self.serial_conn is None:
             return
         try:
-            self.serial_conn.write(cmd.encode('utf-8'))
+            self.serial_conn.write(cmd.encode())
             self.serial_conn.flush()
+        except Exception:
+            self._lss_ok = False
+            try:
+                self.serial_conn.close()
+            except Exception:
+                pass
+            self.serial_conn = None
+
+    def _init_gear_servo(self):
+        if not JETSON_GPIO_AVAILABLE:
+            return
+        if self._gear_ok:
+            return
+        try:
+            GPIO.setmode(GPIO.BOARD)
+            GPIO.setup(GEAR_PWM_PIN, GPIO.OUT)
+            self._gear_pwm = GPIO.PWM(GEAR_PWM_PIN, GEAR_PWM_FREQ)
+            self._gear_pwm.start(GEAR_PWM[self.GEAR_NEUTRAL])
+            self._gear_ok = True
+            self.get_logger().info(f'Gear servo on pin {GEAR_PWM_PIN}: OK')
         except Exception as e:
-            self.get_logger().warn(f'LSS write error: {e}')
-            self._lss_connected = False
+            self.get_logger().warn(f'Gear servo init failed: {e}')
 
     def _init_phidgets(self):
         if not PHIDGETS_AVAILABLE:
-            self.get_logger().warn('Phidget22 library not installed, steering will not be controlled')
+            self.get_logger().warn('Phidget22 not installed — steering unavailable')
             return
         try:
             ch = MotorPositionController()
             ch.setHubPort(self.get_parameter('phidgets_hub_port').value)
             ch.setIsHubPortDevice(False)
-            ch.setOnAttachHandler(self._on_phidgets_attach)
-            ch.setOnDetachHandler(self._on_phidgets_detach)
+            ch.setOnAttachHandler(self._on_attach)
+            ch.setOnDetachHandler(self._on_detach)
             self._phidgets_controller = ch
             ch.open()
-            self.get_logger().info('Phidgets DCC1000 channel opened, waiting for attachment...')
+            self.get_logger().info('MotorPositionController channel opened, waiting for attach...')
         except PhidgetException as e:
-            self.get_logger().error(f'Phidgets open failed: {e}')
+            self.get_logger().warn(f'Phidgets init failed: {e}')
 
-    def _on_phidgets_attach(self, sender):
+    def _on_attach(self, sender):
         try:
             sender.setRescaleFactor(360.0 / (300 * 4 * 4.25))
             sender.setCurrentLimit(self.get_parameter('steering_current_limit').value)
@@ -233,47 +298,70 @@ class AckermannDriveNode(Node):
             sender.setKi(self.get_parameter('steering_ki').value)
             sender.setKd(self.get_parameter('steering_kd').value)
             sender.addPositionOffset(-sender.getPosition())
-            sender.enableFailsafe(500)
             sender.setEngaged(True)
-            with self._phidgets_lock:
-                self._phidgets_connected = True
+            try:
+                sender.enableFailsafe(500)
+            except Exception:
+                pass
+            with self._motor_lock:
+                self._motor_ok = True
                 self._phidgets_runaway_count = 0
-            self.get_logger().info('Phidgets DCC1000 attached and engaged (failsafe=500ms)')
+            self.get_logger().info('MotorPositionController attached and engaged')
         except PhidgetException as e:
-            self.get_logger().error(f'Phidgets attach configuration failed: {e}')
-            with self._phidgets_lock:
-                self._phidgets_connected = False
+            self.get_logger().error(f'MotorPositionController config failed: {e}')
 
-    def _on_phidgets_detach(self, sender):
-        with self._phidgets_lock:
-            self._phidgets_connected = False
-        self.get_logger().warn('Phidgets DCC1000 detached')
-
-    def _command_phidgets_steering(self, steering_angle):
-        with self._phidgets_lock:
-            connected = self._phidgets_connected
-        if not connected:
-            return
+    def _on_detach(self, sender):
+        with self._motor_lock:
+            self._motor_ok = False
+            self._phidgets_controller = None
         try:
-            self._phidgets_controller.resetFailsafe()
+            sender.close()
+        except Exception:
+            pass
+        self.get_logger().warn('MotorPositionController detached')
+
+    def _command_steering(self, steering_angle):
+        with self._motor_lock:
+            if not self._motor_ok or self._phidgets_controller is None:
+                return
+            ctrl = self._phidgets_controller
+        try:
             normalized = steering_angle / self.MAX_STEERING_ANGLE
             target_pos = normalized * self._motor_degrees_at_max_steer
-            self._phidgets_controller.setTargetPosition(target_pos)
-
-            duty = abs(self._phidgets_controller.getDutyCycle())
+            ctrl.setTargetPosition(target_pos)
+            ctrl.resetFailsafe()
+            duty = abs(ctrl.getDutyCycle())
             if duty > 0.95:
                 self._phidgets_runaway_count += 1
                 if self._phidgets_runaway_count > 25:
-                    self.get_logger().error('Steering motor runaway detected — disengaging')
-                    self._phidgets_controller.setEngaged(False)
-                    with self._phidgets_lock:
-                        self._phidgets_connected = False
+                    self.get_logger().error('Steering motor runaway — disengaging')
+                    ctrl.setEngaged(False)
+                    with self._motor_lock:
+                        self._motor_ok = False
             else:
                 self._phidgets_runaway_count = 0
-        except PhidgetException as e:
-            self.get_logger().error(f'Phidgets command failed: {e}')
-            with self._phidgets_lock:
-                self._phidgets_connected = False
+        except Exception:
+            pass
+
+    def _command_gear(self, gear):
+        if self._gear_pwm is not None and self._gear_ok:
+            duty = GEAR_PWM.get(gear)
+            if duty is not None:
+                self._gear_pwm.ChangeDutyCycle(duty)
+        self._current_gear = gear
+
+    def _reconnect_check(self):
+        if not self._lss_ok and self._lss_pending is None:
+            self._init_lss()
+
+        if not self._gear_ok:
+            self._init_gear_servo()
+
+        with self._motor_lock:
+            motor_ok = self._motor_ok
+        if not motor_ok and self._phidgets_controller is None:
+            if self.get_parameter('use_phidgets').value:
+                self._init_phidgets()
 
     def _process_gear(self, ramped_speed):
         if ramped_speed > 0.05:
@@ -303,32 +391,48 @@ class AckermannDriveNode(Node):
         self._command_gear(self._target_gear)
         self._gear_shift_time = now
 
-    def _command_gear(self, gear):
-        lss_pos = self.GEAR_LSS_POSITIONS[gear]
-        if lss_pos != self._last_gear_lss:
-            self._send_lss(f'#{LSS_GEAR_ID}D{lss_pos}\r')
-            self._last_gear_lss = lss_pos
-        self._current_gear = gear
-
     def cmd_vel_callback(self, msg: Twist):
+        if self._estop:
+            return
         self.linear_vel = max(-self.MAX_SPEED, min(self.MAX_SPEED, msg.linear.x))
         self.angular_vel = msg.angular.z
         self.last_cmd_time = self.get_clock().now()
 
     def _apply_acceleration_limit(self, target_speed, dt):
         speed_diff = target_speed - self.current_speed
-
         if speed_diff > 0:
             max_change = self.MAX_ACCEL * dt
         else:
             max_change = self.MAX_DECEL * dt
-
         if abs(speed_diff) > max_change:
             self.current_speed += max_change if speed_diff > 0 else -max_change
         else:
             self.current_speed = target_speed
-
         return self.current_speed
+
+    def _safe_stop(self):
+        self._estop = True
+        self.linear_vel = 0.0
+        self.angular_vel = 0.0
+        self.current_speed = 0.0
+
+        if self.hardware_mode and self._lss_ok:
+            self._send_lss(f'#{LSS_THROTTLE_ID}D{LSS_THROTTLE_NEUTRAL}\r')
+            self._send_lss(f'#{LSS_BRAKE_ID}D{LSS_BRAKE_ENGAGED}\r')
+            self._last_sent_throttle = None
+            self._last_sent_brake = None
+
+        if self.hardware_mode:
+            self._command_steering(0.0)
+            self._command_gear(self.GEAR_NEUTRAL)
+            self._gear_shift_time = time.monotonic()
+
+        self._current_gear = self.GEAR_NEUTRAL
+        self._target_gear = self.GEAR_NEUTRAL
+
+    def _signal_handler(self, _sig, _frame):
+        self._safe_stop()
+        raise SystemExit(0)
 
     def control_loop(self):
         current_time = self.get_clock().now()
@@ -336,6 +440,18 @@ class AckermannDriveNode(Node):
         self.last_time = current_time
 
         if dt <= 0 or dt > 1.0:
+            return
+
+        if self._lss_pending is not None and time.monotonic() - self._lss_open_time >= 0.5:
+            self._init_lss_finish()
+
+        if self._estop:
+            if self.hardware_mode and self._lss_ok:
+                self._send_lss(f'#{LSS_THROTTLE_ID}D{LSS_THROTTLE_NEUTRAL}\r')
+                self._send_lss(f'#{LSS_BRAKE_ID}D{LSS_BRAKE_ENGAGED}\r')
+            if self.hardware_mode:
+                self._command_steering(0.0)
+            self.update_odometry(dt, 0.0, 0.0)
             return
 
         if self.last_cmd_time is not None:
@@ -361,30 +477,38 @@ class AckermannDriveNode(Node):
 
             wheel_speed = ramped_speed / self.WHEEL_RADIUS
 
-        if self.hardware_mode and self._lss_connected:
+        if self.hardware_mode and self._lss_ok:
+            now = time.monotonic()
+            throttle_frac = _clamp(abs(ramped_speed) / self.MAX_SPEED, 0.0, 1.0)
+            thr_int = int(round(_lerp(LSS_THROTTLE_NEUTRAL, LSS_THROTTLE_MAX, throttle_frac)))
+
             if abs(ramped_speed) > 0.01:
-                throttle_deg = int(abs(ramped_speed) / self.MAX_SPEED * 75)
-                throttle_deg = max(0, min(75, throttle_deg))
-                brake_deg = 180
+                brk_int = LSS_BRAKE_RELEASED
             else:
-                throttle_deg = 0
-                brake_deg = 80
+                brk_int = LSS_BRAKE_ENGAGED
 
-            throttle_lss = (throttle_deg - 90) * 10
-            brake_lss = (brake_deg - 90) * 10
+            thr_at_neutral = (thr_int == LSS_THROTTLE_NEUTRAL)
+            thr_needs_send = (
+                self._last_sent_throttle is None
+                or abs(thr_int - self._last_sent_throttle) >= LSS_SEND_DEADBAND
+                or (thr_at_neutral and self._last_sent_throttle != LSS_THROTTLE_NEUTRAL))
+            if thr_needs_send and (now - self._last_send_time_throttle) >= LSS_SEND_MIN_INTERVAL:
+                self._send_lss(f'#{LSS_THROTTLE_ID}D{thr_int}T50\r')
+                self._last_sent_throttle = thr_int
+                self._last_send_time_throttle = now
 
-            if throttle_lss != self._last_throttle_lss:
-                self._send_lss(f'#{LSS_THROTTLE_ID}D{throttle_lss}\r')
-                self._last_throttle_lss = throttle_lss
-
-            if brake_lss != self._last_brake_lss:
-                self._send_lss(f'#{LSS_BRAKE_ID}D{brake_lss}\r')
-                self._last_brake_lss = brake_lss
+            brk_needs_send = (
+                self._last_sent_brake is None
+                or self._last_sent_brake != brk_int)
+            if brk_needs_send and (now - self._last_send_time_brake) >= LSS_SEND_MIN_INTERVAL:
+                self._send_lss(f'#{LSS_BRAKE_ID}D{brk_int}T50\r')
+                self._last_sent_brake = brk_int
+                self._last_send_time_brake = now
 
             self._process_gear(ramped_speed)
 
         if self.hardware_mode:
-            self._command_phidgets_steering(steering_angle)
+            self._command_steering(steering_angle)
 
         left_steer, right_steer = self.compute_ackermann_angles(steering_angle)
 
@@ -460,28 +584,47 @@ class AckermannDriveNode(Node):
             self.tf_broadcaster.sendTransform(t)
 
     def destroy_node(self):
+        self._safe_stop()
+
         if self.hardware_mode:
-            if self._phidgets_controller is not None:
+            if self._lss_pending is not None:
                 try:
-                    if self._phidgets_connected:
-                        self._phidgets_controller.setTargetPosition(
-                            self._phidgets_controller.getPosition())
-                        self._phidgets_controller.setEngaged(False)
-                    self._phidgets_controller.close()
-                except PhidgetException:
+                    self._lss_pending.close()
+                except Exception:
                     pass
+                self._lss_pending = None
+
             if self.serial_conn is not None:
                 try:
-                    self._send_lss(f'#{LSS_THROTTLE_ID}D{LSS_THROTTLE_NEUTRAL}\r')
-                    self._send_lss(f'#{LSS_BRAKE_ID}D{LSS_BRAKE_ENGAGED}\r')
-                    time.sleep(0.05)
                     self._send_lss(f'#{LSS_BRAKE_ID}H\r')
                     self._send_lss(f'#{LSS_THROTTLE_ID}L\r')
-                    self._send_lss(f'#{LSS_GEAR_ID}L\r')
                     time.sleep(0.05)
                     self.serial_conn.close()
                 except Exception:
                     pass
+
+            with self._motor_lock:
+                ctrl = self._phidgets_controller
+                if ctrl is not None:
+                    try:
+                        if self._motor_ok:
+                            ctrl.setTargetPosition(0.0)
+                            ctrl.setEngaged(False)
+                        self._motor_ok = False
+                        self._phidgets_controller = None
+                        ctrl.close()
+                    except Exception:
+                        pass
+
+            if self._gear_pwm is not None:
+                try:
+                    self._gear_pwm.ChangeDutyCycle(GEAR_PWM_NEUTRAL)
+                    time.sleep(0.1)
+                    self._gear_pwm.stop()
+                    GPIO.cleanup()
+                except Exception:
+                    pass
+
         super().destroy_node()
 
 
@@ -490,7 +633,7 @@ def main(args=None):
     node = AckermannDriveNode()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, SystemExit):
         pass
     finally:
         node.destroy_node()

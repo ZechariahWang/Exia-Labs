@@ -1,6 +1,8 @@
-import serial, struct, time
+#!/usr/bin/env python3
+import serial, struct, time, sys
 
-ser = serial.Serial('/dev/ttyACM0', 115200, timeout=2)
+port = sys.argv[1] if len(sys.argv) > 1 else '/dev/ttyACM0'
+ser = serial.Serial(port, 115200, timeout=2)
 ser.reset_input_buffer()
 
 buf = bytearray()

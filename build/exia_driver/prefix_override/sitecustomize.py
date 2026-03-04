@@ -1,4 +1,4 @@
 import sys
 if sys.prefix == '/usr':
     sys.real_prefix = sys.prefix
-    sys.prefix = sys.exec_prefix = '/home/exialabsargus/exia_ws/install/exia_driver'
+    sys.prefix = sys.exec_prefix = '/home/zech/exia_ws/install/exia_driver'

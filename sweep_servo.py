@@ -71,6 +71,8 @@ print(f'\n{label}')
 print('Press Enter to move to next position, q to quit\n')
 
 i = 0
+ser.write(f'#{servo_id}D{0}\r'.encode())
+ser.flush()
 while True:
     pos = positions[i % len(positions)]
     ser.write(f'#{servo_id}D{pos}\r'.encode())

@@ -630,10 +630,14 @@ class HwTeleopNode(Node):
             self._joy_active = False
 
         if msg.buttons[0]:
-            self._request_gear(0)
+            with self._gear_lock:
+                target = max(self._gear - 1, 0)
+            self._request_gear(target)
         elif msg.buttons[2]:
-            self._request_gear(2)
-        elif msg.buttons[3]: # neutral
+            with self._gear_lock:
+                target = min(self._gear + 1, 2)
+            self._request_gear(target)
+        elif msg.buttons[3]:
             self._request_gear(1)
             if self._estop:
                 self._estop = False

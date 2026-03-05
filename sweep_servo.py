@@ -47,27 +47,10 @@ servo_id, positions, label = PRESETS[name]
 ser = serial.Serial(PORT, BAUD, timeout=0.1)
 time.sleep(0.5)
 ser.reset_input_buffer()
-
-print(f'Verifying servo ID {servo_id} on {PORT}...')
-ser.write(f'#{servo_id}QID\r'.encode())
-ser.flush()
-time.sleep(0.2)
-resp = b''
-while ser.in_waiting:
-    resp += ser.read(ser.in_waiting)
-    time.sleep(0.01)
-resp_str = resp.decode(errors='ignore').strip()
-if f'*{servo_id}' not in resp_str:
-    print(f'No response from servo ID {servo_id} (got: "{resp_str}")')
-    print('Check wiring and that the servo has the correct ID assigned.')
-    ser.close()
-    sys.exit(1)
-print(f'Servo ID {servo_id} responded: {resp_str}')
-
 ser.write(f'#{servo_id}SD600\r'.encode())
 ser.flush()
 
-print(f'\n{label}')
+print(f'{label}')
 print('Press Enter to move to next position, q to quit\n')
 
 i = 0

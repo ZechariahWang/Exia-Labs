@@ -1,4 +1,25 @@
 #!/usr/bin/env python3
+#
+# Assign a new ID to an LSS servo.
+# Used during initial setup to give each servo its expected ID
+# (1=throttle, 2=brake, 3=gear).
+#
+# Usage:
+#   python3 assign_servo_id.py <new_id> [port] [current_id]
+#
+# Arguments:
+#   new_id      - ID to assign (required): 1=throttle, 2=brake, 3=gear
+#   port        - serial port (default: /dev/lss_controller)
+#   current_id  - servo's current ID (default: 0, factory default)
+#
+# Examples:
+#   python3 assign_servo_id.py 1                              # assign ID 1 (throttle)
+#   python3 assign_servo_id.py 2 /dev/ttyUSB0                 # assign ID 2 on ttyUSB0
+#   python3 assign_servo_id.py 3 /dev/lss_controller 254      # reassign from ID 254 to 3
+#
+# Tip: connect only ONE servo at a time when assigning from the factory default ID (0).
+#
+# Requires: pyserial (pip install pyserial)
 import serial
 import time
 import sys

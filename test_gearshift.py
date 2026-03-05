@@ -1,4 +1,26 @@
 #!/usr/bin/env python3
+#
+# Test and tune the gear shift servo via Jetson GPIO PWM.
+# Interactive tool for finding the correct duty cycle for each gear position.
+#
+# Usage:
+#   python3 test_gearshift.py [pin]
+#
+# Arguments:
+#   pin  - Jetson BOARD pin number (default: 32)
+#
+# Interactive commands:
+#   <number>   - set duty cycle directly (e.g. 6.94)
+#   r          - go to reverse duty (default 5.67%)
+#   n          - go to neutral duty (default 6.94%)
+#   h          - go to high gear duty (default 8.61%)
+#   r=<val>    - update reverse preset (e.g. r=5.5)
+#   n=<val>    - update neutral preset
+#   h=<val>    - update high preset
+#   sweep      - sweep from 5.0% to 10.0% in 0.25% steps (1s each)
+#   q          - quit (returns to neutral before exiting)
+#
+# Requires: Jetson.GPIO (run on Jetson only)
 
 import sys
 import time

@@ -1,4 +1,20 @@
 #!/usr/bin/env python3
+#
+# Test Phidgets steering motor (MotorPositionController via DCC1000 + HKT22 encoder).
+# Moves the motor to +degrees, -degrees, then back to center.
+#
+# Usage:
+#   python3 test_phidgets.py [hub_port] [degrees]
+#
+# Arguments:
+#   hub_port  - VINT Hub port number (default: 0)
+#   degrees   - target position in degrees for left/right sweep (default: 500.0)
+#
+# Examples:
+#   python3 test_phidgets.py           # port 0, sweep +/-500 deg
+#   python3 test_phidgets.py 1 2160    # port 1, sweep +/-2160 deg (full lock)
+#
+# Requires: Phidget22 library (pip install Phidget22)
 
 import sys
 import time

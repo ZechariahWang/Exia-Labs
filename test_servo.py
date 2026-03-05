@@ -1,4 +1,23 @@
 #!/usr/bin/env python3
+#
+# Test an LSS (Lynxmotion Smart Servo) over serial.
+# Queries servo info, runs a position sweep, then enters interactive mode.
+#
+# Usage:
+#   python3 test_servo.py [port] [servo_id]
+#
+# Arguments:
+#   port      - serial port (default: /dev/ttyUSB0)
+#   servo_id  - LSS servo ID to test (default: 1)
+#
+# Examples:
+#   python3 test_servo.py                          # /dev/ttyUSB0, ID 1
+#   python3 test_servo.py /dev/lss_controller 2    # brake servo (ID 2)
+#
+# Interactive mode accepts degrees (e.g. "45") or tenths with 't' suffix (e.g. "900t").
+# Type 'q' to quit.
+#
+# Requires: pyserial (pip install pyserial)
 import serial
 import time
 import sys

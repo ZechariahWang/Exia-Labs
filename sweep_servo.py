@@ -1,4 +1,26 @@
 #!/usr/bin/env python3
+#
+# Sweep an LSS servo through its preset positions (throttle, brake, or gear).
+# Steps through each position on Enter, useful for verifying range of motion.
+#
+# Usage:
+#   python3 sweep_servo.py <throttle|brake|gear> [port]
+#
+# Arguments:
+#   preset  - which servo to sweep (required):
+#               throttle (ID 1): neutral(5) <-> max(550)
+#               brake    (ID 2): released(900) <-> engaged(-100)
+#               gear     (ID 3): reverse(-330) <-> neutral(-100) <-> high(200)
+#   port    - serial port (default: /dev/lss_controller)
+#
+# Examples:
+#   python3 sweep_servo.py throttle
+#   python3 sweep_servo.py brake /dev/ttyUSB0
+#
+# Press Enter to cycle to next position, 'q' to quit.
+# On exit the servo is sent the limp command (L).
+#
+# Requires: pyserial (pip install pyserial)
 import serial
 import time
 import sys
@@ -32,6 +54,8 @@ print(f'{label}')
 print('Press Enter to move to next position, q to quit\n')
 
 i = 0
+ser.write(f'#{servo_id}D{0}\r'.encode())
+ser.flush()
 while True:
     pos = positions[i % len(positions)]
     ser.write(f'#{servo_id}D{pos}\r'.encode())

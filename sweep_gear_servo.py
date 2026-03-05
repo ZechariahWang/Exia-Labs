@@ -1,4 +1,24 @@
 #!/usr/bin/env python3
+#
+# Interactively sweep the gear shift servo via Jetson GPIO PWM.
+# Lets you enter arbitrary duty cycle percentages or use preset shortcuts.
+#
+# Usage:
+#   python3 sweep_gear_servo.py [pin]
+#
+# Arguments:
+#   pin  - Jetson BOARD pin number (default: 32)
+#
+# Interactive commands:
+#   <number>  - set duty cycle directly (e.g. 7.5)
+#   r         - reverse preset (5.67%)
+#   n         - neutral preset (6.94%)
+#   h         - high gear preset (8.61%)
+#   q         - quit
+#
+# Safe range is 2-13%. Values outside this range are rejected.
+#
+# Requires: Jetson.GPIO (run on Jetson only)
 import sys
 import time
 

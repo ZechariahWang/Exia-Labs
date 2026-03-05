@@ -1,4 +1,20 @@
 #!/usr/bin/env python3
+#
+# Query all LSS servos on the bus to discover their IDs.
+# Scans IDs 0, 1, 2, 3, and 254 (broadcast) and prints any responses.
+#
+# Usage:
+#   python3 query_servo.py [port]
+#
+# Arguments:
+#   port  - serial port (default: /dev/lss_controller)
+#
+# Examples:
+#   python3 query_servo.py
+#   python3 query_servo.py /dev/ttyUSB0
+#
+# Requires: pyserial (pip install pyserial)
+
 import serial
 import time
 import sys

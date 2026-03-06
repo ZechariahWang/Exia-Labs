@@ -484,8 +484,8 @@ class HwTeleopNode(Node):
             ch.openWaitForAttachment(5000)
             ch.setRescaleFactor(360.0 / (300 * 4 * 4.25))
             ch.setCurrentLimit(self.get_parameter('steering_current_limit').value)
-            ch.setVelocityLimit(100000.0)
-            ch.setAcceleration(100000.0)
+            ch.setVelocityLimit(17647.0)
+            ch.setAcceleration(17647.0)
             ch.setDeadBand(0.0)
             ch.setKp(self.get_parameter('steering_kp').value)
             ch.setKi(self.get_parameter('steering_ki').value)
@@ -610,12 +610,7 @@ class HwTeleopNode(Node):
 
         self._joy_throttle = _clamp((1.0 - r2) / 2.0, 0.0, 1.0)
         self._joy_brake = _clamp((1.0 - l2) / 2.0, 0.0, 1.0)
-        dead_zone = 0.1
-        if abs(right_x) < dead_zone:
-            self._joy_steer = 0.0
-        else:
-            sign = 1.0 if right_x > 0 else -1.0
-            self._joy_steer = sign * (abs(right_x) - dead_zone) / (1.0 - dead_zone)
+        self._joy_steer = _clamp(right_x, -1.0, 1.0)
 
         if left_y > 0.15:
             self._joy_throttle = _clamp(left_y, 0.0, 1.0)

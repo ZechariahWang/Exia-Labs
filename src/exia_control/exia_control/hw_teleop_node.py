@@ -176,6 +176,7 @@ class HwTeleopNode(Node):
 
         self._throttle_f = SmoothFilter(LSS_THROTTLE_NEUTRAL, tau=0.04)
         self._brake_f = SmoothFilter(LSS_BRAKE_RELEASED, tau=0.03)
+        self._steer_f = SmoothFilter(0.0, tau=0.08)
 
         self._gear = 1
         self._gear_lock = threading.Lock()
@@ -612,14 +613,8 @@ class HwTeleopNode(Node):
         elif left_y < -0.15:
             self._joy_brake = _clamp(-left_y, 0.0, 1.0)
 
-        has_input = (self._joy_throttle > 0.02
-                     or self._joy_brake > 0.02
-                     or abs(self._joy_steer) > 0.02)
-        if has_input:
-            self._joy_active = True
-            self._joy_last_time = time.monotonic()
-        else:
-            self._joy_active = False
+        self._joy_active = True
+        self._joy_last_time = time.monotonic()
 
         if msg.buttons[0]:
             with self._gear_lock:
@@ -726,7 +721,8 @@ class HwTeleopNode(Node):
         thr_val = self._throttle_f.update(thr_target, dt)
         brk_val = self._brake_f.update(brk_target, dt)
 
-        self._set_steering_position(self._steer_ramp)
+        steer_smooth = self._steer_f.update(self._steer_ramp, dt)
+        self._set_steering_position(steer_smooth)
 
         thr_int = int(round(thr_val))
         thr_at_neutral = (thr_int == LSS_THROTTLE_NEUTRAL)
@@ -771,6 +767,7 @@ class HwTeleopNode(Node):
         else:
             self._throttle_f.snap(LSS_THROTTLE_NEUTRAL)
             self._brake_f.snap(LSS_BRAKE_ENGAGED)
+            self._steer_f.snap(0.0)
             self._last_sent_throttle = None
             self._last_sent_brake = None
             self._send_lss(f'#{LSS_THROTTLE_ID}D{LSS_THROTTLE_NEUTRAL}\r')

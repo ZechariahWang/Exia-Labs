@@ -19,6 +19,11 @@ WS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-0}"
 
+WIFI_IFACE=$(ip -o -4 addr show | grep "192.168" | awk '{print $2}' | head -1)
+if [ -z "$WIFI_IFACE" ]; then
+    WIFI_IFACE=$(ip -o -4 addr show | grep -v "127.0.0" | grep -v "docker" | awk '{print $2}' | head -1)
+fi
+
 CYCLONE_CFG=$(mktemp /tmp/cyclonedds_${ROLE}_XXXXXX.xml)
 cat > "$CYCLONE_CFG" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -26,7 +31,7 @@ cat > "$CYCLONE_CFG" <<EOF
   <Domain>
     <General>
       <Interfaces>
-        <NetworkInterface autodetermine="true" priority="default"/>
+        <NetworkInterface name="${WIFI_IFACE}" priority="default"/>
       </Interfaces>
       <AllowMulticast>false</AllowMulticast>
     </General>

@@ -16,7 +16,7 @@ def generate_launch_description():
         description='Bridge role: base or robot')
 
     peer_ip_arg = DeclareLaunchArgument(
-        'peer_ip', default_value='192.168.100.168',
+        'peer_ip', default_value='192.168.1.122',
         description='IP address of the peer machine')
 
     wifi_bridge_node = Node(

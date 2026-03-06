@@ -177,7 +177,6 @@ class HwTeleopNode(Node):
         self._throttle_f = SmoothFilter(LSS_THROTTLE_NEUTRAL, tau=0.04)
         self._brake_f = SmoothFilter(LSS_BRAKE_RELEASED, tau=0.03)
         self._steer_smooth = 0.0
-        self._steer_max_rate = 2.0
 
         self._gear = 1
         self._gear_lock = threading.Lock()
@@ -511,6 +510,10 @@ class HwTeleopNode(Node):
             try:
                 target = normalized * self._motor_degrees_at_max_steer
                 ctrl.setTargetPosition(target)
+                actual = ctrl.getPosition()
+                if abs(normalized) > 0.05:
+                    self.get_logger().info(
+                        f'STEER norm={normalized:.3f} target={target:.0f} actual={actual:.0f}')
             except Exception as e:
                 self.get_logger().warn(f'Steering set position failed: {e}')
 
@@ -727,15 +730,7 @@ class HwTeleopNode(Node):
         thr_val = self._throttle_f.update(thr_target, dt)
         brk_val = self._brake_f.update(brk_target, dt)
 
-        diff = self._steer_ramp - self._steer_smooth
-        max_step = self._steer_max_rate * dt
-        if abs(diff) <= max_step:
-            self._steer_smooth = self._steer_ramp
-        elif diff > 0:
-            self._steer_smooth += max_step
-        else:
-            self._steer_smooth -= max_step
-        self._set_steering_position(self._steer_smooth)
+        self._set_steering_position(self._steer_ramp)
 
         thr_int = int(round(thr_val))
         thr_at_neutral = (thr_int == LSS_THROTTLE_NEUTRAL)

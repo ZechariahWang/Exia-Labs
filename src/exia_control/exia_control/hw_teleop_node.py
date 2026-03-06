@@ -13,7 +13,8 @@ import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import NavSatFix, Imu, Joy
-from std_msgs.msg import Int32, UInt32
+from std_msgs.msg import Int32, UInt32, Float64MultiArray
+from std_srvs.srv import Trigger
 
 # curl -fsSL  https://www.phidgets.com/downloads/setup_linux | sudo bash
 # sudo apt install -y libphidget22 libphidget22-dev
@@ -62,7 +63,7 @@ GEAR_PWM_HIGH                        = 8.61
 GEAR_PWM                             = {0: GEAR_PWM_REVERSE, 1: GEAR_PWM_NEUTRAL, 2: GEAR_PWM_HIGH}
 
 SPRING_RATE                          = 4.0
-STEER_SPRING_RATE                    = 5.0
+STEER_SMOOTH_TAU                     = 0.06
 
 CMD_VEL_MAX_SPEED                    = 5.0
 CMD_VEL_MAX_REVERSE                  = 0.5
@@ -75,6 +76,8 @@ LSS_SERVO_SPEED                      = 600
 
 DEFAULT_SERIAL_PORT                  = '/dev/lss_controller'
 DEFAULT_SERIAL_BAUD                  = 115200
+DEFAULT_GEAR_SERIAL_PORT             = '/dev/arduino_control'
+DEFAULT_GEAR_SERIAL_BAUD             = 115200
 DEFAULT_PHIDGETS_HUB_PORT            = 3
 DEFAULT_MOTOR_DEGREES_AT_MAX_STEER   = 20000.0
 DEFAULT_STEERING_KP                  = 400.0
@@ -84,6 +87,8 @@ DEFAULT_STEERING_VELOCITY_LIMIT      = 10000.0
 DEFAULT_STEERING_ACCELERATION        = 50000.0
 DEFAULT_STEERING_DEAD_BAND           = 2.0
 DEFAULT_STEERING_CURRENT_LIMIT       = 20
+STEER_MAX_CONSECUTIVE_FAILURES       = 10
+
 DEFAULT_REMOTE_MODE                  = False
 DEFAULT_LAUNCH_SENSORS               = True
 DEFAULT_GUI                          = False
@@ -140,10 +145,8 @@ class HwTeleopNode(Node):
         self.declare_parameter('launch_sensors', DEFAULT_LAUNCH_SENSORS)
         self.declare_parameter('gui', DEFAULT_GUI)
         self.declare_parameter('blue', DEFAULT_BLUE)
-        self.declare_parameter('gear_pwm_pin', GEAR_PWM_PIN)
-        self.declare_parameter('gear_pwm_reverse', GEAR_PWM_REVERSE)
-        self.declare_parameter('gear_pwm_neutral', GEAR_PWM_NEUTRAL)
-        self.declare_parameter('gear_pwm_high', GEAR_PWM_HIGH)
+        self.declare_parameter('gear_serial_port', DEFAULT_GEAR_SERIAL_PORT)
+        self.declare_parameter('gear_serial_baud', DEFAULT_GEAR_SERIAL_BAUD)
         self.declare_parameter('heartbeat_rate', DEFAULT_HEARTBEAT_RATE)
         self.declare_parameter('heartbeat_timeout', DEFAULT_HEARTBEAT_TIMEOUT)
         self.declare_parameter('heartbeat_enabled', DEFAULT_HEARTBEAT_ENABLED)
@@ -151,17 +154,11 @@ class HwTeleopNode(Node):
         self._remote_mode = self.get_parameter('remote_mode').value
         self._launch_sensors = self.get_parameter('launch_sensors').value
 
-        self._gear_pwm_map = {
-            0: self.get_parameter('gear_pwm_reverse').value,
-            1: self.get_parameter('gear_pwm_neutral').value,
-            2: self.get_parameter('gear_pwm_high').value,
-        }
-
         self.serial_conn = None
         self._lss_ok = False
         self._lss_pending = None
         self._lss_open_time = 0.0
-        self._gear_pwm = None
+        self._gear_serial = None
         self._gear_ok = False
 
         self._phidgets_controller = None
@@ -170,13 +167,19 @@ class HwTeleopNode(Node):
         self._motor_degrees_at_max_steer = self.get_parameter('motor_degrees_at_max_steer').value
         self._phidgets_runaway_count = 0
 
+        self._steer_debug_pub = self.create_publisher(
+            Float64MultiArray, '/steering/debug', 10)
+        self._steer_debug_seq = 0
+        self._steer_last_error = 0.0
+        self._steer_last_velocity = 0.0
+
         self._throttle_ramp = 0.0
         self._brake_ramp = 0.0
         self._steer_ramp = 0.0
 
         self._throttle_f = SmoothFilter(LSS_THROTTLE_NEUTRAL, tau=0.04)
         self._brake_f = SmoothFilter(LSS_BRAKE_RELEASED, tau=0.03)
-        self._steer_smooth = 0.0
+        self._steer_f = SmoothFilter(0.0, tau=STEER_SMOOTH_TAU)
 
         self._gear = 1
         self._gear_lock = threading.Lock()
@@ -234,7 +237,10 @@ class HwTeleopNode(Node):
         self._joy_brake = 0.0
         self._joy_steer = 0.0
         self._joy_active = False
-        self._joy_last_time = 0.0
+        self._joy_last_time = time.monotonic()
+        self._joy_timeout_warned = False
+
+        self.create_service(Trigger, '/estop_clear', self._estop_clear_cb)
 
         # init all publishers, subscribers and drivers
         if self._remote_mode:
@@ -258,7 +264,7 @@ class HwTeleopNode(Node):
                 self._init_robot_state_publisher()
             self._init_lss()
             self._init_phidgets()
-            self._init_gear_servo()
+            self._init_gear_serial()
             self.create_subscription(NavSatFix, '/navsatfix', self._gps_cb, 10)
             self.create_subscription(Imu, '/imu/data', self._imu_cb, 10)
             self.create_subscription(Twist, '/radio/teleop', self._remote_teleop_cb, 10)
@@ -471,7 +477,6 @@ class HwTeleopNode(Node):
                 pass
             self.serial_conn = None
 
-    # for steering motor 
     def _init_phidgets(self):
         if not PHIDGETS_AVAILABLE:
             self.get_logger().warn('Phidget22 not installed — steering unavailable')
@@ -480,61 +485,143 @@ class HwTeleopNode(Node):
             ch = MotorPositionController()
             ch.setHubPort(self.get_parameter('phidgets_hub_port').value)
             ch.setIsHubPortDevice(False)
-            self.get_logger().info('MotorPositionController channel opened, waiting for attach...')
-            ch.openWaitForAttachment(5000)
-            ch.setRescaleFactor(360.0 / (300 * 4 * 4.25))
-            ch.setCurrentLimit(self.get_parameter('steering_current_limit').value)
-            ch.setCurrentRegulatorGain(self.get_parameter('steering_current_limit').value)
-            ch.setVelocityLimit(17647.0)
-            ch.setAcceleration(17647.0)
-            ch.setDeadBand(0.0)
-            ch.setKp(self.get_parameter('steering_kp').value)
-            ch.setKi(self.get_parameter('steering_ki').value)
-            ch.setKd(self.get_parameter('steering_kd').value)
-            ch.addPositionOffset(-ch.getPosition())
-            ch.setEngaged(True)
+            ch.setOnAttachHandler(self._on_motor_attach)
+            ch.setOnDetachHandler(self._on_motor_detach)
             self._phidgets_controller = ch
+            ch.open()
+            self.get_logger().info('MotorPositionController channel opened, waiting for attach...')
+        except PhidgetException as e:
+            self.get_logger().warn(f'[STEER_DBG] Phidgets init FAILED: {e}')
+
+    def _on_motor_attach(self, sender):
+        try:
+            sender.setRescaleFactor(360.0 / (300 * 4 * 4.25))
+            sender.setCurrentLimit(self.get_parameter('steering_current_limit').value)
+            sender.setVelocityLimit(self.get_parameter('steering_velocity_limit').value)
+            sender.setAcceleration(self.get_parameter('steering_acceleration').value)
+            sender.setDeadBand(self.get_parameter('steering_dead_band').value)
+            sender.setKp(self.get_parameter('steering_kp').value)
+            sender.setKi(self.get_parameter('steering_ki').value)
+            sender.setKd(self.get_parameter('steering_kd').value)
+            sender.addPositionOffset(-sender.getPosition())
+            sender.setEngaged(True)
+            try:
+                sender.enableFailsafe(500)
+            except Exception:
+                pass
             with self._motor_lock:
                 self._motor_ok = True
                 self._phidgets_runaway_count = 0
             self.get_logger().info(
-                f'MotorPositionController attached (max_degrees={self._motor_degrees_at_max_steer}, '
-                f'current_limit={self.get_parameter("steering_current_limit").value}A)')
+                f'[STEER_DBG] ATTACHED hub_port={self.get_parameter("phidgets_hub_port").value} '
+                f'max_deg={self._motor_degrees_at_max_steer} '
+                f'kp={self.get_parameter("steering_kp").value} '
+                f'ki={self.get_parameter("steering_ki").value} '
+                f'kd={self.get_parameter("steering_kd").value} '
+                f'vel_limit={sender.getVelocityLimit()} '
+                f'accel={sender.getAcceleration()} '
+                f'dead_band={sender.getDeadBand()} '
+                f'current_limit={self.get_parameter("steering_current_limit").value}A '
+                f'init_pos={sender.getPosition():+.1f} init_duty={sender.getDutyCycle():+.3f}')
         except PhidgetException as e:
-            self.get_logger().warn(f'Phidgets init failed: {e}')
+            self.get_logger().error(f'MotorPositionController config failed: {e}')
+            try:
+                sender.close()
+            except Exception:
+                pass
+            with self._motor_lock:
+                self._motor_ok = False
+                self._phidgets_controller = None
+
+    def _on_motor_detach(self, sender):
+        with self._motor_lock:
+            self._motor_ok = False
+            self._phidgets_controller = None
+        try:
+            sender.close()
+        except Exception:
+            pass
+        self.get_logger().warn('MotorPositionController detached')
 
     def _set_steering_position(self, normalized):
         with self._motor_lock:
             if not self._motor_ok or self._phidgets_controller is None:
+                if not self._motor_ok:
+                    self.get_logger().debug(
+                        f'[STEER_DBG] skipped: motor_ok=False norm={normalized:.4f}')
                 return
             ctrl = self._phidgets_controller
             try:
-                target = normalized * self._motor_degrees_at_max_steer
-                ctrl.setTargetPosition(target)
-                actual = ctrl.getPosition()
-                if abs(normalized) > 0.05:
-                    self.get_logger().info(
-                        f'STEER norm={normalized:.3f} target={target:.0f} actual={actual:.0f}')
-            except Exception as e:
-                self.get_logger().warn(f'Steering set position failed: {e}')
+                target_deg = normalized * self._motor_degrees_at_max_steer
+                ctrl.setTargetPosition(target_deg)
+                try:
+                    ctrl.resetFailsafe()
+                except Exception:
+                    pass
 
-    def _init_gear_servo(self):
-        if not JETSON_GPIO_AVAILABLE:
-            return
+                actual_deg = ctrl.getPosition()
+                error_deg = target_deg - actual_deg
+                duty_cycle = ctrl.getDutyCycle()
+
+                try:
+                    velocity = ctrl.getVelocity()
+                except Exception:
+                    velocity = self._steer_last_velocity
+
+                self._steer_last_error = error_deg
+                self._steer_last_velocity = velocity
+                self._phidgets_runaway_count = 0
+                self._steer_debug_seq += 1
+
+                if self._steer_debug_seq % 50 == 0:
+                    self.get_logger().info(
+                        f'[STEER_DBG] seq={self._steer_debug_seq} '
+                        f'joy_norm={normalized:+.4f} '
+                        f'target_deg={target_deg:+.1f} '
+                        f'actual_deg={actual_deg:+.1f} '
+                        f'error_deg={error_deg:+.1f} '
+                        f'duty={duty_cycle:+.3f} '
+                        f'vel={velocity:+.1f} '
+                        f'max_deg={self._motor_degrees_at_max_steer:.0f}')
+
+                debug_msg = Float64MultiArray()
+                debug_msg.data = [
+                    float(self._steer_debug_seq),
+                    normalized,
+                    target_deg,
+                    actual_deg,
+                    error_deg,
+                    duty_cycle,
+                    velocity,
+                    self._motor_degrees_at_max_steer,
+                ]
+                self._steer_debug_pub.publish(debug_msg)
+
+            except Exception as e:
+                self._phidgets_runaway_count += 1
+                self.get_logger().warn(
+                    f'[STEER_DBG] FAILED ({self._phidgets_runaway_count}/{STEER_MAX_CONSECUTIVE_FAILURES}): '
+                    f'norm={normalized:+.4f} err={e}')
+                if self._phidgets_runaway_count >= STEER_MAX_CONSECUTIVE_FAILURES:
+                    self.get_logger().error(
+                        '[STEER_DBG] Too many consecutive failures — disabling motor')
+                    self._motor_ok = False
+
+    def _init_gear_serial(self):
         if self._gear_ok:
             return
         try:
-            pin = self.get_parameter('gear_pwm_pin').value
-            GPIO.setmode(GPIO.BOARD)
-            GPIO.setup(pin, GPIO.OUT)
-            self._gear_pwm = GPIO.PWM(pin, GEAR_PWM_FREQ)
-            self._gear_pwm.start(self._gear_pwm_map[1])
+            import serial
+            port = self.get_parameter('gear_serial_port').value
+            baud = self.get_parameter('gear_serial_baud').value
+            self._gear_serial = serial.Serial(port=port, baudrate=baud, timeout=0.1)
+            time.sleep(0.5)
+            self._gear_serial.reset_input_buffer()
             self._gear_ok = True
-            self.get_logger().info(
-                f'Gear servo on pin {pin}: OK '
-                f'(R={self._gear_pwm_map[0]}% N={self._gear_pwm_map[1]}% H={self._gear_pwm_map[2]}%)')
+            self.get_logger().info(f'Gear Arduino connected on {port}')
         except Exception as e:
-            self.get_logger().warn(f'Gear servo init failed: {e}')
+            self._gear_serial = None
+            self.get_logger().warn(f'Gear Arduino init failed: {e}')
 
     def _reconnect_check(self):
         if not self._lss_ok and self._lss_pending is None:
@@ -543,13 +630,14 @@ class HwTeleopNode(Node):
                 self.get_logger().info('LSS reconnected')
 
         if not self._gear_ok:
-            self._init_gear_servo()
+            self._init_gear_serial()
             if self._gear_ok:
-                self.get_logger().info('Gear servo reconnected')
+                self.get_logger().info('Gear Arduino reconnected')
 
         with self._motor_lock:
             motor_ok = self._motor_ok
-        if not motor_ok and self._phidgets_controller is None:
+            ctrl = self._phidgets_controller
+        if not motor_ok and ctrl is None:
             self._init_phidgets()
 
     def _request_gear(self, target, force=False):
@@ -559,8 +647,6 @@ class HwTeleopNode(Node):
             now = time.monotonic()
             if not force:
                 if now - self._last_gear_shift_time < 0.3:
-                    return
-                if target != 1 and (self._throttle_ramp > 0.05 or self._brake_ramp < 0.3):
                     return
             if self._gear == 0 and target == 2:
                 return
@@ -576,10 +662,17 @@ class HwTeleopNode(Node):
             gear_msg.data = gear_index
             self._gear_pub.publish(gear_msg)
             return
-        if self._gear_pwm is not None and self._gear_ok:
-            duty = self._gear_pwm_map.get(gear_index)
-            if duty is not None:
-                self._gear_pwm.ChangeDutyCycle(duty)
+        if self._gear_serial is not None and self._gear_ok:
+            try:
+                self._gear_serial.write(f'K{gear_index}\n'.encode())
+                self._gear_serial.flush()
+            except Exception:
+                self._gear_ok = False
+                try:
+                    self._gear_serial.close()
+                except Exception:
+                    pass
+                self._gear_serial = None
 
     def _gps_cb(self, msg):
         if math.isfinite(msg.latitude) and math.isfinite(msg.longitude):
@@ -618,8 +711,16 @@ class HwTeleopNode(Node):
         elif left_y < -0.15:
             self._joy_brake = _clamp(-left_y, 0.0, 1.0)
 
-        self._joy_active = True
+        _INPUT_DEADZONE = 0.15
+        if (self._joy_throttle < _INPUT_DEADZONE
+                and self._joy_brake < _INPUT_DEADZONE
+                and abs(self._joy_steer) < _INPUT_DEADZONE):
+            self._joy_active = False
+        else:
+            self._joy_active = True
+
         self._joy_last_time = time.monotonic()
+        self._joy_timeout_warned = False
 
         if msg.buttons[0]:
             with self._gear_lock:
@@ -695,6 +796,11 @@ class HwTeleopNode(Node):
         remote_active = (not self._remote_mode) and (now - self._remote_last_time) < 0.3
         joy_active = self._joy_active or (now - self._joy_last_time) < 0.3
 
+        if (not joy_active and not self._joy_timeout_warned
+                and (now - self._joy_last_time) > 5.0):
+            self.get_logger().warn('No /joy messages received — is the joystick connected?')
+            self._joy_timeout_warned = True
+
         if joy_active and not remote_active:
             self._throttle_ramp = self._joy_throttle
             self._brake_ramp = self._joy_brake
@@ -702,12 +808,7 @@ class HwTeleopNode(Node):
         elif not remote_active:
             self._throttle_ramp = _clamp(self._throttle_ramp - SPRING_RATE * dt, 0.0, 1.0)
             self._brake_ramp = _clamp(self._brake_ramp - SPRING_RATE * dt, 0.0, 1.0)
-            if self._steer_ramp > 0.0:
-                self._steer_ramp = _clamp(
-                    self._steer_ramp - STEER_SPRING_RATE * dt, 0.0, 1.0)
-            elif self._steer_ramp < 0.0:
-                self._steer_ramp = _clamp(
-                    self._steer_ramp + STEER_SPRING_RATE * dt, -1.0, 0.0)
+            self._steer_ramp = 0.0
 
         self._publish_cmd_vel()
 
@@ -726,7 +827,8 @@ class HwTeleopNode(Node):
         thr_val = self._throttle_f.update(thr_target, dt)
         brk_val = self._brake_f.update(brk_target, dt)
 
-        self._set_steering_position(self._steer_ramp)
+        steer_smoothed = self._steer_f.update(self._steer_ramp, dt)
+        self._set_steering_position(steer_smoothed)
 
         thr_int = int(round(thr_val))
         thr_at_neutral = (thr_int == LSS_THROTTLE_NEUTRAL)
@@ -771,13 +873,19 @@ class HwTeleopNode(Node):
         else:
             self._throttle_f.snap(LSS_THROTTLE_NEUTRAL)
             self._brake_f.snap(LSS_BRAKE_ENGAGED)
-            self._steer_smooth = 0.0
+            self._steer_f.snap(0.0)
             self._last_sent_throttle = None
             self._last_sent_brake = None
             self._send_lss(f'#{LSS_THROTTLE_ID}D{LSS_THROTTLE_NEUTRAL}\r')
             self._send_lss(f'#{LSS_BRAKE_ID}D{LSS_BRAKE_ENGAGED}\r')
             self._set_steering_position(0.0)
         self._print_hud()
+
+    def _estop_clear_cb(self, request, response):
+        self._estop = False
+        response.success = True
+        response.message = 'E-stop cleared'
+        return response
 
     def _hb_send(self):
         self._hb_seq += 1
@@ -911,21 +1019,28 @@ class HwTeleopNode(Node):
 
             with self._motor_lock:
                 ctrl = self._phidgets_controller
-                if ctrl is not None:
-                    try:
-                        if self._motor_ok:
-                            ctrl.setTargetPosition(0.0)
-                            ctrl.setEngaged(False)
-                        self._motor_ok = False
-                        self._phidgets_controller = None
-                        ctrl.close()
-                    except Exception:
-                        pass
-
-            if self._gear_pwm is not None:
+                self._phidgets_controller = None
+                was_ok = self._motor_ok
+                self._motor_ok = False
+            if ctrl is not None:
                 try:
-                    self._gear_pwm.stop()
-                    GPIO.cleanup()
+                    final_pos = ctrl.getPosition() if was_ok else float('nan')
+                    self.get_logger().info(
+                        f'[STEER_DBG] SHUTDOWN final_pos={final_pos:+.1f} '
+                        f'total_cmds={self._steer_debug_seq}')
+                    if was_ok:
+                        ctrl.setTargetPosition(0.0)
+                        ctrl.setEngaged(False)
+                    ctrl.close()
+                except Exception as e:
+                    self.get_logger().warn(f'[STEER_DBG] shutdown error: {e}')
+
+            if self._gear_serial is not None:
+                try:
+                    self._gear_serial.write(b'K1\n')
+                    self._gear_serial.flush()
+                    time.sleep(0.05)
+                    self._gear_serial.close()
                 except Exception:
                     pass
 

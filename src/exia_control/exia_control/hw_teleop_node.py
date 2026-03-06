@@ -45,8 +45,8 @@ except ImportError:
     BLUE_AVAILABLE = False
 
 # Need to assign manually using scripts
-LSS_THROTTLE_ID                      = 0
-LSS_BRAKE_ID                         = 1
+LSS_THROTTLE_ID                      = 1
+LSS_BRAKE_ID                         = 0
 
 LSS_THROTTLE_NEUTRAL                 = 0
 LSS_THROTTLE_MAX                     = 330

@@ -45,13 +45,13 @@ except ImportError:
     BLUE_AVAILABLE = False
 
 # Need to assign manually using scripts
-LSS_THROTTLE_ID                      = 1 
-LSS_BRAKE_ID                         = 2
+LSS_THROTTLE_ID                      = 0
+LSS_BRAKE_ID                         = 1
 
-LSS_THROTTLE_NEUTRAL                 = 5
-LSS_THROTTLE_MAX                     = 550
-LSS_BRAKE_RELEASED                   = 0
-LSS_BRAKE_ENGAGED                    = -100
+LSS_THROTTLE_NEUTRAL                 = 0
+LSS_THROTTLE_MAX                     = 330
+LSS_BRAKE_RELEASED                   = -100
+LSS_BRAKE_ENGAGED                    = -160
 
 GEAR_NAMES                           = {0: 'R', 1: 'N', 2: 'H'}
 GEAR_PWM_PIN                         = 32
@@ -76,7 +76,7 @@ LSS_SERVO_SPEED                      = 600
 DEFAULT_SERIAL_PORT                  = '/dev/lss_controller'
 DEFAULT_SERIAL_BAUD                  = 115200
 DEFAULT_PHIDGETS_HUB_PORT            = 0
-DEFAULT_MOTOR_DEGREES_AT_MAX_STEER   = 2160.0
+DEFAULT_MOTOR_DEGREES_AT_MAX_STEER   = 1000.0
 DEFAULT_STEERING_KP                  = 400.0
 DEFAULT_STEERING_KI                  = 0.0
 DEFAULT_STEERING_KD                  = 150.0

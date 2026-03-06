@@ -76,7 +76,7 @@ LSS_SERVO_SPEED                      = 600
 DEFAULT_SERIAL_PORT                  = '/dev/lss_controller'
 DEFAULT_SERIAL_BAUD                  = 115200
 DEFAULT_PHIDGETS_HUB_PORT            = 3
-DEFAULT_MOTOR_DEGREES_AT_MAX_STEER   = 10000.0
+DEFAULT_MOTOR_DEGREES_AT_MAX_STEER   = 20000.0
 DEFAULT_STEERING_KP                  = 400.0
 DEFAULT_STEERING_KI                  = 0.0
 DEFAULT_STEERING_KD                  = 150.0
@@ -176,7 +176,7 @@ class HwTeleopNode(Node):
 
         self._throttle_f = SmoothFilter(LSS_THROTTLE_NEUTRAL, tau=0.04)
         self._brake_f = SmoothFilter(LSS_BRAKE_RELEASED, tau=0.03)
-        self._steer_f = SmoothFilter(0.0, tau=0.08)
+        self._steer_f = SmoothFilter(0.0, tau=0.15)
 
         self._gear = 1
         self._gear_lock = threading.Lock()
@@ -807,7 +807,7 @@ class HwTeleopNode(Node):
                 f'link={"OK" if not self._hb_link_lost else "LOST"}')
 
     def _signal_handler(self, _sig, _frame):
-        self._safe_stop()
+        self._estop = True
         raise SystemExit(0)
 
     def _throttle_pct(self):

@@ -500,7 +500,7 @@ class HwTeleopNode(Node):
             sender.addPositionOffset(-sender.getPosition())
             sender.setEngaged(True)
             try:
-                sender.enableFailsafe(500)
+                sender.enableFailsafe(2000)
             except Exception:
                 pass
             with self._motor_lock:
@@ -540,8 +540,8 @@ class HwTeleopNode(Node):
                         self._motor_ok = False
                 else:
                     self._phidgets_runaway_count = 0
-            except Exception:
-                pass
+            except Exception as e:
+                self.get_logger().warn(f'Steering set position failed: {e}')
 
     def _init_gear_servo(self):
         if not JETSON_GPIO_AVAILABLE:

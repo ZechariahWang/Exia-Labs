@@ -51,7 +51,7 @@ LSS_BRAKE_ID                         = 1
 LSS_THROTTLE_NEUTRAL                 = 0
 LSS_THROTTLE_MAX                     = 330
 LSS_BRAKE_RELEASED                   = -100
-LSS_BRAKE_ENGAGED                    = -160
+LSS_BRAKE_ENGAGED                    = -200
 
 GEAR_NAMES                           = {0: 'R', 1: 'N', 2: 'H'}
 GEAR_PWM_PIN                         = 32

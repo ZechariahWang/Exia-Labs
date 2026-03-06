@@ -479,30 +479,19 @@ class HwTeleopNode(Node):
             ch = MotorPositionController()
             ch.setHubPort(self.get_parameter('phidgets_hub_port').value)
             ch.setIsHubPortDevice(False)
-            ch.setOnAttachHandler(self._on_attach)
-            ch.setOnDetachHandler(self._on_detach)
-            self._phidgets_controller = ch
-            ch.open()
             self.get_logger().info('MotorPositionController channel opened, waiting for attach...')
-        except PhidgetException as e:
-            self.get_logger().warn(f'Phidgets init failed: {e}')
-
-    def _on_attach(self, sender):
-        try:
-            sender.setRescaleFactor(360.0 / (300 * 4 * 4.25))
-            sender.setCurrentLimit(self.get_parameter('steering_current_limit').value)
-            sender.setVelocityLimit(self.get_parameter('steering_velocity_limit').value)
-            sender.setAcceleration(self.get_parameter('steering_acceleration').value)
-            sender.setDeadBand(self.get_parameter('steering_dead_band').value)
-            sender.setKp(self.get_parameter('steering_kp').value)
-            sender.setKi(self.get_parameter('steering_ki').value)
-            sender.setKd(self.get_parameter('steering_kd').value)
-            sender.addPositionOffset(-sender.getPosition())
-            sender.setEngaged(True)
-            try:
-                sender.enableFailsafe(2000)
-            except Exception:
-                pass
+            ch.openWaitForAttachment(5000)
+            ch.setRescaleFactor(360.0 / (300 * 4 * 4.25))
+            ch.setCurrentLimit(self.get_parameter('steering_current_limit').value)
+            ch.setVelocityLimit(self.get_parameter('steering_velocity_limit').value)
+            ch.setAcceleration(self.get_parameter('steering_acceleration').value)
+            ch.setDeadBand(self.get_parameter('steering_dead_band').value)
+            ch.setKp(self.get_parameter('steering_kp').value)
+            ch.setKi(self.get_parameter('steering_ki').value)
+            ch.setKd(self.get_parameter('steering_kd').value)
+            ch.addPositionOffset(-ch.getPosition())
+            ch.setEngaged(True)
+            self._phidgets_controller = ch
             with self._motor_lock:
                 self._motor_ok = True
                 self._phidgets_runaway_count = 0
@@ -510,17 +499,7 @@ class HwTeleopNode(Node):
                 f'MotorPositionController attached (max_degrees={self._motor_degrees_at_max_steer}, '
                 f'current_limit={self.get_parameter("steering_current_limit").value}A)')
         except PhidgetException as e:
-            self.get_logger().error(f'MotorPositionController config failed: {e}')
-
-    def _on_detach(self, sender):
-        with self._motor_lock:
-            self._motor_ok = False
-            self._phidgets_controller = None
-        try:
-            sender.close()
-        except Exception:
-            pass
-        self.get_logger().warn('MotorPositionController detached')
+            self.get_logger().warn(f'Phidgets init failed: {e}')
 
     def _set_steering_position(self, normalized):
         with self._motor_lock:
@@ -530,16 +509,6 @@ class HwTeleopNode(Node):
             try:
                 target = normalized * self._motor_degrees_at_max_steer
                 ctrl.setTargetPosition(target)
-                ctrl.resetFailsafe()
-                duty = abs(ctrl.getDutyCycle())
-                if duty > 0.95:
-                    self._phidgets_runaway_count += 1
-                    if self._phidgets_runaway_count > 25:
-                        self.get_logger().error('Steering motor runaway detected — disengaging')
-                        ctrl.setEngaged(False)
-                        self._motor_ok = False
-                else:
-                    self._phidgets_runaway_count = 0
             except Exception as e:
                 self.get_logger().warn(f'Steering set position failed: {e}')
 

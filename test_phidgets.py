@@ -37,7 +37,7 @@ except PhidgetException as e:
     sys.exit(1)
 
 m.setRescaleFactor(360.0 / (300 * 4 * 4.25))
-m.setCurrentLimit(3.0)
+m.setCurrentLimit(15)
 m.setVelocityLimit(10000.0)
 m.setAcceleration(50000.0)
 m.setDeadBand(2.0)

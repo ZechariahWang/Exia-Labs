@@ -1,8 +1,0 @@
-[console_scripts]
-ackermann_drive_node = exia_control.ackermann_drive_node:main
-dynamic_navigator_node = exia_control.dynamic_navigator_node:main
-hw_teleop = exia_control.hw_teleop_node:main
-lss_calibrate = exia_control.lss_calibrate:main
-nav_to = exia_control.nav_to_cmd:main
-teleop = exia_control.teleop_node:main
-

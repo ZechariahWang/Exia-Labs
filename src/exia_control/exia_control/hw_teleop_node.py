@@ -75,7 +75,7 @@ LSS_SERVO_SPEED                      = 600
 
 DEFAULT_SERIAL_PORT                  = '/dev/lss_controller'
 DEFAULT_SERIAL_BAUD                  = 115200
-DEFAULT_PHIDGETS_HUB_PORT            = 0
+DEFAULT_PHIDGETS_HUB_PORT            = 3
 DEFAULT_MOTOR_DEGREES_AT_MAX_STEER   = 1000.0
 DEFAULT_STEERING_KP                  = 400.0
 DEFAULT_STEERING_KI                  = 0.0

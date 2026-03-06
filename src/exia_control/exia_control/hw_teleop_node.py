@@ -471,7 +471,7 @@ class HwTeleopNode(Node):
                 pass
             self.serial_conn = None
 
-    # for steering motor (position control via DCC1000 + HKT22 encoder)
+    # for steering motor 
     def _init_phidgets(self):
         if not PHIDGETS_AVAILABLE:
             self.get_logger().warn('Phidget22 not installed — steering unavailable')

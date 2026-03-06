@@ -76,7 +76,7 @@ LSS_SERVO_SPEED                      = 600
 DEFAULT_SERIAL_PORT                  = '/dev/lss_controller'
 DEFAULT_SERIAL_BAUD                  = 115200
 DEFAULT_PHIDGETS_HUB_PORT            = 3
-DEFAULT_MOTOR_DEGREES_AT_MAX_STEER   = 10000.0
+DEFAULT_MOTOR_DEGREES_AT_MAX_STEER   = 30000.0
 DEFAULT_STEERING_KP                  = 400.0
 DEFAULT_STEERING_KI                  = 0.0
 DEFAULT_STEERING_KD                  = 150.0
@@ -177,7 +177,7 @@ class HwTeleopNode(Node):
         self._throttle_f = SmoothFilter(LSS_THROTTLE_NEUTRAL, tau=0.04)
         self._brake_f = SmoothFilter(LSS_BRAKE_RELEASED, tau=0.03)
         self._steer_smooth = 0.0
-        self._steer_max_rate = 8.0
+        self._steer_max_rate = 2.0
 
         self._gear = 1
         self._gear_lock = threading.Lock()
@@ -607,7 +607,12 @@ class HwTeleopNode(Node):
 
         self._joy_throttle = _clamp((1.0 - r2) / 2.0, 0.0, 1.0)
         self._joy_brake = _clamp((1.0 - l2) / 2.0, 0.0, 1.0)
-        self._joy_steer = _clamp(right_x, -1.0, 1.0)
+        dead_zone = 0.1
+        if abs(right_x) < dead_zone:
+            self._joy_steer = 0.0
+        else:
+            sign = 1.0 if right_x > 0 else -1.0
+            self._joy_steer = sign * (abs(right_x) - dead_zone) / (1.0 - dead_zone)
 
         if left_y > 0.15:
             self._joy_throttle = _clamp(left_y, 0.0, 1.0)

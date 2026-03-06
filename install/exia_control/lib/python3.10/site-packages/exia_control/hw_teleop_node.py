@@ -13,7 +13,7 @@ import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import NavSatFix, Imu, Joy
-from std_msgs.msg import Int32
+from std_msgs.msg import Int32, UInt32
 
 # curl -fsSL  https://www.phidgets.com/downloads/setup_linux | sudo bash
 # sudo apt install -y libphidget22 libphidget22-dev
@@ -88,6 +88,9 @@ DEFAULT_REMOTE_MODE                  = False
 DEFAULT_LAUNCH_SENSORS               = True
 DEFAULT_GUI                          = False
 DEFAULT_BLUE                         = False
+DEFAULT_HEARTBEAT_RATE               = 10.0
+DEFAULT_HEARTBEAT_TIMEOUT            = 1.5
+DEFAULT_HEARTBEAT_ENABLED            = True
 
 # clamp val
 def _clamp(value, lo, hi):
@@ -141,6 +144,9 @@ class HwTeleopNode(Node):
         self.declare_parameter('gear_pwm_reverse', GEAR_PWM_REVERSE)
         self.declare_parameter('gear_pwm_neutral', GEAR_PWM_NEUTRAL)
         self.declare_parameter('gear_pwm_high', GEAR_PWM_HIGH)
+        self.declare_parameter('heartbeat_rate', DEFAULT_HEARTBEAT_RATE)
+        self.declare_parameter('heartbeat_timeout', DEFAULT_HEARTBEAT_TIMEOUT)
+        self.declare_parameter('heartbeat_enabled', DEFAULT_HEARTBEAT_ENABLED)
 
         self._remote_mode = self.get_parameter('remote_mode').value
         self._launch_sensors = self.get_parameter('launch_sensors').value
@@ -202,6 +208,17 @@ class HwTeleopNode(Node):
         self._cmd_vel_linear_x = 0.0
         self._cmd_vel_angular_z = 0.0
 
+        self._hb_enabled = self.get_parameter('heartbeat_enabled').value
+        self._hb_rate = self.get_parameter('heartbeat_rate').value
+        self._hb_timeout = self.get_parameter('heartbeat_timeout').value
+        self._hb_seq = 0
+        self._hb_last_rx_time = None
+        self._hb_link_lost = False
+        self._hb_rx_count = 0
+        self._hb_tx_count = 0
+        self._hb_drop_count = 0
+        self._hb_last_log_time = 0.0
+
         self._blue_enabled = self.get_parameter('blue').value and BLUE_AVAILABLE
         self._blue_loop = None
         self._blue_thread = None
@@ -222,6 +239,9 @@ class HwTeleopNode(Node):
         if self._remote_mode:
             self._teleop_pub = self.create_publisher(Twist, '/radio/teleop', 10)
             self._gear_pub = self.create_publisher(Int32, '/radio/gear', 10)
+            if self._hb_enabled:
+                self._hb_pub = self.create_publisher(UInt32, '/radio/heartbeat', 10)
+                self.create_timer(1.0 / self._hb_rate, self._hb_send)
             if self._launch_sensors:
                 self._init_foxglove_bridge()
                 self._init_robot_state_publisher()
@@ -242,6 +262,9 @@ class HwTeleopNode(Node):
             self.create_subscription(Imu, '/imu/data', self._imu_cb, 10)
             self.create_subscription(Twist, '/radio/teleop', self._remote_teleop_cb, 10)
             self.create_subscription(Int32, '/radio/gear', self._remote_gear_cb, 10)
+            if self._hb_enabled:
+                self.create_subscription(UInt32, '/radio/heartbeat', self._hb_recv, 10)
+                self.create_timer(0.1, self._hb_watchdog)
 
         self._cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
         self.create_subscription(Joy, '/joy', self._joy_cb, 10)
@@ -786,6 +809,37 @@ class HwTeleopNode(Node):
             self._set_steering_position(0.0)
         self._print_hud()
 
+    def _hb_send(self):
+        self._hb_seq += 1
+        self._hb_tx_count += 1
+        msg = UInt32()
+        msg.data = self._hb_seq
+        self._hb_pub.publish(msg)
+
+    def _hb_recv(self, msg):
+        self._hb_last_rx_time = time.monotonic()
+        self._hb_rx_count += 1
+        if self._hb_link_lost:
+            self._hb_link_lost = False
+            self._estop = False
+            self.get_logger().info('Link restored, heartbeat-loss e-stop auto-cleared')
+
+    def _hb_watchdog(self):
+        if self._hb_last_rx_time is None:
+            return
+        elapsed = time.monotonic() - self._hb_last_rx_time
+        if elapsed > self._hb_timeout and not self._hb_link_lost:
+            self._hb_link_lost = True
+            self._hb_drop_count += 1
+            self.get_logger().warn(f'Heartbeat lost ({elapsed:.2f}s), triggering e-stop')
+            self._safe_stop()
+        now = time.monotonic()
+        if now - self._hb_last_log_time >= 10.0:
+            self._hb_last_log_time = now
+            self.get_logger().info(
+                f'[Heartbeat] rx={self._hb_rx_count} drops={self._hb_drop_count} '
+                f'link={"OK" if not self._hb_link_lost else "LOST"}')
+
     def _signal_handler(self, _sig, _frame):
         self._safe_stop()
         raise SystemExit(0)
@@ -830,7 +884,12 @@ class HwTeleopNode(Node):
             lss_tag = 'LSS:OK' if self._lss_ok else 'LSS:--'
             steer_tag = 'MTR:OK' if motor_ok else 'MTR:--'
             remote_active = (time.monotonic() - self._remote_last_time) < 0.3
-            src_tag = ' [RADIO]' if remote_active else ''
+            if self._hb_enabled and self._hb_link_lost:
+                src_tag = ' [LINK LOST]'
+            elif remote_active:
+                src_tag = ' [WIFI]'
+            else:
+                src_tag = ''
             sys.stdout.write(
                 f'[{lss_tag} {steer_tag}] '
                 f'T:{self._throttle_pct():3d}% '

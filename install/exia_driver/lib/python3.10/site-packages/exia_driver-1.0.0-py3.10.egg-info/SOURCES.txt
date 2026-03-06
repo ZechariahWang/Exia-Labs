@@ -13,4 +13,5 @@ exia_driver/gps_transform_node.py
 exia_driver/imu_test.py
 exia_driver/radio_bridge_node.py
 exia_driver/rc_driver_node.py
+exia_driver/wifi_bridge_node.py
 resource/exia_driver

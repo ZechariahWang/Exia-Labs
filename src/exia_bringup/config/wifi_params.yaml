@@ -1,5 +1,6 @@
-hw_teleop_node:
+wifi_bridge:
   ros__parameters:
+    tcp_port: 5800
     heartbeat_rate: 10.0
     heartbeat_timeout: 1.5
-    heartbeat_enabled: true
+    status_rate: 5.0

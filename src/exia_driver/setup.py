@@ -22,6 +22,7 @@ setup(
             'gps_transform_node = exia_driver.gps_transform_node:main',
             'radio_bridge_node = exia_driver.radio_bridge_node:main',
             'imu_node = exia_driver.imu_test:main',
+            'wifi_bridge_node = exia_driver.wifi_bridge_node:main',
         ],
     },
 )

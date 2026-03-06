@@ -10,9 +10,11 @@
     <Discovery>
       <Peers>
         <!-- Robot (Jetson) IP — override via CYCLONEDDS_URI or edit this file -->
-        <Peer address="${EXIA_ROBOT_IP:-192.168.1.122}"/>
+        <!-- <Peer address="${EXIA_ROBOT_IP:-192.168.1.122}"/> -->
+        <Peer address="${EXIA_ROBOT_IP:-192.168.100.168}"/>
       </Peers>
-      <ParticipantIndex>auto</ParticipantIndex>
+      <ParticipantIndex>none</ParticipantIndex>
+      <MaxAutoParticipantIndex>120</MaxAutoParticipantIndex>
     </Discovery>
   </Domain>
 </CycloneDDS>

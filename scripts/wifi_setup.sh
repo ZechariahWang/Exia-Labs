@@ -34,7 +34,8 @@ cat > "$CYCLONE_CFG" <<EOF
       <Peers>
         <Peer address="${PEER_IP}"/>
       </Peers>
-      <ParticipantIndex>auto</ParticipantIndex>
+      <ParticipantIndex>none</ParticipantIndex>
+      <MaxAutoParticipantIndex>120</MaxAutoParticipantIndex>
     </Discovery>
   </Domain>
 </CycloneDDS>

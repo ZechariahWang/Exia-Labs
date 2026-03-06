@@ -10,9 +10,11 @@
     <Discovery>
       <Peers>
         <!-- Base station laptop IP — override via CYCLONEDDS_URI-->
-        <Peer address="${EXIA_BASE_IP:-192.168.1.247}"/>
+        <!-- <Peer address="${EXIA_BASE_IP:-192.168.1.247}"/> -->
+      <Peer address="${EXIA_BASE_IP:-192.168.100.178}"/>
       </Peers>
-      <ParticipantIndex>auto</ParticipantIndex>
+      <ParticipantIndex>none</ParticipantIndex>
+      <MaxAutoParticipantIndex>120</MaxAutoParticipantIndex>
     </Discovery>
   </Domain>
 </CycloneDDS>

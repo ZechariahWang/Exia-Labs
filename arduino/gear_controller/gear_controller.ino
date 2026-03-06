@@ -1,34 +1,33 @@
 #include <Servo.h>
 
-#define GEAR_SERVO_PIN 46
+#define GEAR_SERVO_PIN 2
 #define LED_PIN 21
 
-#define GEAR_REVERSE_POS 57
-#define GEAR_NEUTRAL_POS 80
-#define GEAR_HIGH_POS 110
+#define GEAR_REVERSE_POS 0
+#define GEAR_NEUTRAL_POS 57
+#define GEAR_LOW_POS 90
+#define GEAR_HIGH_POS 130
 
-#define MAX_GEAR_RATE 100.0f
-#define NUM_GEARS 3
+#define NUM_GEARS 4
 #define HEARTBEAT_INTERVAL_MS 500
-#define JETSON_TIMEOUT_MS 2000
 
 const int GEAR_POSITIONS[NUM_GEARS] = {
-    GEAR_REVERSE_POS, GEAR_NEUTRAL_POS, GEAR_HIGH_POS
+    GEAR_REVERSE_POS, GEAR_NEUTRAL_POS, GEAR_LOW_POS, GEAR_HIGH_POS
 };
 
 Servo gearServo;
 
 int currentGear = 1;
-float currentServoPos = GEAR_NEUTRAL_POS;
 int lastServoOutput = GEAR_NEUTRAL_POS;
 
-unsigned long lastJetsonRxTime = 0;
 unsigned long lastHeartbeatTime = 0;
 unsigned long lastLoopTime = 0;
 bool jetsonConnected = false;
 
 char serialBuffer[32];
 int serialBufIndex = 0;
+
+void parseCommand(const char* msg);
 
 void setup() {
     pinMode(LED_PIN, OUTPUT);
@@ -41,7 +40,6 @@ void setup() {
     delay(500);
 
     lastLoopTime = millis();
-    lastJetsonRxTime = millis();
     lastHeartbeatTime = millis();
 
     Serial.println("GEAR_READY");
@@ -50,7 +48,6 @@ void setup() {
 void processSerial() {
     while (Serial.available() > 0) {
         char c = Serial.read();
-        lastJetsonRxTime = millis();
         jetsonConnected = true;
 
         if (c == '\n' || c == '\r') {
@@ -70,29 +67,16 @@ void parseCommand(const char* msg) {
         int gear = atoi(msg + 1);
         if (gear >= 0 && gear < NUM_GEARS) {
             currentGear = gear;
+            int targetPos = GEAR_POSITIONS[currentGear];
+            if (targetPos < lastServoOutput) {
+                gearServo.write(max(targetPos - 15, 0));
+                delay(300);
+            }
+            gearServo.write(targetPos);
+            lastServoOutput = targetPos;
             Serial.print("GA");
             Serial.println(currentGear);
         }
-    }
-}
-
-void updateServo(float dt) {
-    float targetPos = (float)GEAR_POSITIONS[currentGear];
-    float maxChange = MAX_GEAR_RATE * dt;
-    float diff = targetPos - currentServoPos;
-
-    if (diff > maxChange) {
-        currentServoPos += maxChange;
-    } else if (diff < -maxChange) {
-        currentServoPos -= maxChange;
-    } else {
-        currentServoPos = targetPos;
-    }
-
-    int newOutput = (int)(currentServoPos + 0.5f);
-    if (newOutput != lastServoOutput) {
-        gearServo.write(newOutput);
-        lastServoOutput = newOutput;
     }
 }
 
@@ -102,30 +86,11 @@ void sendHeartbeat() {
     lastHeartbeatTime = millis();
 }
 
-void safeState() {
-    currentGear = 1;
-    currentServoPos = GEAR_NEUTRAL_POS;
-    gearServo.write(GEAR_NEUTRAL_POS);
-    lastServoOutput = GEAR_NEUTRAL_POS;
-    jetsonConnected = false;
-    digitalWrite(LED_PIN, LOW);
-}
-
 void loop() {
     unsigned long now = millis();
-    float dt = (now - lastLoopTime) / 1000.0f;
-    if (dt < 0.001f) dt = 0.001f;
-    if (dt > 0.1f) dt = 0.1f;
     lastLoopTime = now;
 
     processSerial();
-
-    if (jetsonConnected && (now - lastJetsonRxTime > JETSON_TIMEOUT_MS)) {
-        safeState();
-        Serial.println("GE");
-    }
-
-    updateServo(dt);
 
     if (jetsonConnected) {
         digitalWrite(LED_PIN, HIGH);

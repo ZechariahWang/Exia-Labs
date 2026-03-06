@@ -54,7 +54,7 @@ LSS_THROTTLE_MAX                     = 330
 LSS_BRAKE_RELEASED                   = -100
 LSS_BRAKE_ENGAGED                    = -330
 
-GEAR_NAMES                           = {0: 'R', 1: 'N', 2: 'H'}
+GEAR_NAMES                           = {0: 'R', 1: 'N', 2: 'L', 3: 'H'}
 GEAR_PWM_PIN                         = 32
 GEAR_PWM_FREQ                        = 50
 GEAR_PWM_REVERSE                     = 5.67
@@ -76,7 +76,7 @@ LSS_SERVO_SPEED                      = 600
 
 DEFAULT_SERIAL_PORT                  = '/dev/lss_controller'
 DEFAULT_SERIAL_BAUD                  = 115200
-DEFAULT_GEAR_SERIAL_PORT             = '/dev/arduino_control'
+DEFAULT_GEAR_SERIAL_PORT             = '/dev/exia_gear'
 DEFAULT_GEAR_SERIAL_BAUD             = 115200
 DEFAULT_PHIDGETS_HUB_PORT            = 3
 DEFAULT_MOTOR_DEGREES_AT_MAX_STEER   = 20000.0
@@ -252,6 +252,7 @@ class HwTeleopNode(Node):
             if self._launch_sensors:
                 self._init_foxglove_bridge()
                 self._init_robot_state_publisher()
+            self._init_gear_serial()
             self.create_subscription(NavSatFix, '/navsatfix', self._gps_cb, 10)
             self.create_subscription(Imu, '/imu/data', self._imu_cb, 10)
         else:
@@ -648,9 +649,7 @@ class HwTeleopNode(Node):
             if not force:
                 if now - self._last_gear_shift_time < 0.3:
                     return
-            if self._gear == 0 and target == 2:
-                return
-            if self._gear == 2 and target == 0:
+            if abs(self._gear - target) > 1 and not force:
                 return
             self._gear = target
             self._last_gear_shift_time = now
@@ -661,7 +660,6 @@ class HwTeleopNode(Node):
             gear_msg = Int32()
             gear_msg.data = gear_index
             self._gear_pub.publish(gear_msg)
-            return
         if self._gear_serial is not None and self._gear_ok:
             try:
                 self._gear_serial.write(f'K{gear_index}\n'.encode())
@@ -728,7 +726,7 @@ class HwTeleopNode(Node):
             self._request_gear(target)
         elif msg.buttons[2]:
             with self._gear_lock:
-                target = min(self._gear + 1, 2)
+                target = min(self._gear + 1, 3)
             self._request_gear(target)
         elif msg.buttons[3]:
             self._request_gear(1)
@@ -747,14 +745,16 @@ class HwTeleopNode(Node):
         self._remote_last_time = time.monotonic()
 
     def _remote_gear_cb(self, msg):
-        gear = _clamp(msg.data, 0, 2)
+        gear = _clamp(msg.data, 0, 3)
         self._request_gear(gear, force=(gear == 1))
 
     def _publish_cmd_vel(self):
         with self._gear_lock:
             gear = self._gear
-        if gear == 2:
+        if gear == 3:
             speed = self._throttle_ramp * CMD_VEL_MAX_SPEED
+        elif gear == 2:
+            speed = self._throttle_ramp * CMD_VEL_MAX_SPEED * 0.5
         elif gear == 0:
             speed = -self._throttle_ramp * CMD_VEL_MAX_REVERSE
         else:

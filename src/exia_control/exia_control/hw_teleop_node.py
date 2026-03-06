@@ -76,7 +76,7 @@ LSS_SERVO_SPEED                      = 600
 DEFAULT_SERIAL_PORT                  = '/dev/lss_controller'
 DEFAULT_SERIAL_BAUD                  = 115200
 DEFAULT_PHIDGETS_HUB_PORT            = 3
-DEFAULT_MOTOR_DEGREES_AT_MAX_STEER   = 20000.0
+DEFAULT_MOTOR_DEGREES_AT_MAX_STEER   = 10000.0
 DEFAULT_STEERING_KP                  = 400.0
 DEFAULT_STEERING_KI                  = 0.0
 DEFAULT_STEERING_KD                  = 150.0
@@ -176,7 +176,8 @@ class HwTeleopNode(Node):
 
         self._throttle_f = SmoothFilter(LSS_THROTTLE_NEUTRAL, tau=0.04)
         self._brake_f = SmoothFilter(LSS_BRAKE_RELEASED, tau=0.03)
-        self._steer_f = SmoothFilter(0.0, tau=0.15)
+        self._steer_smooth = 0.0
+        self._steer_max_rate = 8.0
 
         self._gear = 1
         self._gear_lock = threading.Lock()
@@ -721,8 +722,15 @@ class HwTeleopNode(Node):
         thr_val = self._throttle_f.update(thr_target, dt)
         brk_val = self._brake_f.update(brk_target, dt)
 
-        steer_smooth = self._steer_f.update(self._steer_ramp, dt)
-        self._set_steering_position(steer_smooth)
+        diff = self._steer_ramp - self._steer_smooth
+        max_step = self._steer_max_rate * dt
+        if abs(diff) <= max_step:
+            self._steer_smooth = self._steer_ramp
+        elif diff > 0:
+            self._steer_smooth += max_step
+        else:
+            self._steer_smooth -= max_step
+        self._set_steering_position(self._steer_smooth)
 
         thr_int = int(round(thr_val))
         thr_at_neutral = (thr_int == LSS_THROTTLE_NEUTRAL)
@@ -767,7 +775,7 @@ class HwTeleopNode(Node):
         else:
             self._throttle_f.snap(LSS_THROTTLE_NEUTRAL)
             self._brake_f.snap(LSS_BRAKE_ENGAGED)
-            self._steer_f.snap(0.0)
+            self._steer_smooth = 0.0
             self._last_sent_throttle = None
             self._last_sent_brake = None
             self._send_lss(f'#{LSS_THROTTLE_ID}D{LSS_THROTTLE_NEUTRAL}\r')

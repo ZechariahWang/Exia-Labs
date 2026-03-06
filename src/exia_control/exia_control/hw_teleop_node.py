@@ -51,7 +51,7 @@ LSS_BRAKE_ID                         = 1
 LSS_THROTTLE_NEUTRAL                 = 0
 LSS_THROTTLE_MAX                     = 330
 LSS_BRAKE_RELEASED                   = -100
-LSS_BRAKE_ENGAGED                    = -200
+LSS_BRAKE_ENGAGED                    = -400
 
 GEAR_NAMES                           = {0: 'R', 1: 'N', 2: 'H'}
 GEAR_PWM_PIN                         = 32
@@ -484,6 +484,7 @@ class HwTeleopNode(Node):
             ch.openWaitForAttachment(5000)
             ch.setRescaleFactor(360.0 / (300 * 4 * 4.25))
             ch.setCurrentLimit(self.get_parameter('steering_current_limit').value)
+            ch.setCurrentRegulatorGain(self.get_parameter('steering_current_limit').value)
             ch.setVelocityLimit(17647.0)
             ch.setAcceleration(17647.0)
             ch.setDeadBand(0.0)

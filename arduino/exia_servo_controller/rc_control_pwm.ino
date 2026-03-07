@@ -358,9 +358,6 @@ bool isBrakeEngaged() {
 void processGearShift(int ch3Filtered, bool rcLostFlag) {
     if (rcLostFlag) return;
 
-    String val = String(ch3Filtered);
-    Serial.println(val);
-
     Ch3Position pos = getCh3Position(ch3Filtered);
 
     if (switchLatch == LATCH_READY) {
@@ -514,14 +511,6 @@ void loop() {
 #if ENABLE_GEARSHIFT
     bool ch3Valid = isValidRC(ch3Raw);
 
-    Serial.print("CH3:");
-    Serial.print(ch3Raw);
-    Serial.print(" F:");
-    Serial.print(ch3Filtered);
-    Serial.print(" G:");
-    Serial.print(currentGear);
-    Serial.print(" L:");
-    Serial.println(switchLatch);
 #endif
 
 #if ENABLE_GEARSHIFT

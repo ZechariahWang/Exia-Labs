@@ -23,6 +23,7 @@ setup(
             'radio_bridge_node = exia_driver.radio_bridge_node:main',
             'imu_node = exia_driver.imu_test:main',
             'wifi_bridge_node = exia_driver.wifi_bridge_node:main',
+            'rc_phidget_driver_node = exia_driver.rc_phidget_driver_node:main',
         ],
     },
 )

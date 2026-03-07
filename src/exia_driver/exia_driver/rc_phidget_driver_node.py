@@ -24,6 +24,7 @@ except ImportError:
     PHIDGETS_AVAILABLE = False
 
 
+# enum fo rstates of motor
 class State(IntEnum):
     IDLE = 0
     CONNECTING = 1
@@ -33,11 +34,12 @@ class State(IntEnum):
     ERROR = 5
 
 
+# phidget inits, must be tuned later
 @dataclass
 class PhidgetConfig:
     hub_port: int = 0
     kp: float = 1
-    ki: float = 1
+    ki: float = 0
     kd: float = 1
     velocity_limit: float = 10000.0
     acceleration: float = 50000.0
@@ -46,7 +48,7 @@ class PhidgetConfig:
     motor_degrees_at_max_steer: float = 2160.0
     failsafe_timeout: int = 1500
 
-
+# configs for s curve motion profile
 @dataclass
 class SafetyConfig:
     max_position: float = 2160.0
@@ -60,7 +62,7 @@ class SafetyConfig:
     runaway_position_error: float = 100.0
     runaway_max_count: int = 25
 
-
+# for tak, IGNORE
 @dataclass
 class TakConfig:
     enabled: bool = False
@@ -89,8 +91,49 @@ def _as_bool(value):
         return value.strip().lower() in ('1', 'true', 'yes', 'on')
     return False
 
+# phidget init vars
+DEFAULT_SERIAL_PORT = '/dev/arduino_control'
+DEFAULT_BAUD_RATE = 115200
+DEFAULT_PHIDGETS_HUB_PORT = 0
+DEFAULT_MOTOR_DEGREES_AT_MAX_STEER = 2160.0
+DEFAULT_STEERING_KP = 400.0
+DEFAULT_STEERING_KI = 0.0
+DEFAULT_STEERING_KD = 150.0
+DEFAULT_STEERING_VELOCITY_LIMIT = 10000.0
+DEFAULT_STEERING_ACCELERATION = 50000.0
+DEFAULT_STEERING_DEAD_BAND = 2.0
+DEFAULT_STEERING_CURRENT_LIMIT = 15.0
+DEFAULT_FAILSAFE_TIMEOUT = 1500
+DEFAULT_COMMAND_TIMEOUT = 1.0
+DEFAULT_FEEDBACK_RATE = 20.0
+DEFAULT_CONTROL_RATE = 50.0
+DEFAULT_RAMP_RATE = 5.0
+DEFAULT_SMOOTHING_ALPHA = 0.1
+DEFAULT_SCURVE_SHARPNESS = 3.0
+DEFAULT_AUTONOMOUS_MODE = False
+DEFAULT_SKIP_MOTOR = False
+DEFAULT_SKIP_PHIDGET = False
+
+# Tak init vars
+DEFAULT_TAK_UDP_ENABLED = False
+DEFAULT_TAK_GPS_TOPIC = '/navsatfix'
+DEFAULT_TAK_HOST = '192.168.1.69'
+DEFAULT_TAK_PORT = 4242
+DEFAULT_TAK_UID = 'exialabs-argus-1'
+DEFAULT_TAK_CALLSIGN = 'exialabs-argus-1'
+DEFAULT_TAK_TYPE = 'a-f-G-E-V-U'
+DEFAULT_TAK_HOW = 'm-g'
+DEFAULT_TAK_ICONSETPATH = 'COT_MAPPING_2525C'
+DEFAULT_TAK_RATE_HZ = 0.2
+DEFAULT_TAK_STALE_SECONDS = 60.0
+DEFAULT_TAK_DEFAULT_HAE = 0.0
+DEFAULT_TAK_DEFAULT_CE = 10.0
+DEFAULT_TAK_DEFAULT_LE = 10.0
+DEFAULT_TAK_REQUIRE_FIX = True
+
 
 class RCPhidgetDriverNode(Node):
+    # for autonomous, can ignore for now
     WHEELBASE = 1.3
     MAX_STEERING_ANGLE = 0.6
     MAX_SPEED = 5.0
@@ -212,6 +255,7 @@ class RCPhidgetDriverNode(Node):
         self._gear_shift_time = 0.0
 
         self.skip_motor = _as_bool(self.get_parameter('skip_motor').value)
+        self.skip_phidget = _as_bool(self.get_parameter('skip_phidget').value)
 
         if self.skip_motor:
             self.state = State.ARMED
@@ -225,7 +269,8 @@ class RCPhidgetDriverNode(Node):
             feedback_period = 1.0 / self.safety_config.feedback_rate
             self.control_timer = self.create_timer(control_period, self._control_loop)
             self.feedback_timer = self.create_timer(feedback_period, self._feedback_loop)
-            self.watchdog_timer = self.create_timer(0.1, self._watchdog_callback)
+            if not self.skip_phidget:
+                self.watchdog_timer = self.create_timer(0.1, self._watchdog_callback)
 
             self._init_serial()
             if self.autonomous_mode and self.serial_conn is not None:
@@ -236,47 +281,54 @@ class RCPhidgetDriverNode(Node):
                 self.serial_conn.reset_input_buffer()
                 self.get_logger().info('Sent AUTO to Arduino early (before Phidget connect)')
             self.autonomous_grace_time = time.monotonic()
-            self._transition_state(State.CONNECTING)
+
+            if self.skip_phidget:
+                self.state = State.ARMED
+                self.get_logger().info('skip_phidget=true — Phidget motor skipped, serial/Arduino active')
+            else:
+                self._transition_state(State.CONNECTING)
 
         self.get_logger().info('RC Phidget Driver Node started')
 
     def _declare_parameters(self):
-        self.declare_parameter('serial_port', '/dev/arduino_control')
-        self.declare_parameter('baud_rate', 115200)
-        self.declare_parameter('phidgets_hub_port', 0)
-        self.declare_parameter('motor_degrees_at_max_steer', 2160.0)
-        self.declare_parameter('steering_kp', 400.0)
-        self.declare_parameter('steering_ki', 0.0)
-        self.declare_parameter('steering_kd', 150.0)
-        self.declare_parameter('steering_velocity_limit', 10000.0)
-        self.declare_parameter('steering_acceleration', 50000.0)
-        self.declare_parameter('steering_dead_band', 2.0)
-        self.declare_parameter('steering_current_limit', 15.0)
-        self.declare_parameter('failsafe_timeout', 1500)
-        self.declare_parameter('command_timeout', 1.0)
-        self.declare_parameter('feedback_rate', 20.0)
-        self.declare_parameter('control_rate', 50.0)
-        self.declare_parameter('ramp_rate', 5.0)
-        self.declare_parameter('smoothing_alpha', 0.1)
-        self.declare_parameter('scurve_sharpness', 3.0)
-        self.declare_parameter('autonomous_mode', False)
-        self.declare_parameter('skip_motor', False)
-        self.declare_parameter('tak_udp_enabled', False)
-        self.declare_parameter('tak_gps_topic', '/navsatfix')
-        self.declare_parameter('tak_host', '192.168.1.69')
-        self.declare_parameter('tak_port', 4242)
-        self.declare_parameter('tak_uid', 'exialabs-argus-1')
-        self.declare_parameter('tak_callsign', 'exialabs-argus-1')
-        self.declare_parameter('tak_type', 'a-f-G-E-V-U')
-        self.declare_parameter('tak_how', 'm-g')
-        self.declare_parameter('tak_iconsetpath', 'COT_MAPPING_2525C')
-        self.declare_parameter('tak_rate_hz', 0.2)
-        self.declare_parameter('tak_stale_seconds', 60.0)
-        self.declare_parameter('tak_default_hae', 0.0)
-        self.declare_parameter('tak_default_ce', 10.0)
-        self.declare_parameter('tak_default_le', 10.0)
-        self.declare_parameter('tak_require_fix', True)
+        self.declare_parameter('serial_port', DEFAULT_SERIAL_PORT)
+        self.declare_parameter('baud_rate', DEFAULT_BAUD_RATE)
+        self.declare_parameter('phidgets_hub_port', DEFAULT_PHIDGETS_HUB_PORT)
+        self.declare_parameter('motor_degrees_at_max_steer', DEFAULT_MOTOR_DEGREES_AT_MAX_STEER)
+        self.declare_parameter('steering_kp', DEFAULT_STEERING_KP)
+        self.declare_parameter('steering_ki', DEFAULT_STEERING_KI)
+        self.declare_parameter('steering_kd', DEFAULT_STEERING_KD)
+        self.declare_parameter('steering_velocity_limit', DEFAULT_STEERING_VELOCITY_LIMIT)
+        self.declare_parameter('steering_acceleration', DEFAULT_STEERING_ACCELERATION)
+        self.declare_parameter('steering_dead_band', DEFAULT_STEERING_DEAD_BAND)
+        self.declare_parameter('steering_current_limit', DEFAULT_STEERING_CURRENT_LIMIT)
+        self.declare_parameter('failsafe_timeout', DEFAULT_FAILSAFE_TIMEOUT)
+        self.declare_parameter('command_timeout', DEFAULT_COMMAND_TIMEOUT)
+        self.declare_parameter('feedback_rate', DEFAULT_FEEDBACK_RATE)
+        self.declare_parameter('control_rate', DEFAULT_CONTROL_RATE)
+        self.declare_parameter('ramp_rate', DEFAULT_RAMP_RATE)
+        self.declare_parameter('smoothing_alpha', DEFAULT_SMOOTHING_ALPHA)
+        self.declare_parameter('scurve_sharpness', DEFAULT_SCURVE_SHARPNESS)
+        self.declare_parameter('autonomous_mode', DEFAULT_AUTONOMOUS_MODE)
+        self.declare_parameter('skip_motor', DEFAULT_SKIP_MOTOR)
+        self.declare_parameter('skip_phidget', DEFAULT_SKIP_PHIDGET)
+        self.declare_parameter('tak_udp_enabled', DEFAULT_TAK_UDP_ENABLED)
+        self.declare_parameter('tak_gps_topic', DEFAULT_TAK_GPS_TOPIC)
+        self.declare_parameter('tak_host', DEFAULT_TAK_HOST)
+        self.declare_parameter('tak_port', DEFAULT_TAK_PORT)
+        self.declare_parameter('tak_uid', DEFAULT_TAK_UID)
+        self.declare_parameter('tak_callsign', DEFAULT_TAK_CALLSIGN)
+        self.declare_parameter('tak_type', DEFAULT_TAK_TYPE)
+        self.declare_parameter('tak_how', DEFAULT_TAK_HOW)
+        self.declare_parameter('tak_iconsetpath', DEFAULT_TAK_ICONSETPATH)
+        self.declare_parameter('tak_rate_hz', DEFAULT_TAK_RATE_HZ)
+        self.declare_parameter('tak_stale_seconds', DEFAULT_TAK_STALE_SECONDS)
+        self.declare_parameter('tak_default_hae', DEFAULT_TAK_DEFAULT_HAE)
+        self.declare_parameter('tak_default_ce', DEFAULT_TAK_DEFAULT_CE)
+        self.declare_parameter('tak_default_le', DEFAULT_TAK_DEFAULT_LE)
+        self.declare_parameter('tak_require_fix', DEFAULT_TAK_REQUIRE_FIX)
 
+    # for CoT, ignore
     @staticmethod
     def _cot_time(dt: datetime) -> str:
         return dt.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
@@ -314,6 +366,7 @@ class RCPhidgetDriverNode(Node):
             ET.SubElement(detail, 'usericon', {'iconsetpath': self.tak_config.iconsetpath})
         return ET.tostring(root, encoding='utf-8')
 
+    # gets data from gps sensor, attempts to send to tak
     def _gps_callback(self, msg: NavSatFix):
         if not self.tak_config.enabled or self._tak_socket is None:
             return
@@ -343,6 +396,7 @@ class RCPhidgetDriverNode(Node):
                     f'TAK UDP send failed to {self.tak_config.host}:{self.tak_config.port}: {e}'
                 )
 
+    # initialize serial to arduino
     def _init_serial(self) -> bool:
         try:
             self.serial_conn = serial.Serial(
@@ -361,6 +415,7 @@ class RCPhidgetDriverNode(Node):
             self.serial_conn = None
             return False
 
+    # read data from serial
     def _read_serial(self) -> Optional[str]:
         if self.serial_conn is None:
             return None
@@ -381,6 +436,7 @@ class RCPhidgetDriverNode(Node):
             self.get_logger().warn(f'Serial read error: {e}')
         return None
 
+    # write data to serial
     def _write_serial(self, msg: str) -> bool:
         if self.serial_conn is None:
             return False
@@ -394,6 +450,7 @@ class RCPhidgetDriverNode(Node):
             self.get_logger().warn(f'Serial write error: {e}')
             return False
 
+    # init phidget motor, assign it base config params
     def _init_phidgets(self) -> bool:
         if not PHIDGETS_AVAILABLE:
             self.get_logger().error('Phidget22 library not available')
@@ -413,6 +470,7 @@ class RCPhidgetDriverNode(Node):
             self.get_logger().error(f'Phidgets init failed: {e}')
             return False
 
+    # attach motor params
     def _on_attach(self, sender):
         try:
             sender.setRescaleFactor(360.0 / (300 * 4 * 4.25))
@@ -439,6 +497,7 @@ class RCPhidgetDriverNode(Node):
         except PhidgetException as e:
             self.get_logger().error(f'MotorPositionController config failed: {e}')
 
+    # detach motor, disarm in case of error or shutdown
     def _on_detach(self, sender):
         with self._motor_lock:
             self._motor_ok = False
@@ -451,6 +510,7 @@ class RCPhidgetDriverNode(Node):
         if self.state == State.ARMED:
             self._transition_state(State.ERROR)
 
+    # move the motor based on normalized hjoystick return val
     def _command_position(self, normalized: float):
         if self.state != State.ARMED:
             return
@@ -458,6 +518,17 @@ class RCPhidgetDriverNode(Node):
         target_degrees = normalized * self.phidget_config.motor_degrees_at_max_steer
         self.current_target = target_degrees
 
+    """
+    this part is meant for just smoothing out movements of motor. process is as folows:
+
+    formula for low pass: xsmooth​(t+1)=xsmooth​(t)+α(xtarget​−xsmooth​)
+    normalize the error, so no units req
+    create the s curve shape: f(e)=e^k
+    create a dynamic alpha, similar behavour to pid controller, but more control w this
+    limit rate of motor delta xmax=vmax*dt, so motor physically cant move faster than the lim
+    clamp finval val to limit rate
+    return smoothed target
+    """
     def _apply_ramp(self, dt: float):
         error = self.current_target - self.smoothed_target
 
@@ -481,6 +552,7 @@ class RCPhidgetDriverNode(Node):
 
         self.smoothed_target += weighted_step
 
+    # send target to motor to spin to, update important algo vars such as error
     def _send_to_phidget(self):
         if self.state != State.ARMED:
             return
@@ -511,6 +583,7 @@ class RCPhidgetDriverNode(Node):
             self.get_logger().error(f'Phidget command failed: {e}')
             self._transition_state(State.ERROR)
 
+    # log motor details
     def _get_feedback(self) -> dict:
         with self._motor_lock:
             if not self._motor_ok or self._phidgets_controller is None:
@@ -526,6 +599,7 @@ class RCPhidgetDriverNode(Node):
             self.get_logger().warn(f'Feedback read failed: {e}')
             return {'pos': 0.0, 'vel': 0.0, 'duty': 0.0}
 
+    # ensure phidget is usable
     def _check_phidget_health(self) -> bool:
         with self._motor_lock:
             if not self._motor_ok or self._phidgets_controller is None:
@@ -540,6 +614,7 @@ class RCPhidgetDriverNode(Node):
         except PhidgetException:
             return False
 
+    # estop, we wont need this right
     def _emergency_stop(self):
         self.get_logger().warn('Emergency stop activated')
         self._transition_state(State.ESTOP)
@@ -585,6 +660,7 @@ class RCPhidgetDriverNode(Node):
         self._write_serial('Z3')
         return True
 
+    # update state of motor
     def _transition_state(self, new_state: State):
         if self.state != new_state:
             self.get_logger().info(f'State: {self.state.name} -> {new_state.name}')
@@ -599,6 +675,7 @@ class RCPhidgetDriverNode(Node):
             msg.data = new_state.name
             self.state_pub.publish(msg)
 
+    # parse serial command from arduino, determine what type
     def parse_command(self, msg: str) -> Optional[dict]:
         if not msg:
             return None
@@ -622,6 +699,7 @@ class RCPhidgetDriverNode(Node):
             return {'type': 'estop'}
         return None
 
+    # main control loop
     def _control_loop(self):
         if self.state == State.CONNECTING:
             with self._motor_lock:
@@ -657,9 +735,11 @@ class RCPhidgetDriverNode(Node):
             self.last_command_time = time.monotonic()
 
             if cmd['type'] == 'steering':
+                raw = cmd['value']
+                normalized = raw / 1000.0
+                normalized = max(-1.0, min(1.0, normalized))
+                self.get_logger().info(f'RC CH1: raw={raw} normalized={normalized:.3f}')
                 if self.state == State.ARMED and not self.autonomous_mode:
-                    normalized = cmd['value'] / 1000.0
-                    normalized = max(-1.0, min(1.0, normalized))
                     self._command_position(normalized)
                 self._write_serial('A')
 
@@ -690,6 +770,7 @@ class RCPhidgetDriverNode(Node):
             pos_msg.data = self.smoothed_target
             self.steering_pub.publish(pos_msg)
 
+    # getting data 
     def _feedback_loop(self):
         if self.state not in [State.ARMED, State.ESTOP]:
             return
@@ -703,6 +784,7 @@ class RCPhidgetDriverNode(Node):
         self._write_serial(msg)
         self.last_feedback_time = time.monotonic()
 
+    # monitors motor status, updates as needed
     def _watchdog_callback(self):
         now = time.monotonic()
 
@@ -752,6 +834,7 @@ class RCPhidgetDriverNode(Node):
                 elif self._phidgets_controller is None:
                     self._init_phidgets()
 
+    # nah we never need this
     def _estop_callback(self, _request, response):
         self._emergency_stop()
         response.success = True
@@ -929,10 +1012,8 @@ class RCPhidgetDriverNode(Node):
 
         super().destroy_node()
 
-
 def main(args=None):
     rclpy.init(args=args)
-
     node = RCPhidgetDriverNode()
 
     try:
@@ -943,7 +1024,6 @@ def main(args=None):
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
-
 
 if __name__ == '__main__':
     main()

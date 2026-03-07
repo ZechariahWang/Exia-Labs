@@ -1,8 +1,4 @@
 # Exia Ground Robot Workspace
-# Author: Zechariah Wang (Dec 25, 2025)
-# Updated: February 2026 - Safety Hardening + Runtime Navigation Commands + Radio Bridge (fragmented key exchange, e-stop distinction, status relay) + GPS-Referenced Navigation + Foxglove Visualization
-
-ROS 2 workspace for the Exia Ground robot platform.
 
 ## Three-Motor Ackermann Architecture
 

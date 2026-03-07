@@ -4,12 +4,16 @@ from rclpy.node import Node
 from std_msgs.msg import Float64, String
 from std_srvs.srv import Trigger
 from geometry_msgs.msg import Twist
+from sensor_msgs.msg import NavSatFix, NavSatStatus
 import serial
 import time
 import math
 import threading
+import socket
+import xml.etree.ElementTree as ET
 from enum import IntEnum
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 try:
@@ -55,6 +59,35 @@ class SafetyConfig:
     runaway_duty_threshold: float = 0.95
     runaway_position_error: float = 100.0
     runaway_max_count: int = 25
+
+
+@dataclass
+class TakConfig:
+    enabled: bool = False
+    gps_topic: str = '/navsatfix'
+    host: str = '192.168.1.69'
+    port: int = 4242
+    uid: str = 'exialabs-argus-1'
+    callsign: str = 'exialabs-argus-1'
+    cot_type: str = 'a-f-G-E-V-U'
+    how: str = 'm-g'
+    iconsetpath: str = 'COT_MAPPING_2525C'
+    rate_hz: float = 0.2
+    stale_seconds: float = 60.0
+    default_hae: float = 0.0
+    default_ce: float = 10.0
+    default_le: float = 10.0
+    require_fix: bool = True
+
+
+def _as_bool(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        return value.strip().lower() in ('1', 'true', 'yes', 'on')
+    return False
 
 
 class RCPhidgetDriverNode(Node):
@@ -119,6 +152,47 @@ class RCPhidgetDriverNode(Node):
             scurve_sharpness=self.get_parameter('scurve_sharpness').value,
         )
 
+        self.tak_config = TakConfig(
+            enabled=_as_bool(self.get_parameter('tak_udp_enabled').value),
+            gps_topic=str(self.get_parameter('tak_gps_topic').value),
+            host=str(self.get_parameter('tak_host').value),
+            port=int(self.get_parameter('tak_port').value),
+            uid=str(self.get_parameter('tak_uid').value),
+            callsign=str(self.get_parameter('tak_callsign').value),
+            cot_type=str(self.get_parameter('tak_type').value),
+            how=str(self.get_parameter('tak_how').value),
+            iconsetpath=str(self.get_parameter('tak_iconsetpath').value),
+            rate_hz=float(self.get_parameter('tak_rate_hz').value),
+            stale_seconds=float(self.get_parameter('tak_stale_seconds').value),
+            default_hae=float(self.get_parameter('tak_default_hae').value),
+            default_ce=float(self.get_parameter('tak_default_ce').value),
+            default_le=float(self.get_parameter('tak_default_le').value),
+            require_fix=_as_bool(self.get_parameter('tak_require_fix').value),
+        )
+        if self.tak_config.rate_hz <= 0.0:
+            self.tak_config.rate_hz = 1.0
+        self._tak_min_interval = 1.0 / self.tak_config.rate_hz
+        self._tak_last_send_time = 0.0
+        self._tak_last_warn_time = 0.0
+        self._tak_socket = None
+        self._gps_sub = None
+        if self.tak_config.enabled:
+            try:
+                self._tak_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                self._tak_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+                self._gps_sub = self.create_subscription(
+                    NavSatFix, self.tak_config.gps_topic, self._gps_callback, 10)
+                self.get_logger().info(
+                    f'TAK UDP enabled: topic={self.tak_config.gps_topic} -> '
+                    f'{self.tak_config.host}:{self.tak_config.port} '
+                    f'uid={self.tak_config.uid} callsign={self.tak_config.callsign} '
+                    f'rate={self.tak_config.rate_hz:.2f}Hz'
+                )
+            except Exception as e:
+                self.get_logger().warn(f'Failed to initialize TAK UDP socket: {e}')
+                self._tak_socket = None
+                self.tak_config.enabled = False
+
         self.steering_pub = self.create_publisher(Float64, '/phidget/steering_position', 10)
         self.state_pub = self.create_publisher(String, '/phidget/state', 10)
 
@@ -180,6 +254,83 @@ class RCPhidgetDriverNode(Node):
         self.declare_parameter('smoothing_alpha', 0.1)
         self.declare_parameter('scurve_sharpness', 3.0)
         self.declare_parameter('autonomous_mode', False)
+        self.declare_parameter('tak_udp_enabled', False)
+        self.declare_parameter('tak_gps_topic', '/navsatfix')
+        self.declare_parameter('tak_host', '192.168.1.69')
+        self.declare_parameter('tak_port', 4242)
+        self.declare_parameter('tak_uid', 'exialabs-argus-1')
+        self.declare_parameter('tak_callsign', 'exialabs-argus-1')
+        self.declare_parameter('tak_type', 'a-f-G-E-V-U')
+        self.declare_parameter('tak_how', 'm-g')
+        self.declare_parameter('tak_iconsetpath', 'COT_MAPPING_2525C')
+        self.declare_parameter('tak_rate_hz', 0.2)
+        self.declare_parameter('tak_stale_seconds', 60.0)
+        self.declare_parameter('tak_default_hae', 0.0)
+        self.declare_parameter('tak_default_ce', 10.0)
+        self.declare_parameter('tak_default_le', 10.0)
+        self.declare_parameter('tak_require_fix', True)
+
+    @staticmethod
+    def _cot_time(dt: datetime) -> str:
+        return dt.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+
+    def _build_tak_cot(self, lat: float, lon: float, hae: float) -> bytes:
+        now = datetime.now(timezone.utc)
+        stale = now + timedelta(seconds=self.tak_config.stale_seconds)
+        root = ET.Element(
+            'event',
+            {
+                'version': '2.0',
+                'uid': self.tak_config.uid,
+                'type': self.tak_config.cot_type,
+                'how': self.tak_config.how,
+                'time': self._cot_time(now),
+                'start': self._cot_time(now),
+                'stale': self._cot_time(stale),
+            },
+        )
+        ET.SubElement(
+            root,
+            'point',
+            {
+                'lat': f'{lat:.8f}',
+                'lon': f'{lon:.8f}',
+                'hae': f'{hae:.2f}',
+                'ce': f'{self.tak_config.default_ce:.2f}',
+                'le': f'{self.tak_config.default_le:.2f}',
+            },
+        )
+        detail = ET.SubElement(root, 'detail')
+        ET.SubElement(detail, 'contact', {'callsign': self.tak_config.callsign})
+        ET.SubElement(detail, '__group', {'name': 'Blue', 'role': 'Team Member'})
+        if self.tak_config.iconsetpath:
+            ET.SubElement(detail, 'usericon', {'iconsetpath': self.tak_config.iconsetpath})
+        return ET.tostring(root, encoding='utf-8')
+
+    def _gps_callback(self, msg: NavSatFix):
+        if not self.tak_config.enabled or self._tak_socket is None:
+            return
+        if not math.isfinite(msg.latitude) or not math.isfinite(msg.longitude):
+            return
+        if self.tak_config.require_fix and msg.status.status < NavSatStatus.STATUS_FIX:
+            return
+
+        now = time.monotonic()
+        if now - self._tak_last_send_time < self._tak_min_interval:
+            return
+
+        hae = msg.altitude if math.isfinite(msg.altitude) else self.tak_config.default_hae
+        payload = self._build_tak_cot(msg.latitude, msg.longitude, hae)
+
+        try:
+            self._tak_socket.sendto(payload, (self.tak_config.host, self.tak_config.port))
+            self._tak_last_send_time = now
+        except Exception as e:
+            if now - self._tak_last_warn_time > 2.0:
+                self._tak_last_warn_time = now
+                self.get_logger().warn(
+                    f'TAK UDP send failed to {self.tak_config.host}:{self.tak_config.port}: {e}'
+                )
 
     def _init_serial(self) -> bool:
         try:
@@ -737,6 +888,13 @@ class RCPhidgetDriverNode(Node):
 
         if self.autonomous_mode:
             self._write_serial('MANUAL')
+
+        if self._tak_socket is not None:
+            try:
+                self._tak_socket.close()
+            except Exception:
+                pass
+            self._tak_socket = None
 
         with self._motor_lock:
             ctrl = self._phidgets_controller

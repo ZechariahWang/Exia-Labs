@@ -17,7 +17,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 try:
-    from Phidget22.Devices.MotorPositionController import MotorPositionController
+    from Phidget22.Devices.DCMotor import DCMotor
+    from Phidget22.Devices.Encoder import Encoder
     from Phidget22.PhidgetException import PhidgetException
     PHIDGETS_AVAILABLE = True
 except ImportError:
@@ -38,29 +39,21 @@ class State(IntEnum):
 @dataclass
 class PhidgetConfig:
     hub_port: int = 0
-    kp: float = 1
-    ki: float = 0
-    kd: float = 1
-    velocity_limit: float = 10000.0
-    acceleration: float = 50000.0
-    dead_band: float = 2.0
-    current_limit: float = 15.0
-    motor_degrees_at_max_steer: float = 2160.0
-    failsafe_timeout: int = 1500
+    kp: float = 3.5
+    ki: float = 0.15
+    kd: float = 0.8
+    dead_band: float = 15.0
+    motor_degrees_at_max_steer: float = 1080.0
+    stiction_ff: float = 0.06
+    phidget_acceleration: float = 40.0
 
-# configs for s curve motion profile
 @dataclass
 class SafetyConfig:
-    max_position: float = 2160.0
     command_timeout: float = 1.0
     feedback_rate: float = 20.0
     control_rate: float = 50.0
-    ramp_rate: float = 5.0
-    smoothing_alpha: float = 0.1
-    scurve_sharpness: float = 3.0
-    runaway_duty_threshold: float = 0.95
-    runaway_position_error: float = 100.0
-    runaway_max_count: int = 25
+    runaway_max_count: int = 50
+    error_recovery_delay: float = 2.0
 
 # for tak, IGNORE
 @dataclass
@@ -95,21 +88,18 @@ def _as_bool(value):
 DEFAULT_SERIAL_PORT = '/dev/arduino_control'
 DEFAULT_BAUD_RATE = 115200
 DEFAULT_PHIDGETS_HUB_PORT = 0
-DEFAULT_MOTOR_DEGREES_AT_MAX_STEER = 2160.0
-DEFAULT_STEERING_KP = 400.0
-DEFAULT_STEERING_KI = 0.0
-DEFAULT_STEERING_KD = 150.0
-DEFAULT_STEERING_VELOCITY_LIMIT = 10000.0
-DEFAULT_STEERING_ACCELERATION = 50000.0
-DEFAULT_STEERING_DEAD_BAND = 2.0
-DEFAULT_STEERING_CURRENT_LIMIT = 15.0
-DEFAULT_FAILSAFE_TIMEOUT = 1500
+DEFAULT_MOTOR_DEGREES_AT_MAX_STEER = 1080.0
+DEFAULT_STEERING_KP = 3.5
+DEFAULT_STEERING_KI = 0.15
+DEFAULT_STEERING_KD = 0.8
+DEFAULT_STEERING_DEAD_BAND = 15.0
+DEFAULT_STICTION_FF = 0.06
+DEFAULT_PHIDGET_ACCELERATION = 40.0
 DEFAULT_COMMAND_TIMEOUT = 1.0
 DEFAULT_FEEDBACK_RATE = 20.0
 DEFAULT_CONTROL_RATE = 50.0
-DEFAULT_RAMP_RATE = 5.0
-DEFAULT_SMOOTHING_ALPHA = 0.1
-DEFAULT_SCURVE_SHARPNESS = 3.0
+DEFAULT_RUNAWAY_MAX_COUNT = 50
+DEFAULT_ERROR_RECOVERY_DELAY = 2.0
 DEFAULT_AUTONOMOUS_MODE = False
 DEFAULT_SKIP_MOTOR = False
 DEFAULT_SKIP_PHIDGET = False
@@ -157,14 +147,24 @@ class RCPhidgetDriverNode(Node):
         self.armed_time = 0.0
         self.startup_grace_period = 15.0
         self.current_target = 0.0
-        self.smoothed_target = 0.0
-        self.rc_lost = False
         self._timeout_warned = False
 
         self._phidgets_controller = None
+        self._phidgets_encoder = None
         self._motor_ok = False
+        self._encoder_ok = False
         self._motor_lock = threading.Lock()
         self._phidgets_runaway_count = 0
+        self._error_recovery_count = 0
+        self._encoder_position = 0.0
+        self._encoder_offset = 0.0
+        self._rescale_factor = -360.0 / (300 * 4 * 4.25)
+        self._pid_integral = 0.0
+        self._pid_last_position = 0.0
+        self._velocity_filtered = 0.0
+        self._last_control_time = time.monotonic()
+        self._log_counter = 0
+        self._in_dead_band = True
 
         self.serial_port = self.get_parameter('serial_port').value
         self.baud_rate = self.get_parameter('baud_rate').value
@@ -177,22 +177,18 @@ class RCPhidgetDriverNode(Node):
             kp=self.get_parameter('steering_kp').value,
             ki=self.get_parameter('steering_ki').value,
             kd=self.get_parameter('steering_kd').value,
-            velocity_limit=self.get_parameter('steering_velocity_limit').value,
-            acceleration=self.get_parameter('steering_acceleration').value,
             dead_band=self.get_parameter('steering_dead_band').value,
-            current_limit=self.get_parameter('steering_current_limit').value,
             motor_degrees_at_max_steer=self.get_parameter('motor_degrees_at_max_steer').value,
-            failsafe_timeout=self.get_parameter('failsafe_timeout').value,
+            stiction_ff=self.get_parameter('stiction_ff').value,
+            phidget_acceleration=self.get_parameter('phidget_acceleration').value,
         )
 
         self.safety_config = SafetyConfig(
-            max_position=self.get_parameter('motor_degrees_at_max_steer').value,
             command_timeout=self.get_parameter('command_timeout').value,
             feedback_rate=self.get_parameter('feedback_rate').value,
             control_rate=self.get_parameter('control_rate').value,
-            ramp_rate=self.get_parameter('ramp_rate').value,
-            smoothing_alpha=self.get_parameter('smoothing_alpha').value,
-            scurve_sharpness=self.get_parameter('scurve_sharpness').value,
+            runaway_max_count=self.get_parameter('runaway_max_count').value,
+            error_recovery_delay=self.get_parameter('error_recovery_delay').value,
         )
 
         self.tak_config = TakConfig(
@@ -298,17 +294,14 @@ class RCPhidgetDriverNode(Node):
         self.declare_parameter('steering_kp', DEFAULT_STEERING_KP)
         self.declare_parameter('steering_ki', DEFAULT_STEERING_KI)
         self.declare_parameter('steering_kd', DEFAULT_STEERING_KD)
-        self.declare_parameter('steering_velocity_limit', DEFAULT_STEERING_VELOCITY_LIMIT)
-        self.declare_parameter('steering_acceleration', DEFAULT_STEERING_ACCELERATION)
         self.declare_parameter('steering_dead_band', DEFAULT_STEERING_DEAD_BAND)
-        self.declare_parameter('steering_current_limit', DEFAULT_STEERING_CURRENT_LIMIT)
-        self.declare_parameter('failsafe_timeout', DEFAULT_FAILSAFE_TIMEOUT)
+        self.declare_parameter('stiction_ff', DEFAULT_STICTION_FF)
+        self.declare_parameter('phidget_acceleration', DEFAULT_PHIDGET_ACCELERATION)
         self.declare_parameter('command_timeout', DEFAULT_COMMAND_TIMEOUT)
         self.declare_parameter('feedback_rate', DEFAULT_FEEDBACK_RATE)
         self.declare_parameter('control_rate', DEFAULT_CONTROL_RATE)
-        self.declare_parameter('ramp_rate', DEFAULT_RAMP_RATE)
-        self.declare_parameter('smoothing_alpha', DEFAULT_SMOOTHING_ALPHA)
-        self.declare_parameter('scurve_sharpness', DEFAULT_SCURVE_SHARPNESS)
+        self.declare_parameter('runaway_max_count', DEFAULT_RUNAWAY_MAX_COUNT)
+        self.declare_parameter('error_recovery_delay', DEFAULT_ERROR_RECOVERY_DELAY)
         self.declare_parameter('autonomous_mode', DEFAULT_AUTONOMOUS_MODE)
         self.declare_parameter('skip_motor', DEFAULT_SKIP_MOTOR)
         self.declare_parameter('skip_phidget', DEFAULT_SKIP_PHIDGET)
@@ -457,56 +450,69 @@ class RCPhidgetDriverNode(Node):
             return False
 
         try:
-            ch = MotorPositionController()
-            ch.setHubPort(self.phidget_config.hub_port)
-            ch.setIsHubPortDevice(False)
-            ch.setOnAttachHandler(self._on_attach)
-            ch.setOnDetachHandler(self._on_detach)
-            self._phidgets_controller = ch
-            ch.open()
-            self.get_logger().info('MotorPositionController channel opened, waiting for attach...')
+            motor = DCMotor()
+            motor.setChannel(0)
+            motor.setOnAttachHandler(self._on_motor_attach)
+            motor.setOnDetachHandler(self._on_detach)
+            self._phidgets_controller = motor
+            motor.open()
+            self.get_logger().info('DCMotor channel opened, waiting for attach...')
+
+            enc = Encoder()
+            enc.setChannel(0)
+            enc.setOnAttachHandler(self._on_encoder_attach)
+            enc.setOnDetachHandler(self._on_encoder_detach)
+            self._phidgets_encoder = enc
+            enc.open()
+            self.get_logger().info('Encoder channel opened, waiting for attach...')
             return True
         except PhidgetException as e:
             self.get_logger().error(f'Phidgets init failed: {e}')
             return False
 
-    # attach motor params
-    def _on_attach(self, sender):
+    def _on_motor_attach(self, sender):
         try:
-            sender.setRescaleFactor(360.0 / (300 * 4 * 4.25))
-            sender.setCurrentLimit(self.phidget_config.current_limit)
-            sender.setVelocityLimit(self.phidget_config.velocity_limit)
-            sender.setAcceleration(self.phidget_config.acceleration)
-            sender.setDeadBand(self.phidget_config.dead_band)
-            sender.setKp(self.phidget_config.kp)
-            sender.setKi(self.phidget_config.ki)
-            sender.setKd(self.phidget_config.kd)
-            sender.addPositionOffset(-sender.getPosition())
-            sender.setEngaged(True)
             try:
-                sender.enableFailsafe(self.phidget_config.failsafe_timeout)
-            except Exception:
+                sender.setAcceleration(self.phidget_config.phidget_acceleration)
+            except PhidgetException:
                 pass
             with self._motor_lock:
                 self._motor_ok = True
                 self._phidgets_runaway_count = 0
-            self.get_logger().info('MotorPositionController attached and engaged')
-
-            if self.state == State.CONNECTING:
-                self._transition_state(State.CALIBRATING)
+            self.get_logger().info(f'DCMotor attached, acceleration={sender.getAcceleration()}')
+            self._check_both_attached()
         except PhidgetException as e:
-            self.get_logger().error(f'MotorPositionController config failed: {e}')
+            self.get_logger().error(f'DCMotor config failed: {e}')
+
+    def _on_encoder_attach(self, sender):
+        try:
+            sender.setDataInterval(20)
+            self._encoder_offset = sender.getPosition() * self._rescale_factor
+            with self._motor_lock:
+                self._encoder_ok = True
+            self.get_logger().info('Encoder attached')
+            self._check_both_attached()
+        except PhidgetException as e:
+            self.get_logger().error(f'Encoder config failed: {e}')
+
+    def _on_encoder_detach(self, _sender):
+        with self._motor_lock:
+            self._encoder_ok = False
+        self.get_logger().warn('Encoder detached')
+        if self.state == State.ARMED:
+            self._transition_state(State.ERROR)
+
+    def _check_both_attached(self):
+        with self._motor_lock:
+            both = self._motor_ok and self._encoder_ok
+        if both and self.state == State.CONNECTING:
+            self._transition_state(State.CALIBRATING)
 
     # detach motor, disarm in case of error or shutdown
-    def _on_detach(self, sender):
+    def _on_detach(self, _sender):
         with self._motor_lock:
             self._motor_ok = False
-            self._phidgets_controller = None
-        try:
-            sender.close()
-        except Exception:
-            pass
-        self.get_logger().warn('MotorPositionController detached')
+        self.get_logger().warn('DCMotor detached')
         if self.state == State.ARMED:
             self._transition_state(State.ERROR)
 
@@ -515,70 +521,111 @@ class RCPhidgetDriverNode(Node):
         if self.state != State.ARMED:
             return
 
-        target_degrees = normalized * self.phidget_config.motor_degrees_at_max_steer
-        self.current_target = target_degrees
+        normalized = max(-1.0, min(1.0, normalized))
+        max_pos = self.phidget_config.motor_degrees_at_max_steer
+        self.current_target = max(-max_pos, min(max_pos, normalized * max_pos))
 
-    """
-    this part is meant for just smoothing out movements of motor. process is as folows:
+    def _read_encoder_position(self) -> float:
+        with self._motor_lock:
+            if not self._encoder_ok or self._phidgets_encoder is None:
+                return self._encoder_position
+            enc = self._phidgets_encoder
+        try:
+            raw = enc.getPosition() * self._rescale_factor
+            self._encoder_position = raw - self._encoder_offset
+        except PhidgetException:
+            pass
+        return self._encoder_position
 
-    formula for low pass: xsmooth​(t+1)=xsmooth​(t)+α(xtarget​−xsmooth​)
-    normalize the error, so no units req
-    create the s curve shape: f(e)=e^k
-    create a dynamic alpha, similar behavour to pid controller, but more control w this
-    limit rate of motor delta xmax=vmax*dt, so motor physically cant move faster than the lim
-    clamp finval val to limit rate
-    return smoothed target
-    """
-    def _apply_ramp(self, dt: float):
-        error = self.current_target - self.smoothed_target
-
-        if abs(error) < 0.5:
-            self.smoothed_target = self.current_target
-            return
-
-        alpha = self.safety_config.smoothing_alpha
-        sharpness = self.safety_config.scurve_sharpness
-
-        max_range = self.phidget_config.motor_degrees_at_max_steer
-        normalized_error = min(abs(error) / max_range, 1.0)
-        scurve_factor = normalized_error ** sharpness
-        dynamic_alpha = alpha + (1.0 - alpha) * scurve_factor
-
-        max_step = self.safety_config.ramp_rate * max_range * dt
-        weighted_step = error * dynamic_alpha
-
-        if abs(weighted_step) > max_step:
-            weighted_step = max_step if error > 0 else -max_step
-
-        self.smoothed_target += weighted_step
-
-    # send target to motor to spin to, update important algo vars such as error
     def _send_to_phidget(self):
         if self.state != State.ARMED:
             return
 
         with self._motor_lock:
-            if not self._motor_ok or self._phidgets_controller is None:
+            if not self._motor_ok or not self._encoder_ok:
+                return
+            if self._phidgets_controller is None:
                 return
             ctrl = self._phidgets_controller
 
         try:
-            ctrl.setTargetPosition(self.smoothed_target)
-            ctrl.resetFailsafe()
+            position = self._read_encoder_position()
+            now = time.monotonic()
+            actual_dt = now - self._last_control_time
+            self._last_control_time = now
+            actual_dt = max(0.001, min(actual_dt, 0.1))
+            max_pos = self.phidget_config.motor_degrees_at_max_steer
 
-            duty = abs(ctrl.getDutyCycle())
-            pos_error = abs(ctrl.getPosition() - self.smoothed_target)
+            if abs(position) > max_pos * 1.2:
+                self.get_logger().error(f'Position limit exceeded: {position:.1f}')
+                ctrl.setTargetVelocity(0.0)
+                self._pid_integral = 0.0
+                with self._motor_lock:
+                    self._motor_ok = False
+                self._transition_state(State.ERROR)
+                return
 
-            if duty > self.safety_config.runaway_duty_threshold and pos_error > self.safety_config.runaway_position_error:
-                self._phidgets_runaway_count += 1
-                if self._phidgets_runaway_count > self.safety_config.runaway_max_count:
-                    self.get_logger().error('Steering motor runaway detected — disengaging')
-                    ctrl.setEngaged(False)
-                    with self._motor_lock:
-                        self._motor_ok = False
-                    self._transition_state(State.ERROR)
+            error_raw = self.current_target - position
+            error = error_raw / max_pos
+
+            velocity_deg = (position - self._pid_last_position) / actual_dt
+            velocity = velocity_deg / max_pos
+            self._pid_last_position = position
+
+            alpha_d = 0.3
+            self._velocity_filtered = alpha_d * velocity + (1.0 - alpha_d) * self._velocity_filtered
+
+            db = self.phidget_config.dead_band
+
+            self._pid_integral += error * actual_dt
+            self._pid_integral = max(-0.3, min(0.3, self._pid_integral))
+            self._pid_integral *= 0.995
+
+            p_term = self.phidget_config.kp * error
+            i_term = self.phidget_config.ki * self._pid_integral
+            d_term = -self.phidget_config.kd * self._velocity_filtered
+            output = p_term + i_term + d_term
+
+            if abs(error_raw) < db:
+                fade = (abs(error_raw) / db) ** 2
+                output *= fade
+                self._pid_integral *= 0.95
+
+            if abs(position) > max_pos * 1.05:
+                output = -0.3 if position > 0 else 0.3
+                self._pid_integral = 0.0
+
+            output = max(-1.0, min(1.0, output))
+
+            if abs(output) < 0.04:
+                output = 0.0
+
+            ctrl.setTargetVelocity(output)
+
+            self._log_counter += 1
+            if self._log_counter % 50 == 0:
+                self.get_logger().info(
+                    f'PID: pos={position:.1f} tgt={self.current_target:.1f} '
+                    f'err={error_raw:.1f} vel={velocity_deg:.1f} out={output:.3f} '
+                    f'I={self._pid_integral:.4f}'
+                )
+
+            if abs(error_raw) > 100.0 and abs(velocity_deg) > 300.0:
+                err_sign = 1.0 if error_raw > 0 else -1.0
+                vel_sign = 1.0 if velocity_deg > 0 else -1.0
+                if err_sign != vel_sign:
+                    self._phidgets_runaway_count += 1
+                else:
+                    self._phidgets_runaway_count = max(0, self._phidgets_runaway_count - 1)
             else:
-                self._phidgets_runaway_count = 0
+                self._phidgets_runaway_count = max(0, self._phidgets_runaway_count - 1)
+
+            if self._phidgets_runaway_count > self.safety_config.runaway_max_count:
+                self.get_logger().error('Steering motor runaway detected')
+                ctrl.setTargetVelocity(0.0)
+                with self._motor_lock:
+                    self._motor_ok = False
+                self._transition_state(State.ERROR)
         except PhidgetException as e:
             self.get_logger().error(f'Phidget command failed: {e}')
             self._transition_state(State.ERROR)
@@ -591,9 +638,9 @@ class RCPhidgetDriverNode(Node):
             ctrl = self._phidgets_controller
 
         try:
-            pos = ctrl.getPosition()
+            pos = self._read_encoder_position()
             vel = ctrl.getVelocity()
-            duty = ctrl.getDutyCycle()
+            duty = ctrl.getTargetVelocity()
             return {'pos': pos, 'vel': vel, 'duty': duty}
         except PhidgetException as e:
             self.get_logger().warn(f'Feedback read failed: {e}')
@@ -602,17 +649,11 @@ class RCPhidgetDriverNode(Node):
     # ensure phidget is usable
     def _check_phidget_health(self) -> bool:
         with self._motor_lock:
-            if not self._motor_ok or self._phidgets_controller is None:
+            if not self._motor_ok or not self._encoder_ok:
                 return False
-            ctrl = self._phidgets_controller
-
-        try:
-            if not ctrl.getEngaged():
-                self.get_logger().warn('Phidget motor not engaged')
+            if self._phidgets_controller is None or self._phidgets_encoder is None:
                 return False
-            return True
-        except PhidgetException:
-            return False
+        return True
 
     # estop, we wont need this right
     def _emergency_stop(self):
@@ -622,11 +663,13 @@ class RCPhidgetDriverNode(Node):
         with self._motor_lock:
             if self._motor_ok and self._phidgets_controller is not None:
                 try:
-                    self._phidgets_controller.setTargetPosition(0.0)
-                    self._phidgets_controller.setEngaged(False)
+                    self._phidgets_controller.setTargetVelocity(0.0)
                     self._motor_ok = False
                 except PhidgetException as e:
                     self.get_logger().error(f'E-stop command failed: {e}')
+        self._pid_integral = 0.0
+        self._pid_last_position = 0.0
+        self._velocity_filtered = 0.0
 
         self._write_serial('Z4')
 
@@ -637,13 +680,8 @@ class RCPhidgetDriverNode(Node):
         self.get_logger().info('Clearing emergency stop')
 
         with self._motor_lock:
-            if self._phidgets_controller is not None:
+            if self._phidgets_controller is not None and self._phidgets_encoder is not None:
                 try:
-                    self._phidgets_controller.setEngaged(True)
-                    try:
-                        self._phidgets_controller.enableFailsafe(self.phidget_config.failsafe_timeout)
-                    except Exception:
-                        pass
                     self._motor_ok = True
                     self._phidgets_runaway_count = 0
                 except PhidgetException as e:
@@ -655,7 +693,9 @@ class RCPhidgetDriverNode(Node):
                 return False
 
         self.current_target = 0.0
-        self.smoothed_target = 0.0
+        self._pid_integral = 0.0
+        self._pid_last_position = 0.0
+        self._velocity_filtered = 0.0
         self._transition_state(State.ARMED)
         self._write_serial('Z3')
         return True
@@ -703,19 +743,28 @@ class RCPhidgetDriverNode(Node):
     def _control_loop(self):
         if self.state == State.CONNECTING:
             with self._motor_lock:
-                motor_ok = self._motor_ok
-            if not motor_ok and self._phidgets_controller is None:
+                both_ok = self._motor_ok and self._encoder_ok
+            if not both_ok and self._phidgets_controller is None:
                 self._init_phidgets()
-            elif motor_ok:
+            elif both_ok:
                 self._transition_state(State.CALIBRATING)
             return
 
         if self.state == State.CALIBRATING:
             with self._motor_lock:
-                motor_ok = self._motor_ok
-            if motor_ok:
+                both_ok = self._motor_ok and self._encoder_ok
+            if both_ok:
                 self.current_target = 0.0
-                self.smoothed_target = 0.0
+                self._pid_integral = 0.0
+                self._pid_last_position = 0.0
+                self._velocity_filtered = 0.0
+                self._last_control_time = time.monotonic()
+                if self._phidgets_encoder is not None:
+                    try:
+                        self._encoder_offset = self._phidgets_encoder.getPosition() * self._rescale_factor
+                    except Exception:
+                        pass
+                self._encoder_position = 0.0
                 self._transition_state(State.ARMED)
                 self._write_serial('A')
             return
@@ -762,12 +811,10 @@ class RCPhidgetDriverNode(Node):
                     self._emergency_stop()
 
         if self.state == State.ARMED:
-            dt = 1.0 / self.safety_config.control_rate
-            self._apply_ramp(dt)
             self._send_to_phidget()
 
             pos_msg = Float64()
-            pos_msg.data = self.smoothed_target
+            pos_msg.data = self.current_target
             self.steering_pub.publish(pos_msg)
 
     # getting data 
@@ -805,22 +852,24 @@ class RCPhidgetDriverNode(Node):
                 self._transition_state(State.ERROR)
 
         if self.state == State.ERROR:
-            if now - self.last_command_time > 0.5:
-                self.get_logger().info('Attempting error recovery...')
+            delay = self.safety_config.error_recovery_delay * (1 + self._error_recovery_count)
+            if now - self.last_command_time > delay:
+                self._error_recovery_count = min(self._error_recovery_count + 1, 5)
+                self.get_logger().info(f'Attempting error recovery (attempt {self._error_recovery_count})...')
                 with self._motor_lock:
                     ctrl = self._phidgets_controller
-                    if ctrl is not None:
+                    enc = self._phidgets_encoder
+                    if ctrl is not None and enc is not None:
                         try:
-                            ctrl.addPositionOffset(-ctrl.getPosition())
-                            ctrl.setEngaged(True)
-                            try:
-                                ctrl.enableFailsafe(self.phidget_config.failsafe_timeout)
-                            except Exception:
-                                pass
+                            self._encoder_offset = enc.getPosition() * self._rescale_factor
+                            self._encoder_position = 0.0
                             self._motor_ok = True
                             self._phidgets_runaway_count = 0
                             self.current_target = 0.0
-                            self.smoothed_target = 0.0
+                            self._pid_integral = 0.0
+                            self._pid_last_position = 0.0
+                            self._velocity_filtered = 0.0
+                            self._last_control_time = time.monotonic()
                         except PhidgetException as e:
                             self.get_logger().warn(f'Recovery failed: {e}')
                             self._motor_ok = False
@@ -829,6 +878,7 @@ class RCPhidgetDriverNode(Node):
                     motor_ok = self._motor_ok
 
                 if motor_ok:
+                    self._error_recovery_count = 0
                     self._transition_state(State.ARMED)
                     self._write_serial('Z3')
                 elif self._phidgets_controller is None:
@@ -921,13 +971,13 @@ class RCPhidgetDriverNode(Node):
 
         now = time.monotonic()
         if now - self.last_cmd_vel_time > 0.5:
-            self._write_serial('J0,180')
+            self._write_serial('J0,80')
             return
 
         linear_x = self.last_cmd_vel.linear.x
         angular_z = self.last_cmd_vel.angular.z
 
-        if abs(linear_x) > 0.01 and abs(angular_z) > 0.001:
+        if abs(linear_x) > 0.1 and abs(angular_z) > 0.001:
             steering_angle = math.atan(self.WHEELBASE * angular_z / linear_x)
             steering_angle = max(-self.MAX_STEERING_ANGLE, min(self.MAX_STEERING_ANGLE, steering_angle))
             normalized = steering_angle / self.MAX_STEERING_ANGLE
@@ -995,11 +1045,18 @@ class RCPhidgetDriverNode(Node):
             if ctrl is not None:
                 try:
                     if self._motor_ok:
-                        ctrl.setTargetPosition(0.0)
-                        ctrl.setEngaged(False)
+                        ctrl.setTargetVelocity(0.0)
                     self._motor_ok = False
                     self._phidgets_controller = None
                     ctrl.close()
+                except Exception:
+                    pass
+            enc = self._phidgets_encoder
+            if enc is not None:
+                try:
+                    self._encoder_ok = False
+                    self._phidgets_encoder = None
+                    enc.close()
                 except Exception:
                     pass
 

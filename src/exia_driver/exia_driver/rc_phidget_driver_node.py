@@ -576,20 +576,33 @@ class RCPhidgetDriverNode(Node):
             self._velocity_filtered = alpha_d * velocity + (1.0 - alpha_d) * self._velocity_filtered
 
             db = self.phidget_config.dead_band
+            db_exit = db * 3.0
 
-            self._pid_integral += error * actual_dt
-            self._pid_integral = max(-0.3, min(0.3, self._pid_integral))
-            self._pid_integral *= 0.995
+            if self._in_dead_band:
+                in_db = abs(error_raw) < db_exit
+            else:
+                in_db = abs(error_raw) < db
 
-            p_term = self.phidget_config.kp * error
-            i_term = self.phidget_config.ki * self._pid_integral
-            d_term = -self.phidget_config.kd * self._velocity_filtered
-            output = p_term + i_term + d_term
+            if in_db:
+                self._in_dead_band = True
+                output = 0.0
+                self._pid_integral = 0.0
+                self._velocity_filtered = 0.0
+            else:
+                self._in_dead_band = False
+                self._pid_integral += error * actual_dt
+                self._pid_integral = max(-0.3, min(0.3, self._pid_integral))
+                self._pid_integral *= 0.995
 
-            if abs(error_raw) < db:
-                fade = (abs(error_raw) / db) ** 2
-                output *= fade
-                self._pid_integral *= 0.95
+                p_term = self.phidget_config.kp * error
+                i_term = self.phidget_config.ki * self._pid_integral
+                d_term = -self.phidget_config.kd * self._velocity_filtered
+
+                ff_scale = min((abs(error_raw) - db_exit) / (db * 3.0), 1.0)
+                ff_scale = max(0.0, ff_scale)
+                ff = self.phidget_config.stiction_ff * ff_scale
+                ff = ff if error > 0 else -ff
+                output = p_term + i_term + d_term + ff
 
             if abs(position) > max_pos * 1.05:
                 output = -0.3 if position > 0 else 0.3

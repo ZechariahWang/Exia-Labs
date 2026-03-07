@@ -32,9 +32,9 @@ class State(IntEnum):
 @dataclass
 class PhidgetConfig:
     hub_port: int = 0
-    kp: float = 400.0
-    ki: float = 0.0
-    kd: float = 150.0
+    kp: float = 1
+    ki: float = 1
+    kd: float = 1
     velocity_limit: float = 10000.0
     acceleration: float = 50000.0
     dead_band: float = 2.0

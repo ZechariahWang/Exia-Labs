@@ -24,6 +24,12 @@ def generate_launch_description():
         description='Start in autonomous mode'
     )
 
+    skip_motor_arg = DeclareLaunchArgument(
+        'skip_motor',
+        default_value='false',
+        description='Skip motor/serial/Arduino init (TAK-only mode)'
+    )
+
     enable_tak_udp_arg = DeclareLaunchArgument(
         'enable_tak_udp',
         default_value='false',
@@ -81,6 +87,7 @@ def generate_launch_description():
             'serial_port': LaunchConfiguration('serial_port'),
             'phidgets_hub_port': LaunchConfiguration('hub_port'),
             'autonomous_mode': LaunchConfiguration('autonomous'),
+            'skip_motor': LaunchConfiguration('skip_motor'),
             'tak_udp_enabled': LaunchConfiguration('enable_tak_udp'),
             'tak_gps_topic': LaunchConfiguration('tak_gps_topic'),
             'tak_host': LaunchConfiguration('tak_host'),
@@ -96,6 +103,7 @@ def generate_launch_description():
         serial_port_arg,
         hub_port_arg,
         autonomous_arg,
+        skip_motor_arg,
         enable_tak_udp_arg,
         tak_gps_topic_arg,
         tak_host_arg,

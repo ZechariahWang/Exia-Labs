@@ -211,26 +211,32 @@ class RCPhidgetDriverNode(Node):
         self._gear_shift_target = 'neutral'
         self._gear_shift_time = 0.0
 
-        if self.autonomous_mode:
-            self.cmd_vel_sub = self.create_subscription(Twist, '/cmd_vel', self._cmd_vel_callback, 10)
-            self.auto_timer = self.create_timer(1.0 / 50.0, self._autonomous_control_loop)
+        self.skip_motor = _as_bool(self.get_parameter('skip_motor').value)
 
-        control_period = 1.0 / self.safety_config.control_rate
-        feedback_period = 1.0 / self.safety_config.feedback_rate
-        self.control_timer = self.create_timer(control_period, self._control_loop)
-        self.feedback_timer = self.create_timer(feedback_period, self._feedback_loop)
-        self.watchdog_timer = self.create_timer(0.1, self._watchdog_callback)
+        if self.skip_motor:
+            self.state = State.ARMED
+            self.get_logger().info('skip_motor=true — motor/serial/Arduino skipped, TAK-only mode')
+        else:
+            if self.autonomous_mode:
+                self.cmd_vel_sub = self.create_subscription(Twist, '/cmd_vel', self._cmd_vel_callback, 10)
+                self.auto_timer = self.create_timer(1.0 / 50.0, self._autonomous_control_loop)
 
-        self._init_serial()
-        if self.autonomous_mode and self.serial_conn is not None:
-            time.sleep(0.5)
-            self.serial_conn.reset_input_buffer()
-            self._write_serial('AUTO')
-            time.sleep(0.1)
-            self.serial_conn.reset_input_buffer()
-            self.get_logger().info('Sent AUTO to Arduino early (before Phidget connect)')
-        self.autonomous_grace_time = time.monotonic()
-        self._transition_state(State.CONNECTING)
+            control_period = 1.0 / self.safety_config.control_rate
+            feedback_period = 1.0 / self.safety_config.feedback_rate
+            self.control_timer = self.create_timer(control_period, self._control_loop)
+            self.feedback_timer = self.create_timer(feedback_period, self._feedback_loop)
+            self.watchdog_timer = self.create_timer(0.1, self._watchdog_callback)
+
+            self._init_serial()
+            if self.autonomous_mode and self.serial_conn is not None:
+                time.sleep(0.5)
+                self.serial_conn.reset_input_buffer()
+                self._write_serial('AUTO')
+                time.sleep(0.1)
+                self.serial_conn.reset_input_buffer()
+                self.get_logger().info('Sent AUTO to Arduino early (before Phidget connect)')
+            self.autonomous_grace_time = time.monotonic()
+            self._transition_state(State.CONNECTING)
 
         self.get_logger().info('RC Phidget Driver Node started')
 
@@ -254,6 +260,7 @@ class RCPhidgetDriverNode(Node):
         self.declare_parameter('smoothing_alpha', 0.1)
         self.declare_parameter('scurve_sharpness', 3.0)
         self.declare_parameter('autonomous_mode', False)
+        self.declare_parameter('skip_motor', False)
         self.declare_parameter('tak_udp_enabled', False)
         self.declare_parameter('tak_gps_topic', '/navsatfix')
         self.declare_parameter('tak_host', '192.168.1.69')
@@ -325,6 +332,10 @@ class RCPhidgetDriverNode(Node):
         try:
             self._tak_socket.sendto(payload, (self.tak_config.host, self.tak_config.port))
             self._tak_last_send_time = now
+            self.get_logger().info(
+                f'TAK UDP sent: lat={msg.latitude:.6f} lon={msg.longitude:.6f} '
+                f'alt={hae:.1f}m -> {self.tak_config.host}:{self.tak_config.port}'
+            )
         except Exception as e:
             if now - self._tak_last_warn_time > 2.0:
                 self._tak_last_warn_time = now
@@ -930,7 +941,8 @@ def main(args=None):
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':

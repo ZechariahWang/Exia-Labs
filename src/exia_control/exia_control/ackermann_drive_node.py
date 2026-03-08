@@ -53,8 +53,8 @@ DEFAULT_MOTOR_DEGREES_AT_MAX_STEER   = 2160.0
 DEFAULT_STEERING_KP                  = 400.0
 DEFAULT_STEERING_KI                  = 0.0
 DEFAULT_STEERING_KD                  = 150.0
-DEFAULT_STEERING_VELOCITY_LIMIT      = 10000.0
-DEFAULT_STEERING_ACCELERATION        = 50000.0
+DEFAULT_STEERING_VELOCITY_LIMIT      = 1800.0
+DEFAULT_STEERING_ACCELERATION        = 9000.0
 DEFAULT_STEERING_DEAD_BAND           = 2.0
 DEFAULT_STEERING_CURRENT_LIMIT       = 3.0
 
@@ -289,7 +289,7 @@ class AckermannDriveNode(Node):
 
     def _on_attach(self, sender):
         try:
-            sender.setRescaleFactor(360.0 / (300 * 4 * 4.25))
+            sender.setRescaleFactor(-360.0 / (300 * 4 * 4.25 * 76 / 13))
             sender.setCurrentLimit(self.get_parameter('steering_current_limit').value)
             sender.setVelocityLimit(self.get_parameter('steering_velocity_limit').value)
             sender.setAcceleration(self.get_parameter('steering_acceleration').value)

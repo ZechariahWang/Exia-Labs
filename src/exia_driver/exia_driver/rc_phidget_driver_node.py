@@ -39,12 +39,12 @@ class State(IntEnum):
 @dataclass
 class PhidgetConfig:
     hub_port: int = 0
-    kp: float = 2.0
-    ki: float = 0.25
-    kd: float = 0.8
+    kp: float = 1.2
+    ki: float = 0.15
+    kd: float = 0.5
     dead_band: float = 15.0
-    motor_degrees_at_max_steer: float = 1080.0
-    stiction_ff: float = 0.06
+    motor_degrees_at_max_steer: float = 1750.0
+    stiction_ff: float = 0.10
     phidget_acceleration: float = 40.0
 
 @dataclass
@@ -131,7 +131,7 @@ class RCPhidgetDriverNode(Node):
         self._error_recovery_count = 0
         self._encoder_position = 0.0
         self._encoder_offset = 0.0
-        self._rescale_factor = -360.0 / (300 * 4 * 4.25)
+        self._rescale_factor = 360.0 / (300 * 4 * 4.25 * 76 / 13)
         self._pid_integral = 0.0
         self._pid_last_position = 0.0
         self._velocity_filtered = 0.0
@@ -460,7 +460,7 @@ class RCPhidgetDriverNode(Node):
 
     def _on_encoder_attach(self, sender):
         try:
-            sender.setDataInterval(20)
+            sender.setDataInterval(100)
             self._encoder_offset = sender.getPosition() * self._rescale_factor
             with self._motor_lock:
                 self._encoder_ok = True
@@ -567,7 +567,7 @@ class RCPhidgetDriverNode(Node):
                 self._in_dead_band = False
                 self._pid_integral += error * actual_dt
                 self._pid_integral = max(-0.3, min(0.3, self._pid_integral))
-                self._pid_integral *= 0.995
+                self._pid_integral *= 0.998
 
                 p_term = self.phidget_config.kp * error
                 i_term = self.phidget_config.ki * self._pid_integral
@@ -588,7 +588,7 @@ class RCPhidgetDriverNode(Node):
             alpha_out = 0.65
             self._output_filtered = alpha_out * output + (1.0 - alpha_out) * self._output_filtered
 
-            if abs(self._output_filtered) < 0.05:
+            if abs(self._output_filtered) < 0.03:
                 self._output_filtered = 0.0
 
             ctrl.setTargetVelocity(self._output_filtered)
@@ -601,7 +601,7 @@ class RCPhidgetDriverNode(Node):
                     f'I={self._pid_integral:.4f}'
                 )
 
-            if abs(error_raw) > 100.0 and abs(velocity_deg) > 300.0:
+            if abs(error_raw) > 100.0 and abs(velocity_deg) > 55.0:
                 err_sign = 1.0 if error_raw > 0 else -1.0
                 vel_sign = 1.0 if velocity_deg > 0 else -1.0
                 if err_sign != vel_sign:

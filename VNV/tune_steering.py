@@ -20,11 +20,11 @@ except PhidgetException as e:
     print(f'Check: is the VINT Hub plugged in? Is the controller on port {hub_port}?')
     sys.exit(1)
 
-rescale = 360.0 / (300 * 4 * 4.25)
+rescale = -360.0 / (300 * 4 * 4.25 * 76 / 13)
 m.setRescaleFactor(rescale)
 m.setCurrentLimit(15)
-m.setVelocityLimit(10000.0)
-m.setAcceleration(50000.0)
+m.setVelocityLimit(1800.0)
+m.setAcceleration(9000.0)
 m.setDeadBand(2.0)
 m.setKp(400.0)
 m.setKi(0.0)
@@ -35,8 +35,8 @@ m.setEngaged(True)
 kp = 400.0
 ki = 0.0
 kd = 150.0
-vel_limit = 10000.0
-accel = 50000.0
+vel_limit = 1800.0
+accel = 9000.0
 current_limit = 15.0
 dead_band = 2.0
 target_pos = 0.0

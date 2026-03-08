@@ -39,8 +39,8 @@ class State(IntEnum):
 @dataclass
 class PhidgetConfig:
     hub_port: int = 0
-    kp: float = 3.5
-    ki: float = 0.15
+    kp: float = 2.0
+    ki: float = 0.25
     kd: float = 0.8
     dead_band: float = 15.0
     motor_degrees_at_max_steer: float = 1080.0
@@ -84,42 +84,15 @@ def _as_bool(value):
         return value.strip().lower() in ('1', 'true', 'yes', 'on')
     return False
 
-# phidget init vars
 DEFAULT_SERIAL_PORT = '/dev/arduino_control'
 DEFAULT_BAUD_RATE = 115200
-DEFAULT_PHIDGETS_HUB_PORT = 0
-DEFAULT_MOTOR_DEGREES_AT_MAX_STEER = 1080.0
-DEFAULT_STEERING_KP = 3.5
-DEFAULT_STEERING_KI = 0.15
-DEFAULT_STEERING_KD = 0.8
-DEFAULT_STEERING_DEAD_BAND = 15.0
-DEFAULT_STICTION_FF = 0.06
-DEFAULT_PHIDGET_ACCELERATION = 40.0
-DEFAULT_COMMAND_TIMEOUT = 1.0
-DEFAULT_FEEDBACK_RATE = 20.0
-DEFAULT_CONTROL_RATE = 50.0
-DEFAULT_RUNAWAY_MAX_COUNT = 50
-DEFAULT_ERROR_RECOVERY_DELAY = 2.0
 DEFAULT_AUTONOMOUS_MODE = False
 DEFAULT_SKIP_MOTOR = False
 DEFAULT_SKIP_PHIDGET = False
 
-# Tak init vars
-DEFAULT_TAK_UDP_ENABLED = False
-DEFAULT_TAK_GPS_TOPIC = '/navsatfix'
-DEFAULT_TAK_HOST = '192.168.1.69'
-DEFAULT_TAK_PORT = 4242
-DEFAULT_TAK_UID = 'exialabs-argus-1'
-DEFAULT_TAK_CALLSIGN = 'exialabs-argus-1'
-DEFAULT_TAK_TYPE = 'a-f-G-E-V-U'
-DEFAULT_TAK_HOW = 'm-g'
-DEFAULT_TAK_ICONSETPATH = 'COT_MAPPING_2525C'
-DEFAULT_TAK_RATE_HZ = 0.2
-DEFAULT_TAK_STALE_SECONDS = 60.0
-DEFAULT_TAK_DEFAULT_HAE = 0.0
-DEFAULT_TAK_DEFAULT_CE = 10.0
-DEFAULT_TAK_DEFAULT_LE = 10.0
-DEFAULT_TAK_REQUIRE_FIX = True
+_PHIDGET_DEFAULTS = PhidgetConfig()
+_SAFETY_DEFAULTS = SafetyConfig()
+_TAK_DEFAULTS = TakConfig()
 
 
 class RCPhidgetDriverNode(Node):
@@ -165,6 +138,7 @@ class RCPhidgetDriverNode(Node):
         self._last_control_time = time.monotonic()
         self._log_counter = 0
         self._in_dead_band = True
+        self._output_filtered = 0.0
 
         self.serial_port = self.get_parameter('serial_port').value
         self.baud_rate = self.get_parameter('baud_rate').value
@@ -289,37 +263,37 @@ class RCPhidgetDriverNode(Node):
     def _declare_parameters(self):
         self.declare_parameter('serial_port', DEFAULT_SERIAL_PORT)
         self.declare_parameter('baud_rate', DEFAULT_BAUD_RATE)
-        self.declare_parameter('phidgets_hub_port', DEFAULT_PHIDGETS_HUB_PORT)
-        self.declare_parameter('motor_degrees_at_max_steer', DEFAULT_MOTOR_DEGREES_AT_MAX_STEER)
-        self.declare_parameter('steering_kp', DEFAULT_STEERING_KP)
-        self.declare_parameter('steering_ki', DEFAULT_STEERING_KI)
-        self.declare_parameter('steering_kd', DEFAULT_STEERING_KD)
-        self.declare_parameter('steering_dead_band', DEFAULT_STEERING_DEAD_BAND)
-        self.declare_parameter('stiction_ff', DEFAULT_STICTION_FF)
-        self.declare_parameter('phidget_acceleration', DEFAULT_PHIDGET_ACCELERATION)
-        self.declare_parameter('command_timeout', DEFAULT_COMMAND_TIMEOUT)
-        self.declare_parameter('feedback_rate', DEFAULT_FEEDBACK_RATE)
-        self.declare_parameter('control_rate', DEFAULT_CONTROL_RATE)
-        self.declare_parameter('runaway_max_count', DEFAULT_RUNAWAY_MAX_COUNT)
-        self.declare_parameter('error_recovery_delay', DEFAULT_ERROR_RECOVERY_DELAY)
         self.declare_parameter('autonomous_mode', DEFAULT_AUTONOMOUS_MODE)
         self.declare_parameter('skip_motor', DEFAULT_SKIP_MOTOR)
         self.declare_parameter('skip_phidget', DEFAULT_SKIP_PHIDGET)
-        self.declare_parameter('tak_udp_enabled', DEFAULT_TAK_UDP_ENABLED)
-        self.declare_parameter('tak_gps_topic', DEFAULT_TAK_GPS_TOPIC)
-        self.declare_parameter('tak_host', DEFAULT_TAK_HOST)
-        self.declare_parameter('tak_port', DEFAULT_TAK_PORT)
-        self.declare_parameter('tak_uid', DEFAULT_TAK_UID)
-        self.declare_parameter('tak_callsign', DEFAULT_TAK_CALLSIGN)
-        self.declare_parameter('tak_type', DEFAULT_TAK_TYPE)
-        self.declare_parameter('tak_how', DEFAULT_TAK_HOW)
-        self.declare_parameter('tak_iconsetpath', DEFAULT_TAK_ICONSETPATH)
-        self.declare_parameter('tak_rate_hz', DEFAULT_TAK_RATE_HZ)
-        self.declare_parameter('tak_stale_seconds', DEFAULT_TAK_STALE_SECONDS)
-        self.declare_parameter('tak_default_hae', DEFAULT_TAK_DEFAULT_HAE)
-        self.declare_parameter('tak_default_ce', DEFAULT_TAK_DEFAULT_CE)
-        self.declare_parameter('tak_default_le', DEFAULT_TAK_DEFAULT_LE)
-        self.declare_parameter('tak_require_fix', DEFAULT_TAK_REQUIRE_FIX)
+        self.declare_parameter('phidgets_hub_port', _PHIDGET_DEFAULTS.hub_port)
+        self.declare_parameter('motor_degrees_at_max_steer', _PHIDGET_DEFAULTS.motor_degrees_at_max_steer)
+        self.declare_parameter('steering_kp', _PHIDGET_DEFAULTS.kp)
+        self.declare_parameter('steering_ki', _PHIDGET_DEFAULTS.ki)
+        self.declare_parameter('steering_kd', _PHIDGET_DEFAULTS.kd)
+        self.declare_parameter('steering_dead_band', _PHIDGET_DEFAULTS.dead_band)
+        self.declare_parameter('stiction_ff', _PHIDGET_DEFAULTS.stiction_ff)
+        self.declare_parameter('phidget_acceleration', _PHIDGET_DEFAULTS.phidget_acceleration)
+        self.declare_parameter('command_timeout', _SAFETY_DEFAULTS.command_timeout)
+        self.declare_parameter('feedback_rate', _SAFETY_DEFAULTS.feedback_rate)
+        self.declare_parameter('control_rate', _SAFETY_DEFAULTS.control_rate)
+        self.declare_parameter('runaway_max_count', _SAFETY_DEFAULTS.runaway_max_count)
+        self.declare_parameter('error_recovery_delay', _SAFETY_DEFAULTS.error_recovery_delay)
+        self.declare_parameter('tak_udp_enabled', _TAK_DEFAULTS.enabled)
+        self.declare_parameter('tak_gps_topic', _TAK_DEFAULTS.gps_topic)
+        self.declare_parameter('tak_host', _TAK_DEFAULTS.host)
+        self.declare_parameter('tak_port', _TAK_DEFAULTS.port)
+        self.declare_parameter('tak_uid', _TAK_DEFAULTS.uid)
+        self.declare_parameter('tak_callsign', _TAK_DEFAULTS.callsign)
+        self.declare_parameter('tak_type', _TAK_DEFAULTS.cot_type)
+        self.declare_parameter('tak_how', _TAK_DEFAULTS.how)
+        self.declare_parameter('tak_iconsetpath', _TAK_DEFAULTS.iconsetpath)
+        self.declare_parameter('tak_rate_hz', _TAK_DEFAULTS.rate_hz)
+        self.declare_parameter('tak_stale_seconds', _TAK_DEFAULTS.stale_seconds)
+        self.declare_parameter('tak_default_hae', _TAK_DEFAULTS.default_hae)
+        self.declare_parameter('tak_default_ce', _TAK_DEFAULTS.default_ce)
+        self.declare_parameter('tak_default_le', _TAK_DEFAULTS.default_le)
+        self.declare_parameter('tak_require_fix', _TAK_DEFAULTS.require_fix)
 
     # for CoT, ignore
     @staticmethod
@@ -588,6 +562,7 @@ class RCPhidgetDriverNode(Node):
                 output = 0.0
                 self._pid_integral = 0.0
                 self._velocity_filtered = 0.0
+                self._output_filtered = 0.0
             else:
                 self._in_dead_band = False
                 self._pid_integral += error * actual_dt
@@ -610,16 +585,19 @@ class RCPhidgetDriverNode(Node):
 
             output = max(-1.0, min(1.0, output))
 
-            if abs(output) < 0.04:
-                output = 0.0
+            alpha_out = 0.65
+            self._output_filtered = alpha_out * output + (1.0 - alpha_out) * self._output_filtered
 
-            ctrl.setTargetVelocity(output)
+            if abs(self._output_filtered) < 0.05:
+                self._output_filtered = 0.0
+
+            ctrl.setTargetVelocity(self._output_filtered)
 
             self._log_counter += 1
             if self._log_counter % 50 == 0:
                 self.get_logger().info(
                     f'PID: pos={position:.1f} tgt={self.current_target:.1f} '
-                    f'err={error_raw:.1f} vel={velocity_deg:.1f} out={output:.3f} '
+                    f'err={error_raw:.1f} vel={velocity_deg:.1f} out={self._output_filtered:.3f} '
                     f'I={self._pid_integral:.4f}'
                 )
 

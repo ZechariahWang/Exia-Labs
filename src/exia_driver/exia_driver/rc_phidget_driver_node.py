@@ -35,7 +35,7 @@ class State(IntEnum):
     ERROR = 5
 
 
-# phidget inits, must be tuned later
+# phidget inits, must be tuned later ok
 @dataclass
 class PhidgetConfig:
     hub_port: int = 0
